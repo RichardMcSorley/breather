@@ -93,9 +93,14 @@ export async function POST(request: NextRequest) {
     const formattedYear = dateObj.getFullYear();
     const formattedMonth = String(dateObj.getMonth() + 1).padStart(2, '0');
     const formattedDay = String(dateObj.getDate()).padStart(2, '0');
-    entryObj.date = `${formattedYear}-${formattedMonth}-${formattedDay}`;
+    
+    // Create response object with string date
+    const responseObj = {
+      ...entryObj,
+      date: `${formattedYear}-${formattedMonth}-${formattedDay}`,
+    };
 
-    return NextResponse.json(entryObj, { status: 201 });
+    return NextResponse.json(responseObj, { status: 201 });
   } catch (error) {
     return handleApiError(error);
   }

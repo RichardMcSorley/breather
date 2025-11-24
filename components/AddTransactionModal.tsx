@@ -133,7 +133,7 @@ export default function AddTransactionModal({
       // If offline, add to sync queue
       if (!navigator.onLine) {
         await addToSyncQueue({
-          type: method === "DELETE" ? "delete" : method === "PUT" ? "update" : "create",
+          type: method === "PUT" ? "update" : "create",
           endpoint: url,
           method,
           data: requestBody,
@@ -164,7 +164,7 @@ export default function AddTransactionModal({
           : "/api/transactions";
         const method = transactionId ? "PUT" : "POST";
         await addToSyncQueue({
-          type: method === "DELETE" ? "delete" : method === "PUT" ? "update" : "create",
+          type: method === "PUT" ? "update" : "create",
           endpoint: url,
           method,
           data: {

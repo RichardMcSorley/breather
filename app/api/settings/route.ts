@@ -17,7 +17,7 @@ export async function GET() {
     let settings = await UserSettings.findOne({ userId: session.user.id }).lean();
 
     if (!settings) {
-      settings = await UserSettings.create({
+      const newSettings = await UserSettings.create({
         userId: session.user.id,
         liquidCash: 0,
         monthlyBurnRate: 0,
@@ -25,14 +25,14 @@ export async function GET() {
         estimatedTaxRate: 0,
         irsMileageDeduction: 0.67,
       });
+      return NextResponse.json(newSettings.toObject());
     } else {
       // Ensure irsMileageDeduction exists for existing users
       if (settings.irsMileageDeduction === undefined || settings.irsMileageDeduction === null) {
         settings.irsMileageDeduction = 0.67;
       }
+      return NextResponse.json(settings);
     }
-
-    return NextResponse.json(settings);
   } catch (error) {
     return handleApiError(error);
   }

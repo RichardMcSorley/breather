@@ -136,15 +136,19 @@ export async function POST(request: NextRequest) {
 
     // Convert to plain object and format dueDate as YYYY-MM-DD string
     const transactionObj = transaction.toObject();
+    let formattedDueDate: string | undefined;
     if (transactionObj.dueDate) {
       const dueDateObj = new Date(transactionObj.dueDate);
       const year = dueDateObj.getFullYear();
       const month = String(dueDateObj.getMonth() + 1).padStart(2, '0');
       const day = String(dueDateObj.getDate()).padStart(2, '0');
-      transactionObj.dueDate = `${year}-${month}-${day}`;
+      formattedDueDate = `${year}-${month}-${day}`;
     }
 
-    return NextResponse.json(transactionObj, { status: 201 });
+    return NextResponse.json({
+      ...transactionObj,
+      dueDate: formattedDueDate,
+    }, { status: 201 });
   } catch (error) {
     return handleApiError(error);
   }
