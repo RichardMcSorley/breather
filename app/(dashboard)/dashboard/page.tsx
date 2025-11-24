@@ -86,7 +86,7 @@ export default function DashboardPage() {
     return (
       <Layout>
         <div className="flex items-center justify-center min-h-[60vh]">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-gray-900"></div>
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-gray-900 dark:border-white"></div>
         </div>
       </Layout>
     );
@@ -98,52 +98,52 @@ export default function DashboardPage() {
         {summary && (
           <Card className="p-6">
             <div className="flex items-center justify-between mb-4">
-              <h2 className="text-xl font-bold text-gray-900">TODAY&apos;S EARNINGS</h2>
+              <h2 className="text-xl font-bold text-gray-900 dark:text-white">TODAY&apos;S EARNINGS</h2>
               <span
                 className={`text-3xl font-semibold ${
-                  (summary.todayNet ?? 0) >= 0 ? "text-green-600" : "text-red-600"
+                  (summary.todayNet ?? 0) >= 0 ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400"
                 }`}
               >
                 {formatCurrency(summary.todayNet ?? 0)}
               </span>
             </div>
 
-            <div className="border-t pt-4 mb-4 space-y-3">
+            <div className="border-t border-gray-200 dark:border-gray-700 pt-4 mb-4 space-y-3">
               <div className="flex justify-between items-center">
-                <span className="text-gray-900">GROSS TOTAL</span>
-                <span className="font-semibold text-gray-900">{formatCurrency(summary.grossTotal ?? 0)}</span>
+                <span className="text-gray-900 dark:text-white">GROSS TOTAL</span>
+                <span className="font-semibold text-gray-900 dark:text-white">{formatCurrency(summary.grossTotal ?? 0)}</span>
               </div>
 
-              <div className="flex justify-between items-center text-red-600">
+              <div className="flex justify-between items-center text-red-600 dark:text-red-400">
                 <span>- TODAY MILEAGE</span>
                 <span>{summary ? `${formatMiles(summary.todayMileageMiles ?? 0)} mi` : "0 mi"}</span>
               </div>
 
-              <div className="flex justify-between items-center text-red-600">
+              <div className="flex justify-between items-center text-red-600 dark:text-red-400">
                 <span>- MILEAGE ({summary?.irsMileageRate?.toFixed(2) ?? "0.00"}/mi)</span>
                 <span>{formatCurrency(summary.todayMileageSavings ?? 0)}</span>
               </div>
             </div>
 
-            <div className="space-y-3 text-gray-700">
+            <div className="space-y-3 text-gray-700 dark:text-gray-300">
               <div className="flex justify-between items-center">
                 <span>Income</span>
                 <span className="font-medium">{formatCurrency(summary.todayIncome ?? 0)}</span>
               </div>
-              <div className="flex justify-between items-center text-red-600">
+              <div className="flex justify-between items-center text-red-600 dark:text-red-400">
                 <span>Expenses</span>
                 <span>- {formatCurrency(summary.todayExpenses ?? 0)}</span>
               </div>
             </div>
 
-            <div className="text-xs text-gray-500 mt-4">
+            <div className="text-xs text-gray-500 dark:text-gray-400 mt-4">
               Bills are excluded from today&apos;s totals.
             </div>
 
-            <div className="border-t pt-3 mt-4">
+            <div className="border-t border-gray-200 dark:border-gray-700 pt-3 mt-4">
               <div className="flex justify-between items-center font-bold">
-                <span className="text-gray-900">FREE CASH</span>
-                <span className={(summary.freeCash ?? 0) >= 0 ? "text-green-600" : "text-red-600"}>
+                <span className="text-gray-900 dark:text-white">FREE CASH</span>
+                <span className={(summary.freeCash ?? 0) >= 0 ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400"}>
                   {formatCurrency(summary.freeCash ?? 0)}
                 </span>
               </div>
