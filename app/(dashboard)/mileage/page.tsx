@@ -109,7 +109,7 @@ export default function MileagePage() {
     }
   };
 
-  const formatDate = (dateString: string) => {
+  const formatDate = (dateString: string | Date) => {
     // Handle both Date objects and ISO strings
     let date: Date;
     if (dateString instanceof Date) {
