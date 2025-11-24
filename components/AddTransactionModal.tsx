@@ -199,6 +199,7 @@ export default function AddTransactionModal({
         <Input
           label="Amount ($)"
           type="number"
+          inputMode="decimal"
           step="0.01"
           required
           ref={amountInputRef}
