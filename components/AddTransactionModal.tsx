@@ -210,7 +210,7 @@ export default function AddTransactionModal({
 
         {type === "income" && (
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
               Income Source
             </label>
             <div className="flex flex-wrap gap-2 mb-2">
@@ -225,7 +225,7 @@ export default function AddTransactionModal({
                   className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors min-h-[44px] ${
                     formData.tag === tag && !customTag
                       ? "bg-green-600 text-white"
-                      : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+                      : "bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600"
                   }`}
                 >
                   {tag}

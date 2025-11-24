@@ -225,7 +225,7 @@ export default function BillsPage() {
     return (
       <Layout>
         <div className="flex items-center justify-center min-h-[60vh]">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-gray-900"></div>
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-gray-900 dark:border-white"></div>
         </div>
       </Layout>
     );
@@ -234,7 +234,7 @@ export default function BillsPage() {
   return (
     <Layout>
       <div className="mb-6 flex items-center justify-between">
-        <h2 className="text-2xl font-bold text-gray-900">BILLS</h2>
+        <h2 className="text-2xl font-bold text-gray-900 dark:text-white">BILLS</h2>
         <Button variant="primary" onClick={handleAddBill}>
           + Add Bill
         </Button>
@@ -242,7 +242,7 @@ export default function BillsPage() {
 
       <div className="space-y-3">
         {bills.length === 0 ? (
-          <div className="text-center py-12 text-gray-500">
+          <div className="text-center py-12 text-gray-500 dark:text-gray-400">
             No bills found. Add your first recurring bill!
           </div>
         ) : (
@@ -251,44 +251,44 @@ export default function BillsPage() {
               <div className="flex items-center justify-between">
                 <div className="flex-1">
                   <div className="flex items-center gap-2">
-                    <h3 className="font-semibold text-gray-900">{bill.name}</h3>
+                    <h3 className="font-semibold text-gray-900 dark:text-white">{bill.name}</h3>
                     {!bill.isActive && (
-                      <span className="text-xs bg-gray-100 text-gray-600 px-2 py-1 rounded">
+                      <span className="text-xs bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400 px-2 py-1 rounded">
                         Inactive
                       </span>
                     )}
                   </div>
-                  <div className="text-sm text-gray-700 mt-1">
+                  <div className="text-sm text-gray-700 dark:text-gray-300 mt-1">
                     Due on day {bill.dueDate} of each month
                   </div>
-                  <div className="text-lg font-bold text-gray-900 mt-1">
+                  <div className="text-lg font-bold text-gray-900 dark:text-white mt-1">
                     {formatCurrency(bill.lastAmount)}
                   </div>
                   {bill.category && (
-                    <div className="text-xs text-gray-700 mt-1">
+                    <div className="text-xs text-gray-700 dark:text-gray-300 mt-1">
                       Category: {bill.category}
                     </div>
                   )}
                   {bill.notes && (
-                    <div className="text-sm text-gray-700 mt-1">{bill.notes}</div>
+                    <div className="text-sm text-gray-700 dark:text-gray-300 mt-1">{bill.notes}</div>
                   )}
                 </div>
                 <div className="flex items-center gap-2 ml-4">
                   <button
                     onClick={() => handleAddToMonth(bill)}
-                    className="px-4 py-2 bg-green-600 text-white rounded-lg text-sm font-medium hover:bg-green-700 min-h-[44px]"
+                    className="px-4 py-2 bg-green-600 dark:bg-green-700 text-white rounded-lg text-sm font-medium hover:bg-green-700 dark:hover:bg-green-600 min-h-[44px]"
                   >
                     Add to this month
                   </button>
                   <button
                     onClick={() => handleEditBill(bill)}
-                    className="p-2 text-gray-600 hover:text-gray-900 min-w-[44px] min-h-[44px] flex items-center justify-center"
+                    className="p-2 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white min-w-[44px] min-h-[44px] flex items-center justify-center"
                   >
                     ✏️
                   </button>
                   <button
                     onClick={() => handleDeleteBill(bill._id)}
-                    className="p-2 text-red-600 hover:text-red-900 min-w-[44px] min-h-[44px] flex items-center justify-center"
+                    className="p-2 text-red-600 dark:text-red-400 hover:text-red-900 dark:hover:text-red-300 min-w-[44px] min-h-[44px] flex items-center justify-center"
                   >
                     🗑️
                   </button>
@@ -357,7 +357,7 @@ export default function BillsPage() {
                 }
                 className="w-5 h-5"
               />
-              <label htmlFor="isActive" className="text-sm text-gray-700">
+              <label htmlFor="isActive" className="text-sm text-gray-700 dark:text-gray-300">
                 Active
               </label>
             </div>
@@ -434,7 +434,7 @@ export default function BillsPage() {
                 }
                 className="w-5 h-5"
               />
-              <label htmlFor="isActiveEdit" className="text-sm text-gray-700">
+              <label htmlFor="isActiveEdit" className="text-sm text-gray-700 dark:text-gray-300">
                 Active
               </label>
             </div>
@@ -484,7 +484,7 @@ export default function BillsPage() {
             />
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                 Select Month
               </label>
               <div className="flex gap-2">
@@ -497,7 +497,7 @@ export default function BillsPage() {
                   className={`flex-1 px-4 py-2 rounded-lg text-sm font-medium min-h-[44px] ${
                     selectedMonth === "this" && !useCustomDate
                       ? "bg-green-600 text-white"
-                      : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+                      : "bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600"
                   }`}
                 >
                   This Month
@@ -511,7 +511,7 @@ export default function BillsPage() {
                   className={`flex-1 px-4 py-2 rounded-lg text-sm font-medium min-h-[44px] ${
                     selectedMonth === "next" && !useCustomDate
                       ? "bg-green-600 text-white"
-                      : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+                      : "bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600"
                   }`}
                 >
                   Next Month
@@ -537,7 +537,7 @@ export default function BillsPage() {
                 }}
                 className="w-5 h-5"
               />
-              <label htmlFor="useCustomDate" className="text-sm text-gray-700">
+              <label htmlFor="useCustomDate" className="text-sm text-gray-700 dark:text-gray-300">
                 Override specific date
               </label>
             </div>
