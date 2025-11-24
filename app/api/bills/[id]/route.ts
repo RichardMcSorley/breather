@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
-import { authOptions } from "../../auth/[...nextauth]/route";
+import { authOptions } from "../../auth/[...nextauth]/config";
 import connectDB from "@/lib/mongodb";
 import Bill from "@/lib/models/Bill";
 import { handleApiError } from "@/lib/api-error-handler";
