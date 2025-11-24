@@ -9,7 +9,7 @@ export async function POST(request: NextRequest) {
     await connectDB();
 
     const body = await request.json();
-    const { userId, amount } = body;
+    const { userId, amount, source } = body;
 
     // Validate required fields
     if (!userId) {
@@ -64,6 +64,7 @@ export async function POST(request: NextRequest) {
         date: transactionDate,
         time: timeString,
         isBill: false,
+        tag: source || undefined,
       });
     }
 
