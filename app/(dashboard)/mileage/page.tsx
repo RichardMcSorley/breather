@@ -200,7 +200,7 @@ export default function MileagePage() {
     return (
       <Layout>
         <div className="flex items-center justify-center min-h-[60vh]">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-gray-900"></div>
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-gray-900 dark:border-white"></div>
         </div>
       </Layout>
     );
@@ -254,7 +254,7 @@ export default function MileagePage() {
   return (
     <Layout>
       <Card className="p-6 mb-6">
-        <h2 className="text-xl font-bold text-gray-900 mb-6">Mileage Tracking</h2>
+        <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-6">Mileage Tracking</h2>
         
         <form onSubmit={handleSubmit} className="space-y-4">
           <Input
@@ -299,18 +299,18 @@ export default function MileagePage() {
         <Card className="p-6 mb-6">
           <div className="space-y-6">
             <div className="text-center py-4">
-              <div className="text-4xl font-bold text-gray-900 mb-2">
+              <div className="text-4xl font-bold text-gray-900 dark:text-white mb-2">
                 {formatOdometer(currentYearMiles)}
               </div>
-              <div className="text-gray-600 text-sm">{currentYear} mileage</div>
+              <div className="text-gray-600 dark:text-gray-400 text-sm">{currentYear} mileage</div>
             </div>
             
-            <div className="border-t pt-6">
+            <div className="border-t border-gray-200 dark:border-gray-700 pt-6">
               <div className="text-center py-4">
-                <div className="text-4xl font-bold text-green-600 mb-2">
+                <div className="text-4xl font-bold text-green-600 dark:text-green-400 mb-2">
                   {formatCurrency(taxDeduction)}
                 </div>
-                <div className="text-gray-600 text-sm">Tax deduction ({irsMileageDeduction}/mile)</div>
+                <div className="text-gray-600 dark:text-gray-400 text-sm">Tax deduction ({irsMileageDeduction}/mile)</div>
               </div>
             </div>
           </div>
@@ -319,7 +319,7 @@ export default function MileagePage() {
 
       {entries.length > 0 && (
         <Card className="p-6">
-          <h3 className="text-lg font-semibold text-gray-900 mb-4">History</h3>
+          <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">History</h3>
           <div className="space-y-0">
             {entries.map((entry, index) => {
               const previousEntry = entries[index + 1];
@@ -331,14 +331,14 @@ export default function MileagePage() {
                 <div key={entry._id}>
                   <div className="flex justify-between items-center py-3">
                     <div className="flex-1">
-                      <div className="font-semibold text-gray-900">
+                      <div className="font-semibold text-gray-900 dark:text-white">
                         {formatOdometer(entry.odometer)} miles
                       </div>
-                      <div className="text-sm text-gray-600">
+                      <div className="text-sm text-gray-600 dark:text-gray-400">
                         {formatDate(entry.date)}
                       </div>
                       {entry.notes && (
-                        <div className="text-sm text-gray-500 mt-1">
+                        <div className="text-sm text-gray-500 dark:text-gray-400 mt-1">
                           {entry.notes}
                         </div>
                       )}
@@ -346,20 +346,20 @@ export default function MileagePage() {
                     <button
                       onClick={() => handleDelete(entry._id)}
                       disabled={deletingId === entry._id}
-                      className="ml-4 text-red-600 hover:text-red-800 disabled:opacity-50 min-w-[44px] min-h-[44px] flex items-center justify-center"
+                      className="ml-4 text-red-600 dark:text-red-400 hover:text-red-800 dark:hover:text-red-300 disabled:opacity-50 min-w-[44px] min-h-[44px] flex items-center justify-center"
                       aria-label="Delete entry"
                     >
                       {deletingId === entry._id ? (
-                        <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-red-600"></div>
+                        <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-red-600 dark:border-red-400"></div>
                       ) : (
                         <span className="text-xl">🗑️</span>
                       )}
                     </button>
                   </div>
                   {milesDifference !== null && index < entries.length - 1 && (
-                    <div className="border-b border-gray-200 py-2">
+                    <div className="border-b border-gray-200 dark:border-gray-700 py-2">
                       <div className="flex justify-center items-center">
-                        <span className="text-xs text-gray-500">
+                        <span className="text-xs text-gray-500 dark:text-gray-400">
                           {formatOdometer(milesDifference)} miles since last entry
                         </span>
                       </div>
@@ -374,7 +374,7 @@ export default function MileagePage() {
 
       {entries.length === 0 && (
         <Card className="p-6">
-          <div className="text-center text-gray-500 py-8">
+          <div className="text-center text-gray-500 dark:text-gray-400 py-8">
             No mileage entries yet. Add your first odometer reading above.
           </div>
         </Card>

@@ -83,7 +83,7 @@ export default function ConfigurationPage() {
     return (
       <Layout>
         <div className="flex items-center justify-center min-h-[60vh]">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-gray-900"></div>
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-gray-900 dark:border-white"></div>
         </div>
       </Layout>
     );
@@ -92,7 +92,7 @@ export default function ConfigurationPage() {
   return (
     <Layout>
       <Card className="p-6">
-        <h2 className="text-2xl font-bold text-gray-900 mb-6">CONFIGURATION</h2>
+        <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-6">CONFIGURATION</h2>
 
         <form onSubmit={handleSubmit} className="space-y-6">
           <div>
@@ -106,12 +106,12 @@ export default function ConfigurationPage() {
               }
               placeholder="0.00"
             />
-            <p className="mt-1 text-sm text-gray-500">
+            <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
               The total liquid cash you have available right now.
             </p>
           </div>
 
-          <div className="border-t pt-6">
+          <div className="border-t border-gray-200 dark:border-gray-700 pt-6">
             <Input
               label="MONTHLY BURN RATE ($)"
               type="number"
@@ -122,12 +122,12 @@ export default function ConfigurationPage() {
               }
               placeholder="0.00"
             />
-            <p className="mt-1 text-sm text-gray-500">
+            <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
               Your total estimated survival budget for one month.
             </p>
           </div>
 
-          <div className="border-t pt-6">
+          <div className="border-t border-gray-200 dark:border-gray-700 pt-6">
             <Input
               label="FIXED EXPENSES ($)"
               type="number"
@@ -138,12 +138,12 @@ export default function ConfigurationPage() {
               }
               placeholder="0.00"
             />
-            <p className="mt-1 text-sm text-gray-500">
+            <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
               Rent, mortgage, or bills due at the end of the month.
             </p>
           </div>
 
-          <div className="border-t pt-6">
+          <div className="border-t border-gray-200 dark:border-gray-700 pt-6">
             <Input
               label="EST. TAX RATE (%)"
               type="number"
@@ -154,12 +154,12 @@ export default function ConfigurationPage() {
               }
               placeholder="0"
             />
-            <p className="mt-1 text-sm text-gray-500">
+            <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
               Percentage of income set aside for taxes (Gig work).
             </p>
           </div>
 
-          <div className="border-t pt-6">
+          <div className="border-t border-gray-200 dark:border-gray-700 pt-6">
             <Input
               label="IRS MILEAGE DEDUCTION ($/mile)"
               type="number"
@@ -170,24 +170,24 @@ export default function ConfigurationPage() {
               }
               placeholder="0.67"
             />
-            <p className="mt-1 text-gray-500">
+            <p className="mt-1 text-gray-500 dark:text-gray-400">
               Current IRS standard mileage rate for business use (2024-2025: $0.67/mile).
             </p>
           </div>
 
-          <div className="border-t pt-6 space-y-4">
-            <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
+          <div className="border-t border-gray-200 dark:border-gray-700 pt-6 space-y-4">
+            <div className="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-700 rounded-lg">
               <div className="flex items-center gap-2">
                 <span>⚡</span>
-                <span className="font-medium">PRO MODE</span>
+                <span className="font-medium text-gray-900 dark:text-white">PRO MODE</span>
               </div>
-              <span className="text-sm text-gray-500">INACTIVE</span>
+              <span className="text-sm text-gray-500 dark:text-gray-400">INACTIVE</span>
             </div>
 
-            <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
+            <div className="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-700 rounded-lg">
               <div className="flex items-center gap-2">
                 <span>🔗</span>
-                <span className="font-medium">LINK BANK ACCOUNT</span>
+                <span className="font-medium text-gray-900 dark:text-white">LINK BANK ACCOUNT</span>
               </div>
             </div>
           </div>

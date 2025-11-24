@@ -131,7 +131,7 @@ export default function HistoryPage() {
     return (
       <Layout>
         <div className="flex items-center justify-center min-h-[60vh]">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-gray-900"></div>
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-gray-900 dark:border-white"></div>
         </div>
       </Layout>
     );
@@ -140,7 +140,7 @@ export default function HistoryPage() {
   return (
     <Layout>
       <div className="mb-6">
-        <h2 className="text-2xl font-bold text-gray-900 mb-4">HISTORY</h2>
+        <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-4">HISTORY</h2>
 
         <div className="flex gap-2 mb-4 overflow-x-auto">
           <button
@@ -148,7 +148,7 @@ export default function HistoryPage() {
             className={`px-4 py-2 rounded-lg text-sm font-medium whitespace-nowrap min-h-[44px] ${
               filterType === "all"
                 ? "bg-green-600 text-white"
-                : "bg-gray-100 text-gray-700"
+                : "bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300"
             }`}
           >
             All
@@ -158,7 +158,7 @@ export default function HistoryPage() {
             className={`px-4 py-2 rounded-lg text-sm font-medium whitespace-nowrap min-h-[44px] ${
               filterType === "income"
                 ? "bg-green-600 text-white"
-                : "bg-gray-100 text-gray-700"
+                : "bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300"
             }`}
           >
             Income
@@ -168,7 +168,7 @@ export default function HistoryPage() {
             className={`px-4 py-2 rounded-lg text-sm font-medium whitespace-nowrap min-h-[44px] ${
               filterType === "expense"
                 ? "bg-red-600 text-white"
-                : "bg-gray-100 text-gray-700"
+                : "bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300"
             }`}
           >
             Expense
@@ -182,7 +182,7 @@ export default function HistoryPage() {
               className={`px-4 py-2 rounded-lg text-sm font-medium whitespace-nowrap min-h-[44px] ${
                 filterTag === "all"
                   ? "bg-blue-600 text-white"
-                  : "bg-gray-100 text-gray-700"
+                  : "bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300"
               }`}
             >
               All Sources
@@ -194,7 +194,7 @@ export default function HistoryPage() {
                 className={`px-4 py-2 rounded-lg text-sm font-medium whitespace-nowrap min-h-[44px] ${
                   filterTag === tag
                     ? "bg-blue-600 text-white"
-                    : "bg-gray-100 text-gray-700"
+                    : "bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300"
                 }`}
               >
                 {tag}
@@ -206,25 +206,25 @@ export default function HistoryPage() {
 
       <div className="space-y-6">
         {Object.keys(groupedTransactions).length === 0 ? (
-          <div className="text-center py-12 text-gray-500">
+          <div className="text-center py-12 text-gray-500 dark:text-gray-400">
             No transactions found. Add your first transaction!
           </div>
         ) : (
           Object.entries(groupedTransactions).map(([dateKey, dateTransactions]) => (
             <div key={dateKey}>
-              <h3 className="text-sm font-bold text-gray-700 mb-2">{dateKey}</h3>
+              <h3 className="text-sm font-bold text-gray-700 dark:text-gray-300 mb-2">{dateKey}</h3>
               <div className="space-y-2">
                 {dateTransactions.map((transaction) => {
                   const isIncome = transaction.type === "income";
                   return (
                     <div
                       key={transaction._id}
-                      className="bg-white rounded-lg p-4 border border-gray-200 flex items-center justify-between"
+                      className="bg-white dark:bg-gray-800 rounded-lg p-4 border border-gray-200 dark:border-gray-700 flex items-center justify-between"
                     >
                       <div className="flex items-center gap-3 flex-1">
                         <div
                           className={`w-10 h-10 rounded-lg flex items-center justify-center ${
-                            isIncome ? "bg-green-100" : "bg-red-100"
+                            isIncome ? "bg-green-100 dark:bg-green-900/30" : "bg-red-100 dark:bg-red-900/30"
                           }`}
                         >
                           <span className="text-xl">📊</span>
@@ -233,22 +233,22 @@ export default function HistoryPage() {
                           <div className="flex items-center gap-2">
                             <span
                               className={`text-sm font-medium ${
-                                isIncome ? "text-green-600" : "text-red-600"
+                                isIncome ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400"
                               }`}
                             >
                               {transaction.type.toUpperCase()}
                             </span>
                             {transaction.tag && (
-                              <span className="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded">
+                              <span className="text-xs text-gray-500 dark:text-gray-400 bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded">
                                 {transaction.tag}
                               </span>
                             )}
                           </div>
-                          <div className="text-xs text-gray-500">
+                          <div className="text-xs text-gray-500 dark:text-gray-400">
                             {formatTime(transaction.date, transaction.time)}
                           </div>
                           {transaction.isBill && transaction.dueDate ? (
-                            <div className="text-sm text-gray-600 mt-1">
+                            <div className="text-sm text-gray-600 dark:text-gray-300 mt-1">
                               {transaction.notes && (
                                 <span className="font-medium">{transaction.notes}</span>
                               )}
@@ -257,14 +257,14 @@ export default function HistoryPage() {
                               </span>
                             </div>
                           ) : transaction.notes ? (
-                            <div className="text-sm text-gray-600 mt-1 truncate">
+                            <div className="text-sm text-gray-600 dark:text-gray-300 mt-1 truncate">
                               {transaction.notes}
                             </div>
                           ) : null}
                         </div>
                         <div
                           className={`text-lg font-bold ${
-                            isIncome ? "text-green-600" : "text-red-600"
+                            isIncome ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400"
                           }`}
                         >
                           {isIncome ? "+" : "-"}
@@ -274,13 +274,13 @@ export default function HistoryPage() {
                       <div className="flex items-center gap-2 ml-4">
                         <button
                           onClick={() => setEditingTransaction(transaction._id)}
-                          className="p-2 text-gray-600 hover:text-gray-900 min-w-[44px] min-h-[44px] flex items-center justify-center"
+                          className="p-2 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white min-w-[44px] min-h-[44px] flex items-center justify-center"
                         >
                           ✏️
                         </button>
                         <button
                           onClick={() => handleDelete(transaction._id)}
-                          className="p-2 text-red-600 hover:text-red-900 min-w-[44px] min-h-[44px] flex items-center justify-center"
+                          className="p-2 text-red-600 dark:text-red-400 hover:text-red-900 dark:hover:text-red-300 min-w-[44px] min-h-[44px] flex items-center justify-center"
                         >
                           🗑️
                         </button>
