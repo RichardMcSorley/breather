@@ -7,6 +7,7 @@ import Link from "next/link";
 import Layout from "@/components/Layout";
 import Card from "@/components/ui/Card";
 import Button from "@/components/ui/Button";
+import Input from "@/components/ui/Input";
 import AddTransactionModal from "@/components/AddTransactionModal";
 
 interface Summary {
@@ -47,13 +48,20 @@ export default function DashboardPage() {
   const [transactionType, setTransactionType] = useState<"income" | "expense">("income");
   const [upcomingPayments, setUpcomingPayments] = useState<PaymentPlanEntry[]>([]);
   const [paidPayments, setPaidPayments] = useState<Record<string, number>>({});
+  
+  // Date navigation state
+  const getTodayDateString = () => {
+    const today = new Date();
+    return `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+  };
+  const [selectedDate, setSelectedDate] = useState<string>(getTodayDateString());
 
   useEffect(() => {
     if (session?.user?.id) {
       fetchSummary();
       loadTodayPayments();
     }
-  }, [session]);
+  }, [session, selectedDate]);
 
   const loadTodayPayments = async () => {
     try {
@@ -62,8 +70,7 @@ export default function DashboardPage() {
       if (!savedConfig) return;
 
       const config = JSON.parse(savedConfig);
-      const today = new Date();
-      const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+      const selectedDateStr = selectedDate;
 
       // Fetch payment plan
       const res = await fetch("/api/bills/payment-plan", {
@@ -92,21 +99,21 @@ export default function DashboardPage() {
           });
           setPaidPayments(paidMap);
 
-          // Check if today's entries are all paid
-          const todayEntries = data.paymentPlan.filter(
-            (entry: PaymentPlanEntry) => entry.date === todayStr
+          // Check if selected date's entries are all paid
+          const selectedDateEntries = data.paymentPlan.filter(
+            (entry: PaymentPlanEntry) => entry.date === selectedDateStr
           );
-          const todayAllPaid = todayEntries.length > 0 && todayEntries.every((entry: PaymentPlanEntry) => {
+          const selectedDateAllPaid = selectedDateEntries.length > 0 && selectedDateEntries.every((entry: PaymentPlanEntry) => {
             const paymentKey = `${entry.billId}-${entry.date}`;
             const paidAmount = paidMap[paymentKey] || 0;
             return paidAmount >= entry.payment;
           });
 
-          // If today is fully paid, show next unpaid dates; otherwise show unpaid entries up to today
-          if (todayAllPaid) {
+          // If selected date is fully paid, show next unpaid dates; otherwise show unpaid entries up to selected date
+          if (selectedDateAllPaid) {
             // Find the next unpaid date
             const allEntries = data.paymentPlan.filter(
-              (entry: PaymentPlanEntry) => entry.date > todayStr
+              (entry: PaymentPlanEntry) => entry.date > selectedDateStr
             );
             // Find the earliest date with unpaid entries
             const datesWithUnpaid = new Set<string>();
@@ -128,10 +135,10 @@ export default function DashboardPage() {
               setUpcomingPayments([]);
             }
           } else {
-            // Show unpaid entries up to and including today
+            // Show unpaid entries up to and including selected date
             const upcomingEntries = data.paymentPlan.filter(
               (entry: PaymentPlanEntry) => {
-                if (entry.date > todayStr) return false;
+                if (entry.date > selectedDateStr) return false;
                 const paymentKey = `${entry.billId}-${entry.date}`;
                 const paidAmount = paidMap[paymentKey] || 0;
                 return paidAmount < entry.payment;
@@ -148,10 +155,8 @@ export default function DashboardPage() {
 
   const fetchSummary = async () => {
     try {
-      // Get user's local date to ensure timezone-correct calculations
-      const now = new Date();
-      const localDate = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
-      const res = await fetch(`/api/summary?localDate=${localDate}`);
+      setLoading(true);
+      const res = await fetch(`/api/summary?localDate=${selectedDate}`);
       if (res.ok) {
         const data = await res.json();
         setSummary(data);
@@ -203,6 +208,47 @@ export default function DashboardPage() {
     });
   };
 
+  const formatSelectedDateDisplay = (dateString: string) => {
+    const [year, month, day] = dateString.split("-").map(Number);
+    const date = new Date(year, month - 1, day);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const selectedDateObj = new Date(date);
+    selectedDateObj.setHours(0, 0, 0, 0);
+    
+    if (selectedDateObj.getTime() === today.getTime()) {
+      return "Today";
+    }
+    const yesterday = new Date(today);
+    yesterday.setDate(yesterday.getDate() - 1);
+    if (selectedDateObj.getTime() === yesterday.getTime()) {
+      return "Yesterday";
+    }
+    return date.toLocaleDateString("en-US", {
+      weekday: "long",
+      month: "long",
+      day: "numeric",
+      year: date.getFullYear() !== today.getFullYear() ? "numeric" : undefined,
+    });
+  };
+
+  const navigateDate = (direction: "prev" | "next") => {
+    const [year, month, day] = selectedDate.split("-").map(Number);
+    const currentDate = new Date(year, month - 1, day);
+    const newDate = new Date(currentDate);
+    newDate.setDate(newDate.getDate() + (direction === "next" ? 1 : -1));
+    const newDateString = `${newDate.getFullYear()}-${String(newDate.getMonth() + 1).padStart(2, '0')}-${String(newDate.getDate()).padStart(2, '0')}`;
+    setSelectedDate(newDateString);
+  };
+
+  const handleDateChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setSelectedDate(e.target.value);
+  };
+
+  const goToToday = () => {
+    setSelectedDate(getTodayDateString());
+  };
+
   const handleAddTransaction = (type: "income" | "expense") => {
     setTransactionType(type);
     setShowAddModal(true);
@@ -225,12 +271,61 @@ export default function DashboardPage() {
 
   return (
     <Layout>
+      {/* Date Navigation */}
+      <Card className="p-4 mb-4">
+        <div className="flex items-center gap-3 flex-wrap">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => navigateDate("prev")}
+            className="min-w-[44px]"
+            aria-label="Previous day"
+          >
+            ←
+          </Button>
+          
+          <div className="flex-1 min-w-[200px]">
+            <Input
+              type="date"
+              value={selectedDate}
+              onChange={handleDateChange}
+              className="w-full"
+            />
+          </div>
+          
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => navigateDate("next")}
+            className="min-w-[44px]"
+            aria-label="Next day"
+          >
+            →
+          </Button>
+          
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={goToToday}
+            className="whitespace-nowrap"
+          >
+            Today
+          </Button>
+          
+          <div className="w-full text-center mt-2 text-sm font-medium text-gray-700 dark:text-gray-300">
+            {formatSelectedDateDisplay(selectedDate)}
+          </div>
+        </div>
+      </Card>
+
       <div className="grid grid-cols-1 gap-4 mb-6">
         {summary && (
           <>
             <Card className="p-6">
               <div className="flex items-center justify-between mb-4">
-                <h2 className="text-xl font-bold text-gray-900 dark:text-white">Today&apos;s Earnings</h2>
+                <h2 className="text-xl font-bold text-gray-900 dark:text-white">
+                  {formatSelectedDateDisplay(selectedDate)}&apos;s Earnings
+                </h2>
               </div>
 
               <div className="space-y-4 mt-4">
