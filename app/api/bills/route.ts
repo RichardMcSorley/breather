@@ -4,6 +4,8 @@ import { authOptions } from "../auth/[...nextauth]/config";
 import connectDB from "@/lib/mongodb";
 import Bill from "@/lib/models/Bill";
 import { handleApiError } from "@/lib/api-error-handler";
+import { parseFloatSafe, parseIntSafe, sanitizeString } from "@/lib/validation";
+import { BillQuery } from "@/lib/types";
 
 export async function GET(request: NextRequest) {
   try {
@@ -17,7 +19,7 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const isActive = searchParams.get("isActive");
 
-    const query: any = { userId: session.user.id };
+    const query: BillQuery = { userId: session.user.id };
     if (isActive !== null) {
       query.isActive = isActive === "true";
     }
@@ -46,17 +48,32 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
     }
 
+    const sanitizedName = sanitizeString(name);
+    if (!sanitizedName) {
+      return NextResponse.json({ error: "Invalid name" }, { status: 400 });
+    }
+
+    const parsedAmount = parseFloatSafe(amount, 0);
+    if (parsedAmount === null) {
+      return NextResponse.json({ error: "Invalid amount" }, { status: 400 });
+    }
+
+    const parsedDueDate = parseIntSafe(dueDate, 1, 31);
+    if (parsedDueDate === null) {
+      return NextResponse.json({ error: "Invalid due date (must be 1-31)" }, { status: 400 });
+    }
+
     const bill = await Bill.create({
       userId: session.user.id,
-      name,
-      amount: parseFloat(amount),
-      dueDate: parseInt(dueDate),
-      company: company || null,
-      category: category || null,
-      notes: notes || null,
+      name: sanitizedName,
+      amount: parsedAmount,
+      dueDate: parsedDueDate,
+      company: company ? sanitizeString(company) || null : null,
+      category: category ? sanitizeString(category) || null : null,
+      notes: notes ? sanitizeString(notes) || null : null,
       isActive: isActive !== undefined ? isActive : true,
       useInPlan: useInPlan !== undefined ? useInPlan : true,
-      lastAmount: parseFloat(amount),
+      lastAmount: parsedAmount,
     });
 
     return NextResponse.json(bill, { status: 201 });

@@ -59,15 +59,21 @@ export default function DashboardPage() {
   const [viewMode, setViewMode] = useState<"day" | "month" | "year">("day");
 
   useEffect(() => {
-    if (session?.user?.id) {
-      fetchSummary();
-      if (viewMode === "day") {
-        loadTodayPayments();
-      }
-    }
-  }, [session, selectedDate, viewMode]);
+    if (!session?.user?.id) return;
 
-  const loadTodayPayments = async () => {
+    const abortController = new AbortController();
+    
+    fetchSummary(abortController.signal);
+    if (viewMode === "day") {
+      loadTodayPayments(abortController.signal);
+    }
+
+    return () => {
+      abortController.abort();
+    };
+  }, [session?.user?.id, selectedDate, viewMode]);
+
+  const loadTodayPayments = async (abortSignal?: AbortSignal) => {
     try {
       // Get saved payment plan config
       const savedConfig = localStorage.getItem("bills_payment_plan_config");
@@ -84,13 +90,14 @@ export default function DashboardPage() {
           startDate: config.startDate,
           dailyPayment: parseFloat(config.dailyPayment),
         }),
+        signal: abortSignal,
       });
 
       if (res.ok) {
         const data = await res.json();
         
         // Fetch paid payments for all dates
-        const paymentsRes = await fetch("/api/bills/payments");
+        const paymentsRes = await fetch("/api/bills/payments", { signal: abortSignal });
         if (paymentsRes.ok) {
           const paymentsData = await paymentsRes.json();
           const paidMap: Record<string, number> = {};
@@ -157,14 +164,14 @@ export default function DashboardPage() {
     }
   };
 
-  const fetchSummary = async () => {
+  const fetchSummary = async (abortSignal?: AbortSignal) => {
     try {
       setLoading(true);
       const params = new URLSearchParams({
         localDate: selectedDate,
         viewMode: viewMode,
       });
-      const res = await fetch(`/api/summary?${params.toString()}`);
+      const res = await fetch(`/api/summary?${params.toString()}`, { signal: abortSignal });
       if (res.ok) {
         const data = await res.json();
         setSummary(data);
@@ -175,6 +182,9 @@ export default function DashboardPage() {
         }
       }
     } catch (error) {
+      if (error instanceof Error && error.name === "AbortError") {
+        return; // Request was aborted, ignore
+      }
       console.error("Error fetching summary:", error);
     } finally {
       setLoading(false);

@@ -7,6 +7,7 @@ import Transaction from "@/lib/models/Transaction";
 import { startOfDay, endOfDay } from "date-fns";
 import { handleApiError } from "@/lib/api-error-handler";
 import { parseESTAsUTC, getCurrentESTAsUTC, formatDateAsUTC } from "@/lib/date-utils";
+import { parseFloatSafe } from "@/lib/validation";
 
 export async function POST(request: NextRequest) {
   try {
@@ -27,11 +28,10 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const parsedAmount = parseFloat(amount);
-
-    if (isNaN(parsedAmount)) {
+    const parsedAmount = parseFloatSafe(amount);
+    if (parsedAmount === null) {
       return NextResponse.json(
-        { error: "Amount must be a number" },
+        { error: "Amount must be a valid number" },
         { status: 400 }
       );
     }

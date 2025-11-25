@@ -5,6 +5,7 @@ import { useSession } from "next-auth/react";
 import { format, isToday, isYesterday } from "date-fns";
 import Layout from "@/components/Layout";
 import AddTransactionModal from "@/components/AddTransactionModal";
+import { useToast } from "@/lib/toast";
 
 interface Transaction {
   _id: string;
@@ -49,8 +50,9 @@ export default function HistoryPage() {
   const [transactionType, setTransactionType] = useState<"income" | "expense">("income");
   const [filterType, setFilterType] = useState<string>("all");
   const [filterTag, setFilterTag] = useState<string>("all");
+  const toast = useToast();
 
-  const fetchTransactions = useCallback(async () => {
+  const fetchTransactions = useCallback(async (abortSignal?: AbortSignal) => {
     try {
       let url = "/api/transactions?limit=100";
       if (filterType !== "all") {
@@ -60,13 +62,16 @@ export default function HistoryPage() {
         url += `&tag=${filterTag}`;
       }
 
-      const res = await fetch(url);
+      const res = await fetch(url, { signal: abortSignal });
       if (res.ok) {
         const data = await res.json();
         // Filter out bills and balance adjustments from the transaction list
         setTransactions(data.transactions.filter((t: Transaction) => !t.isBill && !t.isBalanceAdjustment));
       }
     } catch (error) {
+      if (error instanceof Error && error.name === "AbortError") {
+        return; // Request was aborted, ignore
+      }
       console.error("Error fetching transactions:", error);
     } finally {
       setLoading(false);
@@ -74,10 +79,15 @@ export default function HistoryPage() {
   }, [filterType, filterTag]);
 
   useEffect(() => {
-    if (session?.user?.id) {
-      fetchTransactions();
-    }
-  }, [session, filterType, filterTag, fetchTransactions]);
+    if (!session?.user?.id) return;
+
+    const abortController = new AbortController();
+    fetchTransactions(abortController.signal);
+
+    return () => {
+      abortController.abort();
+    };
+  }, [session?.user?.id, filterType, filterTag, fetchTransactions]);
 
   const handleDelete = async (id: string) => {
     if (!confirm("Are you sure you want to delete this transaction?")) {
@@ -91,12 +101,14 @@ export default function HistoryPage() {
 
       if (res.ok) {
         fetchTransactions();
+        toast.success("Transaction deleted successfully");
       } else {
-        alert("Error deleting transaction");
+        const errorData = await res.json().catch(() => ({ error: "Unknown error" }));
+        toast.error(errorData.error || "Error deleting transaction");
       }
     } catch (error) {
       console.error("Error deleting transaction:", error);
-      alert("Error deleting transaction");
+      toast.error("Error deleting transaction");
     }
   };
 

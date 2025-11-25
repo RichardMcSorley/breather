@@ -5,6 +5,8 @@ import connectDB from "@/lib/mongodb";
 import Mileage from "@/lib/models/Mileage";
 import { handleApiError } from "@/lib/api-error-handler";
 import { parseDateOnlyAsUTC, formatDateAsUTC } from "@/lib/date-utils";
+import { parseFloatSafe, validatePagination, isValidEnum, MILEAGE_CLASSIFICATIONS } from "@/lib/validation";
+import { MileageQuery, FormattedMileageEntry, MileageListResponse } from "@/lib/types";
 
 export async function GET(request: NextRequest) {
   try {
@@ -18,10 +20,17 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const startDate = searchParams.get("startDate");
     const endDate = searchParams.get("endDate");
-    const page = parseInt(searchParams.get("page") || "1");
-    const limit = parseInt(searchParams.get("limit") || "50");
+    
+    const pagination = validatePagination(
+      searchParams.get("page"),
+      searchParams.get("limit")
+    );
+    if (!pagination) {
+      return NextResponse.json({ error: "Invalid pagination parameters" }, { status: 400 });
+    }
+    const { page, limit } = pagination;
 
-    const query: any = { userId: session.user.id };
+    const query: MileageQuery = { userId: session.user.id };
 
     if (startDate || endDate) {
       query.date = {};
@@ -41,8 +50,14 @@ export async function GET(request: NextRequest) {
       .lean();
 
     // Format dates as YYYY-MM-DD strings using UTC
-    const formattedEntries = mileageEntries.map((entry: any) => {
-      return { ...entry, date: formatDateAsUTC(new Date(entry.date)) };
+    const formattedEntries: FormattedMileageEntry[] = mileageEntries.map((entry) => {
+      return {
+        ...entry,
+        _id: entry._id.toString(),
+        date: formatDateAsUTC(new Date(entry.date)),
+        createdAt: entry.createdAt.toISOString(),
+        updatedAt: entry.updatedAt.toISOString(),
+      };
     });
 
     const total = await Mileage.countDocuments(query);
@@ -73,8 +88,18 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const { odometer, date, notes, classification } = body;
 
-    if (!odometer || odometer < 0 || !date) {
-      return NextResponse.json({ error: "Missing required fields or invalid odometer value" }, { status: 400 });
+    if (!odometer || !date) {
+      return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
+    }
+
+    const parsedOdometer = parseFloatSafe(odometer, 0);
+    if (parsedOdometer === null) {
+      return NextResponse.json({ error: "Invalid odometer value" }, { status: 400 });
+    }
+
+    const finalClassification = classification || "work";
+    if (!isValidEnum(finalClassification, MILEAGE_CLASSIFICATIONS)) {
+      return NextResponse.json({ error: "Invalid classification value" }, { status: 400 });
     }
 
     // Parse date as UTC date
@@ -88,9 +113,9 @@ export async function POST(request: NextRequest) {
 
     const mileageEntry = await Mileage.create({
       userId: session.user.id,
-      odometer: parseFloat(odometer),
+      odometer: parsedOdometer,
       date: parsedDate,
-      classification: classification || "work",
+      classification: finalClassification,
       notes,
     });
 

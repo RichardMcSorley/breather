@@ -6,6 +6,7 @@ import Layout from "@/components/Layout";
 import Card from "@/components/ui/Card";
 import Button from "@/components/ui/Button";
 import AddMileageModal from "@/components/AddMileageModal";
+import { useToast } from "@/lib/toast";
 
 interface MileageEntry {
   _id: string;
@@ -24,10 +25,11 @@ export default function MileagePage() {
   const [editingEntryId, setEditingEntryId] = useState<string | null>(null);
   const [showAddModal, setShowAddModal] = useState(false);
   const [irsMileageDeduction, setIrsMileageDeduction] = useState<number>(0.67);
+  const toast = useToast();
 
-  const fetchEntries = useCallback(async () => {
+  const fetchEntries = useCallback(async (abortSignal?: AbortSignal) => {
     try {
-      const res = await fetch("/api/mileage");
+      const res = await fetch("/api/mileage", { signal: abortSignal });
       if (res.ok) {
         const data = await res.json();
         setEntries(sortEntriesByDate(data.entries || []));
@@ -36,30 +38,42 @@ export default function MileagePage() {
         console.error("Error fetching mileage entries:", errorData.error);
       }
     } catch (error) {
+      if (error instanceof Error && error.name === "AbortError") {
+        return; // Request was aborted, ignore
+      }
       console.error("Error fetching mileage entries:", error);
     } finally {
       setLoading(false);
     }
   }, []);
 
-  useEffect(() => {
-    if (session?.user?.id) {
-      fetchEntries();
-      fetchSettings();
-    }
-  }, [session, fetchEntries]);
-
-  const fetchSettings = async () => {
+  const fetchSettings = useCallback(async (abortSignal?: AbortSignal) => {
     try {
-      const res = await fetch("/api/settings");
+      const res = await fetch("/api/settings", { signal: abortSignal });
       if (res.ok) {
         const data = await res.json();
         setIrsMileageDeduction(data.irsMileageDeduction || 0.67);
       }
     } catch (error) {
+      if (error instanceof Error && error.name === "AbortError") {
+        return; // Request was aborted, ignore
+      }
       console.error("Error fetching settings:", error);
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    if (!session?.user?.id) return;
+
+    const abortController = new AbortController();
+    fetchEntries(abortController.signal);
+    fetchSettings(abortController.signal);
+
+    return () => {
+      abortController.abort();
+    };
+  }, [session?.user?.id, fetchEntries, fetchSettings]);
+
 
 
   const formatDate = (dateString: string | Date) => {
@@ -143,13 +157,14 @@ export default function MileagePage() {
 
       if (res.ok) {
         setEntries(entries.filter((entry) => entry._id !== id));
+        toast.success("Mileage entry deleted successfully");
       } else {
         const errorData = await res.json();
-        alert(errorData.error || "Failed to delete entry");
+        toast.error(errorData.error || "Failed to delete entry");
       }
     } catch (error) {
       console.error("Error deleting mileage entry:", error);
-      alert("Failed to delete entry. Please try again.");
+      toast.error("Failed to delete entry. Please try again.");
     } finally {
       setDeletingId(null);
     }

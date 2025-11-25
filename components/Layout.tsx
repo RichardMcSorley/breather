@@ -6,6 +6,7 @@ import Link from "next/link";
 import { ReactNode } from "react";
 import OfflineIndicator from "./OfflineIndicator";
 import { useTheme } from "./ThemeProvider";
+import ToastContainer from "./ui/Toast";
 
 interface LayoutProps {
   children: ReactNode;
@@ -26,6 +27,7 @@ export default function Layout({ children }: LayoutProps) {
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900 pb-20">
+      <ToastContainer />
       <OfflineIndicator />
       <header className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 sticky top-0 z-40 safe-area-inset-top">
         <div className="px-4 py-3 flex items-center justify-between">

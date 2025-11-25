@@ -1,12 +1,13 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { useSession } from "next-auth/react";
 import Layout from "@/components/Layout";
 import Card from "@/components/ui/Card";
 import Button from "@/components/ui/Button";
 import Input from "@/components/ui/Input";
 import Modal from "@/components/ui/Modal";
+import { useToast } from "@/lib/toast";
 
 interface Bill {
   _id: string;
@@ -45,6 +46,7 @@ export default function BillsPage() {
   const [groupedPaymentPlan, setGroupedPaymentPlan] = useState<Record<string, PaymentPlanEntry[]>>({});
   const [viewMode, setViewMode] = useState<"bills" | "plan">("bills");
   const [planLoaded, setPlanLoaded] = useState(false);
+  const toast = useToast();
   const [hidePaidEntries, setHidePaidEntries] = useState(() => {
     if (typeof window !== "undefined") {
       const saved = localStorage.getItem("bills_hide_paid_entries");
@@ -72,11 +74,45 @@ export default function BillsPage() {
     notes: "",
   });
 
-  useEffect(() => {
-    if (session?.user?.id) {
-      fetchBills();
+  const fetchBillsRef = useRef<((abortSignal?: AbortSignal) => Promise<void>) | null>(null);
+
+  const fetchBills = useCallback(async (abortSignal?: AbortSignal) => {
+    try {
+      const res = await fetch("/api/bills", { signal: abortSignal });
+      if (res.ok) {
+        const data = await res.json();
+        setBills(data.bills);
+      } else {
+        const errorData = await res.json();
+        if (res.status === 503) {
+          toast.error(`${errorData.error}${errorData.hint ? `\n\n${errorData.hint}` : ""}`);
+        }
+      }
+    } catch (error) {
+      if (error instanceof Error && error.name === "AbortError") {
+        return; // Request was aborted, ignore
+      }
+      console.error("Error fetching bills:", error);
+      toast.error("Failed to fetch bills. Please check your connection.");
+    } finally {
+      setLoading(false);
     }
-  }, [session]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // toast is stable, don't include in deps
+
+  // Store the latest fetchBills in a ref
+  fetchBillsRef.current = fetchBills;
+
+  useEffect(() => {
+    if (!session?.user?.id) return;
+
+    const abortController = new AbortController();
+    fetchBillsRef.current?.(abortController.signal);
+
+    return () => {
+      abortController.abort();
+    };
+  }, [session?.user?.id]); // Only depend on session, not fetchBills
 
   const loadSavedPaymentPlan = useCallback(() => {
     try {
@@ -130,33 +166,14 @@ export default function BillsPage() {
         setShowPaymentPlanModal(false);
       } else {
         const errorData = await res.json();
-        alert(`Error generating payment plan: ${errorData.error}`);
+        toast.error(errorData.error || "Error generating payment plan");
       }
     } catch (error) {
       console.error("Error generating payment plan:", error);
-      alert("Error generating payment plan");
+      toast.error("Error generating payment plan");
     }
   };
 
-  const fetchBills = async () => {
-    try {
-      const res = await fetch("/api/bills");
-      if (res.ok) {
-        const data = await res.json();
-        setBills(data.bills);
-      } else {
-        const errorData = await res.json();
-        if (res.status === 503) {
-          alert(`Database connection error: ${errorData.error}\n\n${errorData.hint || ""}`);
-        }
-      }
-    } catch (error) {
-      console.error("Error fetching bills:", error);
-      alert("Failed to fetch bills. Please check your connection.");
-    } finally {
-      setLoading(false);
-    }
-  };
 
   const handleAddBill = () => {
     setFormData({
@@ -225,12 +242,14 @@ export default function BillsPage() {
         setShowEditModal(false);
         setEditingBill(null);
         fetchBills();
+        toast.success("Bill saved successfully");
       } else {
-        alert("Error saving bill");
+        const errorData = await res.json().catch(() => ({ error: "Unknown error" }));
+        toast.error(errorData.error || "Error saving bill");
       }
     } catch (error) {
       console.error("Error saving bill:", error);
-      alert("Error saving bill");
+      toast.error("Error saving bill");
     }
   };
 
@@ -247,12 +266,14 @@ export default function BillsPage() {
 
       if (res.ok) {
         fetchBills();
+        toast.success("Bill updated successfully");
       } else {
-        alert("Error updating bill");
+        const errorData = await res.json().catch(() => ({ error: "Unknown error" }));
+        toast.error(errorData.error || "Error updating bill");
       }
     } catch (error) {
       console.error("Error updating bill:", error);
-      alert("Error updating bill");
+      toast.error("Error updating bill");
     }
   };
 
@@ -268,12 +289,14 @@ export default function BillsPage() {
 
       if (res.ok) {
         fetchBills();
+        toast.success("Bill deleted successfully");
       } else {
-        alert("Error deleting bill");
+        const errorData = await res.json().catch(() => ({ error: "Unknown error" }));
+        toast.error(errorData.error || "Error deleting bill");
       }
     } catch (error) {
       console.error("Error deleting bill:", error);
-      alert("Error deleting bill");
+      toast.error("Error deleting bill");
     }
   };
 
@@ -295,12 +318,12 @@ export default function BillsPage() {
             method: "DELETE",
           });
           if (!res.ok) {
-            alert("Error clearing existing payments");
+            toast.error("Error clearing existing payments");
             return;
           }
         } catch (error) {
           console.error("Error clearing payments:", error);
-          alert("Error clearing existing payments");
+          toast.error("Error clearing existing payments");
           return;
         }
       }
@@ -411,11 +434,11 @@ export default function BillsPage() {
         }
       } else {
         const errorData = await res.json();
-        alert(`Error ${editingPayment ? 'updating' : 'recording'} payment: ${errorData.error}`);
+        toast.error(`Error ${editingPayment ? 'updating' : 'recording'} payment: ${errorData.error || "Unknown error"}`);
       }
     } catch (error) {
       console.error(`Error ${editingPayment ? 'updating' : 'recording'} payment:`, error);
-      alert(`Error ${editingPayment ? 'updating' : 'recording'} payment`);
+      toast.error(`Error ${editingPayment ? 'updating' : 'recording'} payment`);
     }
   };
 
@@ -454,11 +477,11 @@ export default function BillsPage() {
         }
       } else {
         const errorData = await res.json();
-        alert(`Error deleting payment: ${errorData.error}`);
+        toast.error(`Error deleting payment: ${errorData.error || "Unknown error"}`);
       }
     } catch (error) {
       console.error("Error deleting payment:", error);
-      alert("Error deleting payment");
+      toast.error("Error deleting payment");
     }
   };
 

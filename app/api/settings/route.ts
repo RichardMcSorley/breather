@@ -4,6 +4,7 @@ import { authOptions } from "../auth/[...nextauth]/config";
 import connectDB from "@/lib/mongodb";
 import UserSettings from "@/lib/models/UserSettings";
 import { handleApiError } from "@/lib/api-error-handler";
+import { parseFloatSafe } from "@/lib/validation";
 
 export async function GET() {
   try {
@@ -14,7 +15,7 @@ export async function GET() {
 
     await connectDB();
 
-    let settings = await UserSettings.findOne({ userId: session.user.id }).lean() as any;
+    let settings = await UserSettings.findOne({ userId: session.user.id }).lean();
 
     if (!settings) {
       const newSettings = await UserSettings.create({
@@ -60,13 +61,9 @@ export async function PUT(request: NextRequest) {
     // Parse irsMileageDeduction - handle both number and string inputs
     let parsedIrsMileage: number = 0.70; // default
     if (irsMileageDeduction !== undefined && irsMileageDeduction !== null && irsMileageDeduction !== '') {
-      if (typeof irsMileageDeduction === 'number') {
-        parsedIrsMileage = irsMileageDeduction;
-      } else if (typeof irsMileageDeduction === 'string') {
-        const parsed = parseFloat(irsMileageDeduction);
-        if (!isNaN(parsed)) {
-          parsedIrsMileage = parsed;
-        }
+      const parsed = parseFloatSafe(irsMileageDeduction, 0);
+      if (parsed !== null) {
+        parsedIrsMileage = parsed;
       }
     }
 
@@ -75,7 +72,12 @@ export async function PUT(request: NextRequest) {
 
     if (!settings) {
       // Create new settings
-      const newSettingsData: any = {
+      const newSettingsData: {
+        userId: string;
+        irsMileageDeduction: number;
+        incomeSourceTags?: string[];
+        expenseSourceTags?: string[];
+      } = {
         userId: session.user.id,
         irsMileageDeduction: parsedIrsMileage,
       };

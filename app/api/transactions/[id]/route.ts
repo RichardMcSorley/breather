@@ -5,6 +5,8 @@ import connectDB from "@/lib/mongodb";
 import Transaction from "@/lib/models/Transaction";
 import { handleApiError } from "@/lib/api-error-handler";
 import { parseDateAsUTC, parseDateOnlyAsUTC, formatDateAsUTC } from "@/lib/date-utils";
+import { isValidObjectId, parseFloatSafe, isValidEnum, TRANSACTION_TYPES } from "@/lib/validation";
+import { TransactionResponse } from "@/lib/types";
 
 export async function GET(
   request: NextRequest,
@@ -18,6 +20,10 @@ export async function GET(
 
     await connectDB();
 
+    if (!isValidObjectId(params.id)) {
+      return NextResponse.json({ error: "Invalid transaction ID" }, { status: 400 });
+    }
+
     const transaction = await Transaction.findOne({
       _id: params.id,
       userId: session.user.id,
@@ -28,17 +34,21 @@ export async function GET(
     }
 
     // Format dates as YYYY-MM-DD strings using UTC
-    const transactionObj: any = { ...transaction };
-    
-    // Format the transaction date
-    if (transactionObj.date) {
-      transactionObj.date = formatDateAsUTC(new Date(transactionObj.date));
-    }
-    
-    // Format dueDate
-    if (transactionObj.dueDate) {
-      transactionObj.dueDate = formatDateAsUTC(new Date(transactionObj.dueDate));
-    }
+    const transactionObj = {
+      _id: String(transaction._id),
+      userId: transaction.userId,
+      amount: transaction.amount,
+      type: transaction.type,
+      date: transaction.date ? formatDateAsUTC(new Date(transaction.date)) : "",
+      time: transaction.time,
+      isBill: transaction.isBill,
+      isBalanceAdjustment: transaction.isBalanceAdjustment,
+      notes: transaction.notes,
+      tag: transaction.tag,
+      dueDate: transaction.dueDate ? formatDateAsUTC(new Date(transaction.dueDate)) : undefined,
+      createdAt: transaction.createdAt.toISOString(),
+      updatedAt: transaction.updatedAt.toISOString(),
+    } satisfies TransactionResponse;
 
     return NextResponse.json(transactionObj);
   } catch (error) {
@@ -58,6 +68,10 @@ export async function PUT(
 
     await connectDB();
 
+    if (!isValidObjectId(params.id)) {
+      return NextResponse.json({ error: "Invalid transaction ID" }, { status: 400 });
+    }
+
     const body = await request.json();
     const { amount, type, date, time, isBill, notes, tag, dueDate } = body;
 
@@ -68,6 +82,16 @@ export async function PUT(
 
     if (!existingTransaction) {
       return NextResponse.json({ error: "Transaction not found" }, { status: 404 });
+    }
+
+    // Validate amount if provided
+    let parsedAmount: number | undefined;
+    if (amount !== undefined) {
+      const parsed = parseFloatSafe(amount);
+      if (parsed === null || parsed <= 0) {
+        return NextResponse.json({ error: "Invalid amount" }, { status: 400 });
+      }
+      parsedAmount = parsed;
     }
 
     // Parse dueDate as UTC date
@@ -96,18 +120,48 @@ export async function PUT(
       }
     }
 
+    const updateData: Partial<{
+      amount: number;
+      type: string;
+      date: Date;
+      time: string;
+      isBill: boolean;
+      notes?: string;
+      tag?: string;
+      dueDate?: Date;
+    }> = {};
+
+    if (parsedAmount !== undefined) {
+      updateData.amount = parsedAmount;
+    }
+    if (type !== undefined) {
+      if (!isValidEnum(type, TRANSACTION_TYPES)) {
+        return NextResponse.json({ error: "Invalid transaction type" }, { status: 400 });
+      }
+      updateData.type = type;
+    }
+    if (transactionDate) {
+      updateData.date = transactionDate;
+    }
+    if (time) {
+      updateData.time = time;
+    }
+    if (isBill !== undefined) {
+      updateData.isBill = isBill;
+    }
+    if (notes !== undefined) {
+      updateData.notes = notes;
+    }
+    if (tag !== undefined) {
+      updateData.tag = tag;
+    }
+    if (parsedDueDate !== undefined) {
+      updateData.dueDate = parsedDueDate;
+    }
+
     const transaction = await Transaction.findOneAndUpdate(
       { _id: params.id, userId: session.user.id },
-      {
-        amount: parseFloat(amount),
-        type,
-        ...(transactionDate ? { date: transactionDate } : {}),
-        ...(time ? { time } : {}),
-        isBill: isBill || false,
-        notes,
-        tag,
-        dueDate: parsedDueDate,
-      },
+      updateData,
       { new: true }
     );
 
@@ -151,6 +205,10 @@ export async function DELETE(
     }
 
     await connectDB();
+
+    if (!isValidObjectId(params.id)) {
+      return NextResponse.json({ error: "Invalid transaction ID" }, { status: 400 });
+    }
 
     const transaction = await Transaction.findOneAndDelete({
       _id: params.id,

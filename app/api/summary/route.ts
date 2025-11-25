@@ -9,6 +9,7 @@ import { handleApiError } from "@/lib/api-error-handler";
 import Mileage from "@/lib/models/Mileage";
 import Bill from "@/lib/models/Bill";
 import { parseDateOnlyAsUTC } from "@/lib/date-utils";
+import { TransactionQuery } from "@/lib/types";
 
 export async function GET(request: NextRequest) {
   try {
@@ -79,7 +80,7 @@ export async function GET(request: NextRequest) {
     const settings = await UserSettings.findOne({ userId: session.user.id }).lean();
 
     // Get transactions for the selected range (day/month/year)
-    const transactionQuery: any = {
+    const transactionQuery: TransactionQuery = {
       userId: session.user.id,
       date: {
         $gte: todayStart,

@@ -6,6 +6,8 @@ import BillPayment from "@/lib/models/BillPayment";
 import Bill from "@/lib/models/Bill";
 import { handleApiError } from "@/lib/api-error-handler";
 import { parseDateAsUTC, parseDateOnlyAsUTC, formatDateAsUTC } from "@/lib/date-utils";
+import { parseFloatSafe, isValidObjectId } from "@/lib/validation";
+import { BillPaymentQuery, FormattedBillPayment, BillPaymentListResponse } from "@/lib/types";
 
 export async function GET(request: NextRequest) {
   try {
@@ -21,7 +23,7 @@ export async function GET(request: NextRequest) {
     const startDate = searchParams.get("startDate");
     const endDate = searchParams.get("endDate");
 
-    const query: any = { userId: session.user.id };
+    const query: BillPaymentQuery = { userId: session.user.id };
     if (billId) {
       query.billId = billId;
     }
@@ -44,11 +46,17 @@ export async function GET(request: NextRequest) {
       .lean();
 
     // Format dates
-    const formattedPayments = payments.map((payment: any) => {
-      const formatted: any = { ...payment };
-      if (payment.paymentDate) {
-        formatted.paymentDate = formatDateAsUTC(new Date(payment.paymentDate));
-      }
+    const formattedPayments: FormattedBillPayment[] = payments.map((payment) => {
+      const formatted: FormattedBillPayment = {
+        ...payment,
+        _id: payment._id.toString(),
+        billId: typeof payment.billId === "object" && payment.billId !== null
+          ? payment.billId
+          : payment.billId.toString(),
+        paymentDate: payment.paymentDate ? formatDateAsUTC(new Date(payment.paymentDate)) : "",
+        createdAt: payment.createdAt.toISOString(),
+        updatedAt: payment.updatedAt.toISOString(),
+      };
       return formatted;
     });
 
@@ -74,6 +82,15 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
     }
 
+    if (!isValidObjectId(billId)) {
+      return NextResponse.json({ error: "Invalid bill ID" }, { status: 400 });
+    }
+
+    const parsedAmount = parseFloatSafe(amount, 0);
+    if (parsedAmount === null) {
+      return NextResponse.json({ error: "Invalid amount" }, { status: 400 });
+    }
+
     // Verify bill belongs to user
     const bill = await Bill.findOne({
       _id: billId,
@@ -89,7 +106,7 @@ export async function POST(request: NextRequest) {
     const payment = await BillPayment.create({
       userId: session.user.id,
       billId,
-      amount: parseFloat(amount),
+      amount: parsedAmount,
       paymentDate: paymentDateObj,
       notes,
     });

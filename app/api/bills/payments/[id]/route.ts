@@ -6,6 +6,8 @@ import BillPayment from "@/lib/models/BillPayment";
 import Bill from "@/lib/models/Bill";
 import { handleApiError } from "@/lib/api-error-handler";
 import { parseDateOnlyAsUTC, formatDateAsUTC } from "@/lib/date-utils";
+import { isValidObjectId, parseFloatSafe } from "@/lib/validation";
+import { BillPaymentResponse } from "@/lib/types";
 
 export async function PUT(
   request: NextRequest,
@@ -18,6 +20,10 @@ export async function PUT(
     }
 
     await connectDB();
+
+    if (!isValidObjectId(params.id)) {
+      return NextResponse.json({ error: "Invalid payment ID" }, { status: 400 });
+    }
 
     const body = await request.json();
     const { amount, paymentDate, notes } = body;
@@ -34,7 +40,11 @@ export async function PUT(
 
     // Update payment fields
     if (amount !== undefined) {
-      payment.amount = parseFloat(amount);
+      const parsedAmount = parseFloatSafe(amount, 0);
+      if (parsedAmount === null) {
+        return NextResponse.json({ error: "Invalid amount" }, { status: 400 });
+      }
+      payment.amount = parsedAmount;
     }
     if (paymentDate) {
       payment.paymentDate = parseDateOnlyAsUTC(paymentDate);
@@ -49,10 +59,18 @@ export async function PUT(
     await payment.populate("billId", "name company");
 
     const paymentObj = payment.toObject();
-    const formattedPayment: any = {
-      ...paymentObj,
+    const formattedPayment = {
+      _id: String(paymentObj._id),
+      userId: paymentObj.userId,
+      billId: typeof paymentObj.billId === "object" && paymentObj.billId !== null
+        ? paymentObj.billId
+        : String(paymentObj.billId),
+      amount: paymentObj.amount,
       paymentDate: formatDateAsUTC(new Date(paymentObj.paymentDate)),
-    };
+      notes: paymentObj.notes,
+      createdAt: paymentObj.createdAt.toISOString(),
+      updatedAt: paymentObj.updatedAt.toISOString(),
+    } satisfies BillPaymentResponse;
 
     return NextResponse.json(formattedPayment);
   } catch (error) {
@@ -71,6 +89,10 @@ export async function DELETE(
     }
 
     await connectDB();
+
+    if (!isValidObjectId(params.id)) {
+      return NextResponse.json({ error: "Invalid payment ID" }, { status: 400 });
+    }
 
     const payment = await BillPayment.findOneAndDelete({
       _id: params.id,

@@ -7,6 +7,7 @@ import Input from "@/components/ui/Input";
 import Button from "@/components/ui/Button";
 import Card from "@/components/ui/Card";
 import Tag from "@/components/ui/Tag";
+import { useToast } from "@/lib/toast";
 
 export default function ConfigurationPage() {
   const { data: session } = useSession();
@@ -19,20 +20,15 @@ export default function ConfigurationPage() {
   });
   const [newIncomeTag, setNewIncomeTag] = useState("");
   const [newExpenseTag, setNewExpenseTag] = useState("");
+  const toast = useToast();
 
   // Default tags
   const DEFAULT_INCOME_TAGS = ["DoorDash", "Uber", "Instacart", "GrubHub", "Roadie", "Shipt", "ProxyPics"];
   const DEFAULT_EXPENSE_TAGS = ["Gas", "Maintenance", "Insurance", "Tolls", "Parking", "Car Wash", "Oil Change", "Withdraw Fees"];
 
-  useEffect(() => {
-    if (session?.user?.id) {
-      fetchSettings();
-    }
-  }, [session]);
-
-  const fetchSettings = async () => {
+  const fetchSettings = useCallback(async (abortSignal?: AbortSignal) => {
     try {
-      const res = await fetch("/api/settings");
+      const res = await fetch("/api/settings", { signal: abortSignal });
       if (res.ok) {
         const data = await res.json();
         setFormData({
@@ -42,11 +38,25 @@ export default function ConfigurationPage() {
         });
       }
     } catch (error) {
+      if (error instanceof Error && error.name === "AbortError") {
+        return; // Request was aborted, ignore
+      }
       console.error("Error fetching settings:", error);
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    if (!session?.user?.id) return;
+
+    const abortController = new AbortController();
+    fetchSettings(abortController.signal);
+
+    return () => {
+      abortController.abort();
+    };
+  }, [session?.user?.id, fetchSettings]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -68,13 +78,14 @@ export default function ConfigurationPage() {
       });
 
       if (res.ok) {
-        alert("Settings saved successfully!");
+        toast.success("Settings saved successfully!");
       } else {
-        alert("Error saving settings");
+        const errorData = await res.json().catch(() => ({ error: "Unknown error" }));
+        toast.error(errorData.error || "Error saving settings");
       }
     } catch (error) {
       console.error("Error saving settings:", error);
-      alert("Error saving settings");
+      toast.error("Error saving settings");
     } finally {
       setSaving(false);
     }

@@ -5,6 +5,7 @@ import connectDB from "@/lib/mongodb";
 import Bill from "@/lib/models/Bill";
 import { handleApiError } from "@/lib/api-error-handler";
 import { parseDateOnlyAsUTC, formatDateAsUTC } from "@/lib/date-utils";
+import { parseFloatSafe } from "@/lib/validation";
 
 interface PaymentPlanEntry {
   date: string;
@@ -31,7 +32,8 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Start date is required" }, { status: 400 });
     }
 
-    const maxPayment = dailyPayment ? parseFloat(dailyPayment) : 100.0;
+    const parsedDailyPayment = dailyPayment ? parseFloatSafe(dailyPayment, 0) : null;
+    const maxPayment = parsedDailyPayment !== null ? parsedDailyPayment : 100.0;
     const startDateObj = parseDateOnlyAsUTC(startDate);
     const currentYear = startDateObj.getUTCFullYear();
     const currentMonth = startDateObj.getUTCMonth();

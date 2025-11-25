@@ -5,6 +5,7 @@ import Modal from "./ui/Modal";
 import Input from "./ui/Input";
 import Button from "./ui/Button";
 import { addToSyncQueue } from "@/lib/offline";
+import { useToast } from "@/lib/toast";
 
 interface AddTransactionModalProps {
   isOpen: boolean;
@@ -59,6 +60,7 @@ export default function AddTransactionModal({
   const [incomeSourceTags, setIncomeSourceTags] = useState<string[]>(DEFAULT_INCOME_SOURCE_TAGS);
   const [expenseSourceTags, setExpenseSourceTags] = useState<string[]>(DEFAULT_EXPENSE_SOURCE_TAGS);
   const amountInputRef = useRef<HTMLInputElement | null>(null);
+  const toast = useToast();
 
   const resetForm = useCallback(() => {
     const now = new Date();
@@ -270,8 +272,10 @@ export default function AddTransactionModal({
         
         onSuccess();
         resetForm();
+        toast.success("Transaction saved successfully");
       } else {
-        alert("Error saving transaction");
+        const errorData = await res.json().catch(() => ({ error: "Unknown error" }));
+        toast.error(errorData.error || "Error saving transaction");
       }
     } catch (error) {
       // If offline, queue the operation
@@ -298,9 +302,10 @@ export default function AddTransactionModal({
         });
         onSuccess();
         resetForm();
+        toast.success("Transaction queued for sync");
       } else {
         console.error("Error saving transaction:", error);
-        alert("Error saving transaction");
+        toast.error("Error saving transaction");
       }
     } finally {
       setLoading(false);

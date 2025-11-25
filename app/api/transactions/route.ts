@@ -5,6 +5,8 @@ import connectDB from "@/lib/mongodb";
 import Transaction from "@/lib/models/Transaction";
 import { handleApiError } from "@/lib/api-error-handler";
 import { parseDateAsUTC, parseDateOnlyAsUTC, formatDateAsUTC } from "@/lib/date-utils";
+import { parseFloatSafe, validatePagination, isValidEnum, TRANSACTION_TYPES } from "@/lib/validation";
+import { TransactionQuery, FormattedTransaction, TransactionListResponse } from "@/lib/types";
 
 export async function GET(request: NextRequest) {
   try {
@@ -20,10 +22,17 @@ export async function GET(request: NextRequest) {
     const endDate = searchParams.get("endDate");
     const type = searchParams.get("type");
     const tag = searchParams.get("tag");
-    const page = parseInt(searchParams.get("page") || "1");
-    const limit = parseInt(searchParams.get("limit") || "50");
+    
+    const pagination = validatePagination(
+      searchParams.get("page"),
+      searchParams.get("limit")
+    );
+    if (!pagination) {
+      return NextResponse.json({ error: "Invalid pagination parameters" }, { status: 400 });
+    }
+    const { page, limit } = pagination;
 
-    const query: any = { userId: session.user.id };
+    const query: TransactionQuery = { userId: session.user.id };
 
     if (startDate || endDate) {
       query.date = {};
@@ -37,6 +46,9 @@ export async function GET(request: NextRequest) {
     }
 
     if (type) {
+      if (!isValidEnum(type, TRANSACTION_TYPES)) {
+        return NextResponse.json({ error: "Invalid transaction type" }, { status: 400 });
+      }
       query.type = type;
     }
 
@@ -51,19 +63,15 @@ export async function GET(request: NextRequest) {
       .lean();
 
     // Format dates as YYYY-MM-DD strings to avoid timezone issues
-    const formattedTransactions = transactions.map((t: any) => {
-      const formatted: any = { ...t };
-      
-      // Format the transaction date as YYYY-MM-DD using UTC
-      if (t.date) {
-        formatted.date = formatDateAsUTC(new Date(t.date));
-      }
-      
-      // Format dueDate as YYYY-MM-DD string using UTC
-      if (t.dueDate) {
-        formatted.dueDate = formatDateAsUTC(new Date(t.dueDate));
-      }
-      
+    const formattedTransactions: FormattedTransaction[] = transactions.map((t) => {
+      const formatted: FormattedTransaction = {
+        ...t,
+        _id: t._id.toString(),
+        date: t.date ? formatDateAsUTC(new Date(t.date)) : "",
+        dueDate: t.dueDate ? formatDateAsUTC(new Date(t.dueDate)) : undefined,
+        createdAt: t.createdAt.toISOString(),
+        updatedAt: t.updatedAt.toISOString(),
+      };
       return formatted;
     });
 
@@ -99,6 +107,15 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
     }
 
+    const parsedAmount = parseFloatSafe(amount);
+    if (parsedAmount === null || parsedAmount <= 0) {
+      return NextResponse.json({ error: "Invalid amount" }, { status: 400 });
+    }
+
+    if (!isValidEnum(type, TRANSACTION_TYPES)) {
+      return NextResponse.json({ error: "Invalid transaction type" }, { status: 400 });
+    }
+
     let transactionDate: Date;
     try {
       transactionDate = parseDateAsUTC(date, time);
@@ -118,7 +135,7 @@ export async function POST(request: NextRequest) {
 
     const transaction = await Transaction.create({
       userId: session.user.id,
-      amount: parseFloat(amount),
+      amount: parsedAmount,
       type,
       date: transactionDate,
       time,
