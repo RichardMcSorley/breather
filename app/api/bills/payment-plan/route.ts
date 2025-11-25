@@ -57,7 +57,20 @@ export async function POST(request: NextRequest) {
     const processedBills: ProcessedBill[] = bills.map((bill) => {
       const dueDay = bill.dueDate;
       // Generate due date for current month
-      const dueDate = new Date(Date.UTC(currentYear, currentMonth, dueDay));
+      let dueDate = new Date(Date.UTC(currentYear, currentMonth, dueDay));
+      
+      // If the due date has already passed, use next month's due date
+      if (dueDate < startDateObj) {
+        // Move to next month
+        let nextMonth = currentMonth + 1;
+        let nextYear = currentYear;
+        if (nextMonth > 11) {
+          nextMonth = 0;
+          nextYear += 1;
+        }
+        dueDate = new Date(Date.UTC(nextYear, nextMonth, dueDay));
+      }
+      
       const billId = bill._id.toString();
       
       return {
