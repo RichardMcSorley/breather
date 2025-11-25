@@ -63,16 +63,33 @@ export async function GET(request: NextRequest) {
       .limit(limit)
       .lean();
 
-    // Format dueDate as YYYY-MM-DD string to avoid timezone issues
+    // Format dates as YYYY-MM-DD strings to avoid timezone issues
     const formattedTransactions = transactions.map((t: any) => {
+      const formatted: any = { ...t };
+      
+      // Format the transaction date as YYYY-MM-DD
+      // Since dates are stored with local time components, we need to extract them correctly
+      // The date was stored using local time, so we use UTC methods to get the original values
+      if (t.date) {
+        const dateObj = new Date(t.date);
+        // Use UTC methods to avoid server timezone conversion
+        // This preserves the date as it was originally stored
+        const year = dateObj.getUTCFullYear();
+        const month = String(dateObj.getUTCMonth() + 1).padStart(2, '0');
+        const day = String(dateObj.getUTCDate()).padStart(2, '0');
+        formatted.date = `${year}-${month}-${day}`;
+      }
+      
+      // Format dueDate as YYYY-MM-DD string to avoid timezone issues
       if (t.dueDate) {
         const dueDateObj = new Date(t.dueDate);
-        const year = dueDateObj.getFullYear();
-        const month = String(dueDateObj.getMonth() + 1).padStart(2, '0');
-        const day = String(dueDateObj.getDate()).padStart(2, '0');
-        return { ...t, dueDate: `${year}-${month}-${day}` };
+        const year = dueDateObj.getUTCFullYear();
+        const month = String(dueDateObj.getUTCMonth() + 1).padStart(2, '0');
+        const day = String(dueDateObj.getUTCDate()).padStart(2, '0');
+        formatted.dueDate = `${year}-${month}-${day}`;
       }
-      return t;
+      
+      return formatted;
     });
 
     const total = await Transaction.countDocuments(query);

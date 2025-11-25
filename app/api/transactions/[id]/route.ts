@@ -45,13 +45,24 @@ export async function GET(
       return NextResponse.json({ error: "Transaction not found" }, { status: 404 });
     }
 
-    // Format dueDate as YYYY-MM-DD string to avoid timezone issues
+    // Format dates as YYYY-MM-DD strings to avoid timezone issues
     const transactionObj: any = { ...transaction };
+    
+    // Format the transaction date
+    if (transactionObj.date) {
+      const dateObj = new Date(transactionObj.date);
+      const year = dateObj.getUTCFullYear();
+      const month = String(dateObj.getUTCMonth() + 1).padStart(2, '0');
+      const day = String(dateObj.getUTCDate()).padStart(2, '0');
+      transactionObj.date = `${year}-${month}-${day}`;
+    }
+    
+    // Format dueDate
     if (transactionObj.dueDate) {
       const dueDateObj = new Date(transactionObj.dueDate);
-      const year = dueDateObj.getFullYear();
-      const month = String(dueDateObj.getMonth() + 1).padStart(2, '0');
-      const day = String(dueDateObj.getDate()).padStart(2, '0');
+      const year = dueDateObj.getUTCFullYear();
+      const month = String(dueDateObj.getUTCMonth() + 1).padStart(2, '0');
+      const day = String(dueDateObj.getUTCDate()).padStart(2, '0');
       transactionObj.dueDate = `${year}-${month}-${day}`;
     }
 
@@ -112,19 +123,32 @@ export async function PUT(
       return NextResponse.json({ error: "Transaction not found" }, { status: 404 });
     }
 
-    // Convert to plain object and format dueDate as YYYY-MM-DD string
+    // Convert to plain object and format dates as YYYY-MM-DD strings
     const transactionObj = transaction.toObject();
+    
+    // Format the transaction date
+    let formattedDate: string | undefined;
+    if (transactionObj.date) {
+      const dateObj = new Date(transactionObj.date);
+      const year = dateObj.getUTCFullYear();
+      const month = String(dateObj.getUTCMonth() + 1).padStart(2, '0');
+      const day = String(dateObj.getUTCDate()).padStart(2, '0');
+      formattedDate = `${year}-${month}-${day}`;
+    }
+    
+    // Format dueDate
     let formattedDueDate: string | undefined;
     if (transactionObj.dueDate) {
       const dueDateObj = new Date(transactionObj.dueDate);
-      const year = dueDateObj.getFullYear();
-      const month = String(dueDateObj.getMonth() + 1).padStart(2, '0');
-      const day = String(dueDateObj.getDate()).padStart(2, '0');
+      const year = dueDateObj.getUTCFullYear();
+      const month = String(dueDateObj.getUTCMonth() + 1).padStart(2, '0');
+      const day = String(dueDateObj.getUTCDate()).padStart(2, '0');
       formattedDueDate = `${year}-${month}-${day}`;
     }
 
     return NextResponse.json({
       ...transactionObj,
+      date: formattedDate || transactionObj.date,
       dueDate: formattedDueDate,
     });
   } catch (error) {
