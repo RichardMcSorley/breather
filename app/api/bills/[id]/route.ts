@@ -18,7 +18,7 @@ export async function PUT(
     await connectDB();
 
     const body = await request.json();
-    const { name, amount, dueDate, company, category, notes, isActive } = body;
+    const { name, amount, dueDate, company, category, notes, isActive, useInPlan } = body;
 
     const updateData: any = {};
     if (name !== undefined) updateData.name = name;
@@ -31,6 +31,7 @@ export async function PUT(
     if (category !== undefined) updateData.category = category || null;
     if (notes !== undefined) updateData.notes = notes || null;
     if (isActive !== undefined) updateData.isActive = isActive;
+    if (useInPlan !== undefined) updateData.useInPlan = useInPlan;
 
     const bill = await Bill.findOneAndUpdate(
       { _id: params.id, userId: session.user.id },
