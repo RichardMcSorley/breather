@@ -77,13 +77,8 @@ export default function DashboardPage() {
 
       if (res.ok) {
         const data = await res.json();
-        // Filter for payments up to and including today (compare as strings in YYYY-MM-DD format)
-        const upcomingEntries = data.paymentPlan.filter(
-          (entry: PaymentPlanEntry) => entry.date <= todayStr
-        );
-        setUpcomingPayments(upcomingEntries);
-
-        // Fetch paid payments for all dates up to today
+        
+        // Fetch paid payments for all dates
         const paymentsRes = await fetch("/api/bills/payments");
         if (paymentsRes.ok) {
           const paymentsData = await paymentsRes.json();
@@ -91,14 +86,59 @@ export default function DashboardPage() {
           paymentsData.payments.forEach((payment: any) => {
             const billId = payment.billId?._id || payment.billId?.toString() || payment.billId;
             if (billId && payment.paymentDate) {
-              // Only include payments up to today (compare as strings)
-              if (payment.paymentDate <= todayStr) {
-                const key = `${billId}-${payment.paymentDate}`;
-                paidMap[key] = (paidMap[key] || 0) + payment.amount;
-              }
+              const key = `${billId}-${payment.paymentDate}`;
+              paidMap[key] = (paidMap[key] || 0) + payment.amount;
             }
           });
           setPaidPayments(paidMap);
+
+          // Check if today's entries are all paid
+          const todayEntries = data.paymentPlan.filter(
+            (entry: PaymentPlanEntry) => entry.date === todayStr
+          );
+          const todayAllPaid = todayEntries.length > 0 && todayEntries.every((entry: PaymentPlanEntry) => {
+            const paymentKey = `${entry.billId}-${entry.date}`;
+            const paidAmount = paidMap[paymentKey] || 0;
+            return paidAmount >= entry.payment;
+          });
+
+          // If today is fully paid, show next unpaid dates; otherwise show unpaid entries up to today
+          if (todayAllPaid) {
+            // Find the next unpaid date
+            const allEntries = data.paymentPlan.filter(
+              (entry: PaymentPlanEntry) => entry.date > todayStr
+            );
+            // Find the earliest date with unpaid entries
+            const datesWithUnpaid = new Set<string>();
+            allEntries.forEach((entry: PaymentPlanEntry) => {
+              const paymentKey = `${entry.billId}-${entry.date}`;
+              const paidAmount = paidMap[paymentKey] || 0;
+              if (paidAmount < entry.payment) {
+                datesWithUnpaid.add(entry.date);
+              }
+            });
+            
+            if (datesWithUnpaid.size > 0) {
+              const nextUnpaidDate = Array.from(datesWithUnpaid).sort()[0];
+              const upcomingEntries = data.paymentPlan.filter(
+                (entry: PaymentPlanEntry) => entry.date === nextUnpaidDate
+              );
+              setUpcomingPayments(upcomingEntries);
+            } else {
+              setUpcomingPayments([]);
+            }
+          } else {
+            // Show unpaid entries up to and including today
+            const upcomingEntries = data.paymentPlan.filter(
+              (entry: PaymentPlanEntry) => {
+                if (entry.date > todayStr) return false;
+                const paymentKey = `${entry.billId}-${entry.date}`;
+                const paidAmount = paidMap[paymentKey] || 0;
+                return paidAmount < entry.payment;
+              }
+            );
+            setUpcomingPayments(upcomingEntries);
+          }
         }
       }
     } catch (error) {
