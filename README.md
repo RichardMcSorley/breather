@@ -145,6 +145,63 @@ The app works offline and automatically syncs when you come back online:
 - Automatic sync when connection is restored
 - Manual sync button available in the offline indicator
 
+## Testing
+
+The project uses Vitest for testing with comprehensive coverage of utilities, hooks, API routes, and components.
+
+### Running Tests
+
+```bash
+# Run all tests
+npm test
+
+# Run tests in watch mode
+npm run test:watch
+
+# Run tests with UI
+npm run test:ui
+
+# Run tests with coverage report
+npm run test:coverage
+
+# Run tests in CI mode
+npm run test:ci
+```
+
+### Test Structure
+
+```
+/__tests__
+  /api/              # API route integration tests
+  /components/       # Component tests
+  /hooks/            # Hook tests
+  /lib/              # Utility function tests
+  /utils/            # Test utilities and helpers
+    /mocks/          # MSW handlers
+    /setup/          # Database setup
+```
+
+### Writing Tests
+
+- **Unit Tests**: Test individual functions and utilities in isolation
+- **Integration Tests**: Test API routes with in-memory MongoDB
+- **Component Tests**: Test React components with React Testing Library
+
+### Test Coverage Goals
+
+- Statements: 80%
+- Branches: 75%
+- Functions: 80%
+- Lines: 80%
+
+### Testing Best Practices
+
+- Use MSW to mock API calls in component/hook tests
+- Use mongodb-memory-server for API route tests
+- Test both happy paths and error scenarios
+- Use React Testing Library best practices (test user behavior, not implementation)
+- Mock external dependencies appropriately
+
 ## Deployment
 
 ### Vercel
