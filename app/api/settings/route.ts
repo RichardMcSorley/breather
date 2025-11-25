@@ -27,6 +27,13 @@ export async function GET() {
       if (settings.irsMileageDeduction === undefined || settings.irsMileageDeduction === null) {
         settings.irsMileageDeduction = 0.70;
       }
+      // Ensure arrays exist
+      if (!settings.incomeSourceTags) {
+        settings.incomeSourceTags = [];
+      }
+      if (!settings.expenseSourceTags) {
+        settings.expenseSourceTags = [];
+      }
       return NextResponse.json(settings);
     }
   } catch (error) {
@@ -44,7 +51,7 @@ export async function PUT(request: NextRequest) {
     await connectDB();
 
     const body = await request.json();
-    const { irsMileageDeduction } = body;
+    const { irsMileageDeduction, incomeSourceTags, expenseSourceTags } = body;
 
     // Parse irsMileageDeduction - handle both number and string inputs
     let parsedIrsMileage: number = 0.70; // default
@@ -59,13 +66,26 @@ export async function PUT(request: NextRequest) {
       }
     }
 
+    // Prepare update object
+    const updateData: any = {
+      irsMileageDeduction: parsedIrsMileage,
+    };
+
+    // Handle incomeSourceTags if provided
+    if (incomeSourceTags !== undefined) {
+      updateData.incomeSourceTags = Array.isArray(incomeSourceTags) ? incomeSourceTags : [];
+    }
+
+    // Handle expenseSourceTags if provided
+    if (expenseSourceTags !== undefined) {
+      updateData.expenseSourceTags = Array.isArray(expenseSourceTags) ? expenseSourceTags : [];
+    }
+
     // Use findOneAndUpdate with explicit $set to ensure all fields are updated
     const settings = await UserSettings.findOneAndUpdate(
       { userId: session.user.id },
       {
-        $set: {
-          irsMileageDeduction: parsedIrsMileage,
-        }
+        $set: updateData,
       },
       { 
         new: true, 

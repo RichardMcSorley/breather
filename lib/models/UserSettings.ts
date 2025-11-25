@@ -3,6 +3,8 @@ import mongoose, { Schema, Document, Model } from "mongoose";
 export interface IUserSettings extends Document {
   userId: string;
   irsMileageDeduction: number;
+  incomeSourceTags?: string[];
+  expenseSourceTags?: string[];
   createdAt: Date;
   updatedAt: Date;
 }
@@ -18,6 +20,14 @@ const UserSettingsSchema: Schema = new Schema(
     irsMileageDeduction: {
       type: Number,
       default: 0.70,
+    },
+    incomeSourceTags: {
+      type: [String],
+      default: undefined,
+    },
+    expenseSourceTags: {
+      type: [String],
+      default: undefined,
     },
   },
   {
