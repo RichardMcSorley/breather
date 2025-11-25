@@ -98,9 +98,12 @@ export async function POST(request: NextRequest) {
     await payment.populate("billId", "name company");
 
     const paymentObj = payment.toObject();
-    paymentObj.paymentDate = formatDateAsUTC(new Date(paymentObj.paymentDate));
+    const formattedPayment: any = {
+      ...paymentObj,
+      paymentDate: formatDateAsUTC(new Date(paymentObj.paymentDate)),
+    };
 
-    return NextResponse.json(paymentObj, { status: 201 });
+    return NextResponse.json(formattedPayment, { status: 201 });
   } catch (error) {
     return handleApiError(error);
   }
