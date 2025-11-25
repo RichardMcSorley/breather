@@ -9,6 +9,7 @@ export interface IBill extends Document {
   category?: string;
   notes?: string;
   isActive: boolean;
+  useInPlan: boolean;
   lastAmount: number;
   createdAt: Date;
   updatedAt: Date;
@@ -45,6 +46,10 @@ const BillSchema: Schema = new Schema(
       type: String,
     },
     isActive: {
+      type: Boolean,
+      default: true,
+    },
+    useInPlan: {
       type: Boolean,
       default: true,
     },

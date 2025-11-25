@@ -36,9 +36,10 @@ export async function POST(request: NextRequest) {
     const currentYear = startDateObj.getUTCFullYear();
     const currentMonth = startDateObj.getUTCMonth();
 
-    // Get all bills (since we removed the active/inactive status from UI)
+    // Get all bills that are marked for use in plan
     const bills = await Bill.find({
       userId: session.user.id,
+      useInPlan: true,
     }).lean();
 
     if (bills.length === 0) {

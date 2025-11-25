@@ -17,6 +17,7 @@ interface Bill {
   category?: string;
   notes?: string;
   isActive: boolean;
+  useInPlan: boolean;
   lastAmount: number;
 }
 
@@ -59,6 +60,7 @@ export default function BillsPage() {
     category: "",
     notes: "",
     isActive: true,
+    useInPlan: true,
   });
   const [paymentPlanConfig, setPaymentPlanConfig] = useState({
     startDate: new Date().toISOString().split("T")[0],
@@ -165,6 +167,7 @@ export default function BillsPage() {
       category: "",
       notes: "",
       isActive: true,
+      useInPlan: true,
     });
     setShowAddModal(true);
   };
@@ -179,6 +182,7 @@ export default function BillsPage() {
       category: bill.category || "",
       notes: bill.notes || "",
       isActive: bill.isActive,
+      useInPlan: bill.useInPlan ?? true,
     });
     setShowEditModal(true);
   };
@@ -196,6 +200,7 @@ export default function BillsPage() {
         amount: parseFloat(formData.amount),
         dueDate: parseInt(formData.dueDate),
         isActive: true, // Always active since we removed the UI control
+        useInPlan: formData.useInPlan,
       };
       
       // Include optional fields - send empty string if empty, not undefined
@@ -226,6 +231,28 @@ export default function BillsPage() {
     } catch (error) {
       console.error("Error saving bill:", error);
       alert("Error saving bill");
+    }
+  };
+
+  const handleToggleUseInPlan = async (bill: Bill) => {
+    try {
+      const currentValue = bill.useInPlan ?? true;
+      const res = await fetch(`/api/bills/${bill._id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          useInPlan: !currentValue,
+        }),
+      });
+
+      if (res.ok) {
+        fetchBills();
+      } else {
+        alert("Error updating bill");
+      }
+    } catch (error) {
+      console.error("Error updating bill:", error);
+      alert("Error updating bill");
     }
   };
 
@@ -506,6 +533,9 @@ export default function BillsPage() {
                 <thead className="bg-gray-50 dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700">
                   <tr>
                     <th className="px-2 sm:px-4 py-2 sm:py-3 text-left text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider">
+                      Use
+                    </th>
+                    <th className="px-2 sm:px-4 py-2 sm:py-3 text-left text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider">
                       Bill Name
                     </th>
                     <th className="px-2 sm:px-4 py-2 sm:py-3 text-left text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider hidden sm:table-cell">
@@ -534,6 +564,17 @@ export default function BillsPage() {
                       key={bill._id}
                       className="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
                     >
+                      <td className="px-2 sm:px-4 py-2 sm:py-3 whitespace-nowrap">
+                        <label className="flex items-center cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={bill.useInPlan ?? true}
+                            onChange={() => handleToggleUseInPlan(bill)}
+                            className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 dark:focus:ring-blue-600 dark:ring-offset-gray-800 focus:ring-2 dark:bg-gray-700 dark:border-gray-600"
+                            title="Use in payment plan"
+                          />
+                        </label>
+                      </td>
                       <td className="px-2 sm:px-4 py-2 sm:py-3 whitespace-nowrap">
                         <div className="font-semibold text-sm sm:text-base text-gray-900 dark:text-white">
                           {bill.name}
