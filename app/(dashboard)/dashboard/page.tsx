@@ -375,7 +375,7 @@ export default function DashboardPage() {
               ←
             </Button>
             
-            <div className="flex-1 min-w-[200px]">
+            <div className="w-[180px]">
               {viewMode === "day" ? (
                 <Input
                   type="date"
@@ -423,11 +423,6 @@ export default function DashboardPage() {
             >
               →
             </Button>
-          </div>
-          
-          {/* Display Text */}
-          <div className="text-center text-base font-semibold text-gray-900 dark:text-white">
-            {getDisplayText()}
           </div>
         </div>
       </Card>
