@@ -81,6 +81,45 @@ describe("GET /api/bills", () => {
     expect(data.bills).toHaveLength(1);
     expect(data.bills[0].name).toBe("Active Bill");
   });
+
+  it("should sort bills by dueDate and name", async () => {
+    await Bill.create({
+      userId: TEST_USER_ID,
+      name: "Z Bill",
+      amount: 100,
+      dueDate: 15,
+      lastAmount: 100,
+    });
+
+    await Bill.create({
+      userId: TEST_USER_ID,
+      name: "A Bill",
+      amount: 50,
+      dueDate: 1,
+      lastAmount: 50,
+    });
+
+    await Bill.create({
+      userId: TEST_USER_ID,
+      name: "B Bill",
+      amount: 75,
+      dueDate: 1,
+      lastAmount: 75,
+    });
+
+    const request = new NextRequest("http://localhost:3000/api/bills");
+    const response = await GET(request);
+    const data = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(data.bills).toHaveLength(3);
+    // Should be sorted by dueDate first, then name
+    expect(data.bills[0].dueDate).toBe(1);
+    expect(data.bills[0].name).toBe("A Bill");
+    expect(data.bills[1].dueDate).toBe(1);
+    expect(data.bills[1].name).toBe("B Bill");
+    expect(data.bills[2].dueDate).toBe(15);
+  });
 });
 
 describe("POST /api/bills", () => {
@@ -165,6 +204,129 @@ describe("POST /api/bills", () => {
 
     expect(response.status).toBe(400);
     expect(data.error).toContain("Invalid due date");
+  });
+
+  it("should return 400 for invalid name (empty after sanitization)", async () => {
+    const request = new NextRequest("http://localhost:3000/api/bills", {
+      method: "POST",
+      body: JSON.stringify({
+        name: "   ", // Empty after sanitization
+        amount: 1000,
+        dueDate: 1,
+      }),
+    });
+
+    const response = await POST(request);
+    const data = await response.json();
+
+    expect(response.status).toBe(400);
+    expect(data.error).toBe("Invalid name");
+  });
+
+  it("should set default isActive to true", async () => {
+    const request = new NextRequest("http://localhost:3000/api/bills", {
+      method: "POST",
+      body: JSON.stringify({
+        name: "Rent",
+        amount: 1000,
+        dueDate: 1,
+      }),
+    });
+
+    const response = await POST(request);
+    const data = await response.json();
+
+    expect(response.status).toBe(201);
+    expect(data.isActive).toBe(true);
+  });
+
+  it("should set default useInPlan to true", async () => {
+    const request = new NextRequest("http://localhost:3000/api/bills", {
+      method: "POST",
+      body: JSON.stringify({
+        name: "Rent",
+        amount: 1000,
+        dueDate: 1,
+      }),
+    });
+
+    const response = await POST(request);
+    const data = await response.json();
+
+    expect(response.status).toBe(201);
+    expect(data.useInPlan).toBe(true);
+  });
+
+  it("should allow setting isActive to false", async () => {
+    const request = new NextRequest("http://localhost:3000/api/bills", {
+      method: "POST",
+      body: JSON.stringify({
+        name: "Rent",
+        amount: 1000,
+        dueDate: 1,
+        isActive: false,
+      }),
+    });
+
+    const response = await POST(request);
+    const data = await response.json();
+
+    expect(response.status).toBe(201);
+    expect(data.isActive).toBe(false);
+  });
+
+  it("should allow setting useInPlan to false", async () => {
+    const request = new NextRequest("http://localhost:3000/api/bills", {
+      method: "POST",
+      body: JSON.stringify({
+        name: "Rent",
+        amount: 1000,
+        dueDate: 1,
+        useInPlan: false,
+      }),
+    });
+
+    const response = await POST(request);
+    const data = await response.json();
+
+    expect(response.status).toBe(201);
+    expect(data.useInPlan).toBe(false);
+  });
+
+  it("should sanitize company field", async () => {
+    const request = new NextRequest("http://localhost:3000/api/bills", {
+      method: "POST",
+      body: JSON.stringify({
+        name: "Rent",
+        amount: 1000,
+        dueDate: 1,
+        company: "  Landlord Co  ",
+      }),
+    });
+
+    const response = await POST(request);
+    const data = await response.json();
+
+    expect(response.status).toBe(201);
+    expect(data.company).toBe("Landlord Co");
+  });
+
+  it("should handle null company field", async () => {
+    const request = new NextRequest("http://localhost:3000/api/bills", {
+      method: "POST",
+      body: JSON.stringify({
+        name: "Rent",
+        amount: 1000,
+        dueDate: 1,
+        company: null,
+      }),
+    });
+
+    const response = await POST(request);
+    const data = await response.json();
+
+    expect(response.status).toBe(201);
+    expect(data.company).toBeNull();
   });
 });
 

@@ -168,6 +168,82 @@ describe("GET /api/transactions", () => {
     expect(response.status).toBe(400);
     expect(data.error).toBe("Invalid transaction type");
   });
+
+  it("should filter by date range", async () => {
+    await Transaction.create({
+      userId: TEST_USER_ID,
+      amount: 100,
+      type: "income",
+      date: new Date("2024-01-15"),
+      time: "10:00",
+    });
+
+    await Transaction.create({
+      userId: TEST_USER_ID,
+      amount: 200,
+      type: "income",
+      date: new Date("2024-02-15"),
+      time: "10:00",
+    });
+
+    const request = new NextRequest(
+      "http://localhost:3000/api/transactions?startDate=2024-01-01&endDate=2024-01-31"
+    );
+    const response = await GET(request);
+    const data = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(data.transactions).toHaveLength(1);
+    expect(data.transactions[0].amount).toBe(100);
+  });
+
+  it("should sort transactions by date descending", async () => {
+    await Transaction.create({
+      userId: TEST_USER_ID,
+      amount: 100,
+      type: "income",
+      date: new Date("2024-01-15"),
+      time: "10:00",
+    });
+
+    await Transaction.create({
+      userId: TEST_USER_ID,
+      amount: 200,
+      type: "income",
+      date: new Date("2024-01-20"),
+      time: "10:00",
+    });
+
+    await Transaction.create({
+      userId: TEST_USER_ID,
+      amount: 150,
+      type: "income",
+      date: new Date("2024-01-18"),
+      time: "10:00",
+    });
+
+    const request = new NextRequest("http://localhost:3000/api/transactions");
+    const response = await GET(request);
+    const data = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(data.transactions).toHaveLength(3);
+    // Should be sorted by date descending
+    expect(data.transactions[0].date).toBe("2024-01-20");
+    expect(data.transactions[1].date).toBe("2024-01-18");
+    expect(data.transactions[2].date).toBe("2024-01-15");
+  });
+
+  it("should return 400 for invalid pagination parameters", async () => {
+    const request = new NextRequest(
+      "http://localhost:3000/api/transactions?page=0&limit=50"
+    );
+    const response = await GET(request);
+    const data = await response.json();
+
+    expect(response.status).toBe(400);
+    expect(data.error).toBe("Invalid pagination parameters");
+  });
 });
 
 describe("POST /api/transactions", () => {
@@ -301,6 +377,118 @@ describe("POST /api/transactions", () => {
 
     expect(response.status).toBe(201);
     expect(data.dueDate).toBe("2024-01-20");
+  });
+
+  it("should return 400 for invalid date format", async () => {
+    const request = new NextRequest("http://localhost:3000/api/transactions", {
+      method: "POST",
+      body: JSON.stringify({
+        amount: 100,
+        type: "income",
+        date: "invalid-date",
+        time: "10:00",
+      }),
+    });
+
+    const response = await POST(request);
+    const data = await response.json();
+
+    expect(response.status).toBe(400);
+    expect(data.error).toBe("Invalid date or time format");
+  });
+
+  it("should return 400 for invalid time format", async () => {
+    const request = new NextRequest("http://localhost:3000/api/transactions", {
+      method: "POST",
+      body: JSON.stringify({
+        amount: 100,
+        type: "income",
+        date: "2024-01-15",
+        time: "invalid-time",
+      }),
+    });
+
+    const response = await POST(request);
+    const data = await response.json();
+
+    expect(response.status).toBe(400);
+    // The error might be "Validation error" from date parsing, or "Invalid date or time format"
+    expect(data.error).toMatch(/Invalid date or time format|Validation error/);
+  });
+
+  it("should return 400 for invalid dueDate format", async () => {
+    const request = new NextRequest("http://localhost:3000/api/transactions", {
+      method: "POST",
+      body: JSON.stringify({
+        amount: 100,
+        type: "expense",
+        date: "2024-01-15",
+        time: "10:00",
+        dueDate: "invalid-date",
+      }),
+    });
+
+    const response = await POST(request);
+    const data = await response.json();
+
+    expect(response.status).toBe(400);
+    expect(data.error).toBe("Invalid dueDate format");
+  });
+
+  it("should return 400 for zero amount", async () => {
+    const request = new NextRequest("http://localhost:3000/api/transactions", {
+      method: "POST",
+      body: JSON.stringify({
+        amount: 0,
+        type: "income",
+        date: "2024-01-15",
+        time: "10:00",
+      }),
+    });
+
+    const response = await POST(request);
+    const data = await response.json();
+
+    expect(response.status).toBe(400);
+    // Amount 0 is falsy, so it triggers "Missing required fields" check first
+    // The code checks `!amount` before parsing, so 0 fails the missing fields check
+    expect(data.error).toBe("Missing required fields");
+  });
+
+  it("should return 400 for negative amount", async () => {
+    const request = new NextRequest("http://localhost:3000/api/transactions", {
+      method: "POST",
+      body: JSON.stringify({
+        amount: -100,
+        type: "income",
+        date: "2024-01-15",
+        time: "10:00",
+      }),
+    });
+
+    const response = await POST(request);
+    const data = await response.json();
+
+    expect(response.status).toBe(400);
+    expect(data.error).toBe("Invalid amount");
+  });
+
+  it("should handle very large amounts", async () => {
+    const request = new NextRequest("http://localhost:3000/api/transactions", {
+      method: "POST",
+      body: JSON.stringify({
+        amount: 999999999.99,
+        type: "income",
+        date: "2024-01-15",
+        time: "10:00",
+      }),
+    });
+
+    const response = await POST(request);
+    const data = await response.json();
+
+    expect(response.status).toBe(201);
+    expect(data.amount).toBe(999999999.99);
   });
 });
 
