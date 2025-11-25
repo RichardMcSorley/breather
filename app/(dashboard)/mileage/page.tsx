@@ -12,6 +12,7 @@ interface MileageEntry {
   _id: string;
   odometer: number;
   date: string;
+  classification?: "work" | "personal";
   notes?: string;
   createdAt: string;
 }
@@ -246,34 +247,34 @@ export default function MileagePage() {
     ? latestEntry.odometer - previousEntry.odometer 
     : null;
 
-  // Calculate current year's mileage
+  // Calculate current year's work mileage for tax deductions
   const currentYear = new Date().getFullYear();
   let currentYearMiles = 0;
   
-  // Find entries from current year
-  const currentYearEntries = entries.filter(entry => {
+  // Find work entries from current year
+  const currentYearWorkEntries = entries.filter(entry => {
     const entryDate = new Date(entry.date);
-    return entryDate.getFullYear() === currentYear;
+    return entryDate.getFullYear() === currentYear && entry.classification === "work";
   });
   
-  if (currentYearEntries.length > 0) {
-    // Sum up miles between consecutive entries in current year
-    for (let i = 0; i < currentYearEntries.length; i++) {
-      const entry = currentYearEntries[i];
-      const previousEntry = i < currentYearEntries.length - 1 
-        ? currentYearEntries[i + 1] 
+  if (currentYearWorkEntries.length > 0) {
+    // Sum up miles between consecutive work entries in current year
+    for (let i = 0; i < currentYearWorkEntries.length; i++) {
+      const entry = currentYearWorkEntries[i];
+      const previousWorkEntry = i < currentYearWorkEntries.length - 1 
+        ? currentYearWorkEntries[i + 1] 
         : entries.find(e => {
             const eDate = new Date(e.date);
-            return eDate.getFullYear() < currentYear;
+            return eDate.getFullYear() < currentYear && e.classification === "work";
           });
       
-      if (previousEntry) {
-        currentYearMiles += entry.odometer - previousEntry.odometer;
+      if (previousWorkEntry) {
+        currentYearMiles += entry.odometer - previousWorkEntry.odometer;
       }
     }
   }
 
-  // Calculate tax deduction
+  // Calculate tax deduction (work miles only)
   const taxDeduction = currentYearMiles * irsMileageDeduction;
 
   const formatCurrency = (amount: number) => {
@@ -370,6 +371,15 @@ export default function MileagePage() {
                       </div>
                       <div className="text-sm text-gray-600 dark:text-gray-400">
                         {formatDate(entry.date)}
+                        {entry.classification && (
+                          <span className={`ml-2 px-2 py-0.5 rounded text-xs font-medium ${
+                            entry.classification === "work"
+                              ? "bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300"
+                              : "bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300"
+                          }`}>
+                            {entry.classification === "work" ? "Work" : "Personal"}
+                          </span>
+                        )}
                       </div>
                       {entry.notes && (
                         <div className="text-sm text-gray-500 dark:text-gray-400 mt-1">
@@ -400,9 +410,12 @@ export default function MileagePage() {
                     </div>
                   </div>
                   {milesDifference !== null && index < entries.length - 1 && (
-                    <div className="border-b border-gray-200 dark:border-gray-700 py-2">
-                      <div className="flex justify-center items-center">
-                        <span className="text-sm font-medium text-gray-600 dark:text-gray-400">
+                    <div className="relative py-2">
+                      <div className="absolute inset-0 flex items-center">
+                        <div className="w-full border-t border-gray-200 dark:border-gray-700"></div>
+                      </div>
+                      <div className="relative flex justify-center">
+                        <span className="bg-white dark:bg-gray-800 px-2 text-sm text-gray-500 dark:text-gray-400">
                           {formatOdometer(milesDifference)} miles
                         </span>
                       </div>

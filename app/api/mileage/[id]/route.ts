@@ -53,7 +53,7 @@ export async function PUT(
     await connectDB();
 
     const body = await request.json();
-    const { odometer, date, notes } = body;
+    const { odometer, date, notes, classification } = body;
 
     const existingEntry = await Mileage.findOne({
       _id: params.id,
@@ -78,13 +78,30 @@ export async function PUT(
       }
     }
 
+    const updateData: any = {};
+    
+    if (odometer !== undefined) {
+      updateData.odometer = parseFloat(odometer);
+    }
+    if (parsedDate) {
+      updateData.date = parsedDate;
+    }
+    if (notes !== undefined) {
+      updateData.notes = notes;
+    }
+    // Always include classification if provided (required field)
+    if (classification !== undefined && classification !== null) {
+      // Validate classification value
+      if (classification !== "work" && classification !== "personal") {
+        return NextResponse.json({ error: "Invalid classification value" }, { status: 400 });
+      }
+      updateData.classification = classification;
+    }
+    // Note: If classification is not provided, we don't update it (keeps existing value)
+
     const mileageEntry = await Mileage.findOneAndUpdate(
       { _id: params.id, userId: session.user.id },
-      {
-        ...(odometer !== undefined ? { odometer: parseFloat(odometer) } : {}),
-        ...(parsedDate ? { date: parsedDate } : {}),
-        ...(notes !== undefined ? { notes } : {}),
-      },
+      updateData,
       { new: true }
     );
 

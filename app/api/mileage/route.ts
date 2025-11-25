@@ -71,7 +71,7 @@ export async function POST(request: NextRequest) {
     await connectDB();
 
     const body = await request.json();
-    const { odometer, date, notes } = body;
+    const { odometer, date, notes, classification } = body;
 
     if (!odometer || odometer < 0 || !date) {
       return NextResponse.json({ error: "Missing required fields or invalid odometer value" }, { status: 400 });
@@ -90,6 +90,7 @@ export async function POST(request: NextRequest) {
       userId: session.user.id,
       odometer: parseFloat(odometer),
       date: parsedDate,
+      classification: classification || "work",
       notes,
     });
 

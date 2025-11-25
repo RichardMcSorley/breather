@@ -95,6 +95,7 @@ export async function GET(request: NextRequest) {
     // Calculate days until last bill is due (can be negative if overdue)
     const daysUntilLastBill = lastDueDate ? differenceInDays(lastDueDate, now) : 0;
 
+    // Get all mileage entries (for total calculation)
     const mileageEntries = await Mileage.find({
       userId: session.user.id,
       date: {
@@ -104,22 +105,35 @@ export async function GET(request: NextRequest) {
       .sort({ date: 1, createdAt: 1 })
       .lean();
 
+    // Get only work mileage entries for tax deduction calculation
+    const workMileageEntries = await Mileage.find({
+      userId: session.user.id,
+      date: {
+        $gte: thirtyDaysAgo,
+      },
+      classification: "work",
+    })
+      .sort({ date: 1, createdAt: 1 })
+      .lean();
+
     let mileageMilesLast30 = 0;
-    if (mileageEntries.length >= 2) {
+    // Calculate work miles only for tax deductions
+    if (workMileageEntries.length >= 2) {
       mileageMilesLast30 =
-        mileageEntries[mileageEntries.length - 1].odometer -
-        mileageEntries[0].odometer;
-    } else if (mileageEntries.length === 1) {
-      const previousEntry = await Mileage.findOne({
+        workMileageEntries[workMileageEntries.length - 1].odometer -
+        workMileageEntries[0].odometer;
+    } else if (workMileageEntries.length === 1) {
+      const previousWorkEntry = await Mileage.findOne({
         userId: session.user.id,
         date: { $lt: thirtyDaysAgo },
+        classification: "work",
       })
         .sort({ date: -1, createdAt: -1 })
         .lean();
 
-      if (previousEntry) {
+      if (previousWorkEntry) {
         mileageMilesLast30 = Math.max(
-          mileageEntries[0].odometer - previousEntry.odometer,
+          workMileageEntries[0].odometer - previousWorkEntry.odometer,
           0
         );
       }
@@ -232,33 +246,35 @@ export async function GET(request: NextRequest) {
 
     const todayNet = todayIncome - todayExpenses;
 
-    // Calculate today's mileage
-    const todayMileageEntries = await Mileage.find({
+    // Calculate today's work mileage for tax deductions
+    const todayWorkMileageEntries = await Mileage.find({
       userId: session.user.id,
       date: {
         $gte: todayStart,
         $lte: todayEnd,
       },
+      classification: "work",
     })
       .sort({ date: 1, createdAt: 1 })
       .lean();
 
     let todayMileageMiles = 0;
-    if (todayMileageEntries.length >= 2) {
+    if (todayWorkMileageEntries.length >= 2) {
       todayMileageMiles =
-        todayMileageEntries[todayMileageEntries.length - 1].odometer -
-        todayMileageEntries[0].odometer;
-    } else if (todayMileageEntries.length === 1) {
-      const previousEntry = await Mileage.findOne({
+        todayWorkMileageEntries[todayWorkMileageEntries.length - 1].odometer -
+        todayWorkMileageEntries[0].odometer;
+    } else if (todayWorkMileageEntries.length === 1) {
+      const previousWorkEntry = await Mileage.findOne({
         userId: session.user.id,
         date: { $lt: todayStart },
+        classification: "work",
       })
         .sort({ date: -1, createdAt: -1 })
         .lean();
 
-      if (previousEntry) {
+      if (previousWorkEntry) {
         todayMileageMiles = Math.max(
-          todayMileageEntries[0].odometer - previousEntry.odometer,
+          todayWorkMileageEntries[0].odometer - previousWorkEntry.odometer,
           0
         );
       }
