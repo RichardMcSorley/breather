@@ -5,7 +5,6 @@ import { useSession } from "next-auth/react";
 import Layout from "@/components/Layout";
 import Card from "@/components/ui/Card";
 import Button from "@/components/ui/Button";
-import Input from "@/components/ui/Input";
 import AddMileageModal from "@/components/AddMileageModal";
 
 interface MileageEntry {
@@ -21,18 +20,9 @@ export default function MileagePage() {
   const { data: session } = useSession();
   const [entries, setEntries] = useState<MileageEntry[]>([]);
   const [loading, setLoading] = useState(true);
-  const [odometer, setOdometer] = useState("");
-  // Use local date components (not UTC) to match dashboard behavior
-  const getLocalDateString = () => {
-    const now = new Date();
-    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
-  };
-  const [date, setDate] = useState(getLocalDateString());
-  const [notes, setNotes] = useState("");
-  const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState("");
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [editingEntryId, setEditingEntryId] = useState<string | null>(null);
+  const [showAddModal, setShowAddModal] = useState(false);
   const [irsMileageDeduction, setIrsMileageDeduction] = useState<number>(0.67);
 
   const fetchEntries = useCallback(async () => {
@@ -71,49 +61,6 @@ export default function MileagePage() {
     }
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError("");
-    setSubmitting(true);
-
-    try {
-      const odometerValue = parseOdometerInput(odometer);
-      if (isNaN(odometerValue) || odometerValue < 0) {
-        setError("Please enter a valid odometer reading");
-        setSubmitting(false);
-        return;
-      }
-
-      const res = await fetch("/api/mileage", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          odometer: odometerValue,
-          date,
-          notes: notes.trim() || undefined,
-        }),
-      });
-
-      if (res.ok) {
-        const newEntry = await res.json();
-        setEntries((prev) => sortEntriesByDate([newEntry, ...prev]));
-        setOdometer("");
-        setNotes("");
-        setDate(getLocalDateString());
-        fetchSettings(); // Refresh settings in case IRS rate changed
-      } else {
-        const errorData = await res.json();
-        setError(errorData.error || "Failed to save mileage entry");
-      }
-    } catch (error) {
-      console.error("Error saving mileage entry:", error);
-      setError("Failed to save mileage entry. Please try again.");
-    } finally {
-      setSubmitting(false);
-    }
-  };
 
   const formatDate = (dateString: string | Date) => {
     // Handle both Date objects and ISO strings
@@ -182,29 +129,6 @@ export default function MileagePage() {
     return value.toLocaleString("en-US");
   };
 
-  const formatOdometerInput = (value: string): string => {
-    // Remove all non-digit characters (including commas, we'll add them back)
-    const digitsOnly = value.replace(/\D/g, "");
-    
-    if (digitsOnly === "") return "";
-    
-    // Format with commas every 3 digits from right to left
-    const formatted = digitsOnly.replace(/\B(?=(\d{3})+(?!\d))/g, ",");
-    
-    return formatted;
-  };
-
-  const parseOdometerInput = (value: string): number => {
-    // Remove all commas and parse
-    const cleaned = value.replace(/,/g, "");
-    return parseFloat(cleaned) || 0;
-  };
-
-  const handleOdometerChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const inputValue = e.target.value;
-    const formatted = formatOdometerInput(inputValue);
-    setOdometer(formatted);
-  };
 
   const handleDelete = async (id: string) => {
     if (!confirm("Are you sure you want to delete this mileage entry?")) {
@@ -288,47 +212,17 @@ export default function MileagePage() {
 
   return (
     <Layout>
-      <Card className="p-6 mb-6">
-        <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-6">Mileage Tracking</h2>
-        
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <Input
-            label="Current Odometer"
-            type="text"
-            value={odometer}
-            onChange={handleOdometerChange}
-            placeholder="Enter odometer reading"
-            inputMode="numeric"
-            required
-            error={error}
-          />
-
-          <Input
-            label="Date"
-            type="date"
-            value={date}
-            onChange={(e) => setDate(e.target.value)}
-            required
-          />
-
-          <Input
-            label="Notes (optional)"
-            type="text"
-            value={notes}
-            onChange={(e) => setNotes(e.target.value)}
-            placeholder="Add any notes..."
-          />
-
+      <div className="mb-6">
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-xl font-bold text-gray-900 dark:text-white">Mileage Tracking</h2>
           <Button
-            type="submit"
             variant="primary"
-            className="w-full"
-            disabled={submitting}
+            onClick={() => setShowAddModal(true)}
           >
-            {submitting ? "Saving..." : "Save Entry"}
+            Add Entry
           </Button>
-        </form>
-      </Card>
+        </div>
+      </div>
 
       {latestEntry && (
         <Card className="p-6 mb-6">
@@ -436,18 +330,20 @@ export default function MileagePage() {
         </Card>
       )}
 
-      {editingEntryId && (
+      {(showAddModal || editingEntryId) && (
         <AddMileageModal
-          isOpen={!!editingEntryId}
+          isOpen={showAddModal || !!editingEntryId}
           onClose={() => {
+            setShowAddModal(false);
             setEditingEntryId(null);
           }}
           onSuccess={() => {
+            setShowAddModal(false);
             setEditingEntryId(null);
             fetchEntries();
             fetchSettings(); // Refresh settings in case IRS rate changed
           }}
-          entryId={editingEntryId}
+          entryId={editingEntryId || undefined}
         />
       )}
     </Layout>

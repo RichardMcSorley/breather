@@ -316,12 +316,13 @@ export default function DashboardPage() {
       {/* Date Navigation */}
       <Card className="p-4 mb-4">
         <div className="space-y-3">
-          {/* View Mode Selector */}
+          {/* View Mode Selector - Centered above date picker */}
           <div className="flex items-center justify-center gap-2">
             <button
               onClick={() => {
                 setViewMode("day");
-                // Keep the current date when switching to day view
+                // Set to today's date when switching to day view
+                setSelectedDate(getTodayDateString());
               }}
               className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
                 viewMode === "day"
@@ -334,9 +335,11 @@ export default function DashboardPage() {
             <button
               onClick={() => {
                 setViewMode("month");
-                // Set to first of the month when switching to month view
-                const [year, month] = selectedDate.split("-").map(Number);
-                setSelectedDate(`${year}-${String(month).padStart(2, '0')}-01`);
+                // Set to current month (first of the month) when switching to month view
+                const today = new Date();
+                const year = today.getFullYear();
+                const month = String(today.getMonth() + 1).padStart(2, '0');
+                setSelectedDate(`${year}-${month}-01`);
               }}
               className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
                 viewMode === "month"
@@ -349,8 +352,9 @@ export default function DashboardPage() {
             <button
               onClick={() => {
                 setViewMode("year");
-                // Set to January 1st when switching to year view
-                const [year] = selectedDate.split("-").map(Number);
+                // Set to current year (January 1st) when switching to year view
+                const today = new Date();
+                const year = today.getFullYear();
                 setSelectedDate(`${year}-01-01`);
               }}
               className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
@@ -364,7 +368,8 @@ export default function DashboardPage() {
           </div>
           
           {/* Date Navigation Controls */}
-          <div className="flex items-center gap-3">
+          <div className="flex items-center justify-between gap-3">
+            {/* Left button */}
             <Button
               variant="outline"
               size="sm"
@@ -375,40 +380,45 @@ export default function DashboardPage() {
               ←
             </Button>
             
-            <div className="w-[180px]">
-              {viewMode === "day" ? (
-                <Input
-                  type="date"
-                  value={selectedDate}
-                  onChange={handleDateChange}
-                  className="w-full h-10"
-                />
-              ) : viewMode === "month" ? (
-                <Input
-                  type="month"
-                  value={`${selectedDate.split("-")[0]}-${selectedDate.split("-")[1]}`}
-                  onChange={(e) => {
-                    const [year, month] = e.target.value.split("-");
-                    setSelectedDate(`${year}-${month}-01`);
-                  }}
-                  className="w-full h-10"
-                />
-              ) : (
-                <Input
-                  type="number"
-                  value={selectedDate.split("-")[0]}
-                  onChange={(e) => {
-                    const year = e.target.value;
-                    setSelectedDate(`${year}-01-01`);
-                  }}
-                  min="2000"
-                  max={new Date().getFullYear() + 10}
-                  className="w-full h-10"
-                  placeholder="Year"
-                />
-              )}
+            {/* Center: Date picker */}
+            <div className="flex-1 flex justify-center">
+              <div className="w-[180px]">
+                {viewMode === "day" ? (
+                  <Input
+                    type="date"
+                    value={selectedDate}
+                    onChange={handleDateChange}
+                    className="w-full h-10 text-center"
+                    style={{ textAlign: "center" }}
+                  />
+                ) : viewMode === "month" ? (
+                  <Input
+                    type="month"
+                    value={`${selectedDate.split("-")[0]}-${selectedDate.split("-")[1]}`}
+                    onChange={(e) => {
+                      const [year, month] = e.target.value.split("-");
+                      setSelectedDate(`${year}-${month}-01`);
+                    }}
+                    className="w-full h-10 text-center"
+                  />
+                ) : (
+                  <Input
+                    type="number"
+                    value={selectedDate.split("-")[0]}
+                    onChange={(e) => {
+                      const year = e.target.value;
+                      setSelectedDate(`${year}-01-01`);
+                    }}
+                    min="2000"
+                    max={new Date().getFullYear() + 10}
+                    className="w-full h-10 text-center"
+                    placeholder="Year"
+                  />
+                )}
+              </div>
             </div>
             
+            {/* Right button */}
             <Button
               variant="outline"
               size="sm"
@@ -433,11 +443,7 @@ export default function DashboardPage() {
             <Card className="p-6">
               <div className="flex items-center justify-between mb-4">
                 <h2 className="text-xl font-bold text-gray-900 dark:text-white">
-                  {viewMode === "day" 
-                    ? `${getDisplayText()}'s Earnings`
-                    : viewMode === "month"
-                    ? `${getDisplayText()} Earnings`
-                    : `${getDisplayText()} Earnings`}
+                  Earnings
                 </h2>
               </div>
 

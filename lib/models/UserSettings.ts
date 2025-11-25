@@ -23,11 +23,15 @@ const UserSettingsSchema: Schema = new Schema(
     },
     incomeSourceTags: {
       type: [String],
-      default: undefined,
+      default: function() {
+        return [];
+      },
     },
     expenseSourceTags: {
       type: [String],
-      default: undefined,
+      default: function() {
+        return [];
+      },
     },
   },
   {

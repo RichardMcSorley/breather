@@ -46,6 +46,7 @@ export default function HistoryPage() {
   const [loading, setLoading] = useState(true);
   const [showAddModal, setShowAddModal] = useState(false);
   const [editingTransaction, setEditingTransaction] = useState<string | null>(null);
+  const [transactionType, setTransactionType] = useState<"income" | "expense">("income");
   const [filterType, setFilterType] = useState<string>("all");
   const [filterTag, setFilterTag] = useState<string>("all");
 
@@ -149,7 +150,29 @@ export default function HistoryPage() {
     <Layout>
       <div className="mb-6">
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Income/Expense Logs</h2>
+          <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Logs</h2>
+          <div className="flex gap-2">
+            <button
+              onClick={() => {
+                setEditingTransaction(null);
+                setShowAddModal(true);
+                setTransactionType("income");
+              }}
+              className="px-4 py-2 rounded-lg text-sm font-medium bg-green-600 text-white hover:bg-green-700 min-h-[44px]"
+            >
+              + Income
+            </button>
+            <button
+              onClick={() => {
+                setEditingTransaction(null);
+                setShowAddModal(true);
+                setTransactionType("expense");
+              }}
+              className="px-4 py-2 rounded-lg text-sm font-medium bg-red-600 text-white hover:bg-red-700 min-h-[44px]"
+            >
+              + Expense
+            </button>
+          </div>
         </div>
 
         <div className="flex gap-2 mb-4 overflow-x-auto">
@@ -299,8 +322,7 @@ export default function HistoryPage() {
             setShowAddModal(false);
             setEditingTransaction(null);
           }}
-          type={transactions.find((t) => t._id === editingTransaction)?.type || "income"}
-          initialType={transactions.find((t) => t._id === editingTransaction)?.type}
+          type={editingTransaction ? (transactions.find((t) => t._id === editingTransaction)?.type || "income") : transactionType}
           onSuccess={() => {
             setShowAddModal(false);
             setEditingTransaction(null);

@@ -43,4 +43,24 @@ input[type="date"] {
   width: 100%;
 }
 
+/* Center text in date inputs when text-center class is applied */
+input[type="date"].text-center {
+  text-align: center;
+}
+
+/* Handle date input pseudo-elements for better centering */
+input[type="date"].text-center::-webkit-datetime-edit {
+  text-align: center;
+  width: 100%;
+}
+
+input[type="date"].text-center::-webkit-datetime-edit-fields-wrapper {
+  text-align: center;
+  width: 100%;
+}
+
+input[type="date"].text-center::-webkit-datetime-edit-text {
+  text-align: center;
+}
+
 

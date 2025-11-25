@@ -114,6 +114,58 @@ export default function AddTransactionModal({
     }
   }, []);
 
+  const saveCustomTagToSettings = async (tag: string, type: "income" | "expense") => {
+    try {
+      // Fetch current settings
+      const res = await fetch("/api/settings");
+      if (!res.ok) return;
+      
+      const currentSettings = await res.json();
+      const currentTags = type === "income" 
+        ? (currentSettings.incomeSourceTags || [])
+        : (currentSettings.expenseSourceTags || []);
+      
+      // Check if tag already exists (case-insensitive)
+      const tagExists = currentTags.some(
+        (existingTag: string) => existingTag.toLowerCase() === tag.toLowerCase()
+      );
+      
+      if (!tagExists) {
+        // Add the new tag to the appropriate array
+        const updatedTags = [...currentTags, tag];
+        
+        // Update settings
+        const updateBody: any = {
+          irsMileageDeduction: currentSettings.irsMileageDeduction || 0.70,
+        };
+        
+        if (type === "income") {
+          updateBody.incomeSourceTags = updatedTags;
+          updateBody.expenseSourceTags = currentSettings.expenseSourceTags || [];
+        } else {
+          updateBody.incomeSourceTags = currentSettings.incomeSourceTags || [];
+          updateBody.expenseSourceTags = updatedTags;
+        }
+        
+        await fetch("/api/settings", {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(updateBody),
+        });
+        
+        // Update local state to reflect the new tag
+        if (type === "income") {
+          setIncomeSourceTags(updatedTags);
+        } else {
+          setExpenseSourceTags(updatedTags);
+        }
+      }
+    } catch (error) {
+      console.error("Error saving custom tag to settings:", error);
+      // Don't show error to user - this is a background operation
+    }
+  };
+
   useEffect(() => {
     if (isOpen) {
       fetchUserSettings();
@@ -121,14 +173,32 @@ export default function AddTransactionModal({
   }, [isOpen, fetchUserSettings]);
 
   useEffect(() => {
+    if (!isOpen) {
+      // Reset form when modal closes
+      resetForm();
+      setDataLoaded(false);
+      return;
+    }
+
     if (transactionId) {
       setDataLoaded(false);
       fetchTransaction();
     } else {
-      resetForm();
+      // When opening for new transaction, ensure date is set to today
+      const now = new Date();
+      setFormData({
+        amount: initialAmount?.toString() || "",
+        date: formatLocalDate(now),
+        time: now.toTimeString().slice(0, 5),
+        notes: initialNotes || "",
+        tag: "",
+        isBill: initialIsBill || false,
+        dueDate: "",
+      });
+      setCustomTag("");
       setDataLoaded(true);
     }
-  }, [transactionId, isOpen, initialAmount, initialNotes, initialIsBill, fetchTransaction, resetForm]);
+  }, [transactionId, isOpen, initialAmount, initialNotes, initialIsBill, fetchTransaction]);
 
   useEffect(() => {
     if (!isOpen || !dataLoaded) return;
@@ -144,9 +214,9 @@ export default function AddTransactionModal({
     e.preventDefault();
     setLoading(true);
 
-    const now = new Date();
-    const submissionDate = transactionId ? formData.date : formatLocalDate(now);
-    const submissionTime = transactionId ? formData.time : now.toTimeString().slice(0, 5);
+    // Use form data for both new and edited transactions
+    const submissionDate = formData.date;
+    const submissionTime = formData.time;
 
     try {
       const tag = customTag || formData.tag;
@@ -186,6 +256,18 @@ export default function AddTransactionModal({
       });
 
       if (res.ok) {
+        // If a custom tag was used, save it to settings
+        const finalTag = customTag || formData.tag;
+        if (finalTag && finalTag.trim()) {
+          // Check if it's a custom tag (not in the current tags list)
+          const currentTags = transactionType === "income" ? incomeSourceTags : expenseSourceTags;
+          const isCustomTag = !currentTags.includes(finalTag.trim());
+          
+          if (isCustomTag) {
+            await saveCustomTagToSettings(finalTag.trim(), transactionType);
+          }
+        }
+        
         onSuccess();
         resetForm();
       } else {
@@ -206,8 +288,8 @@ export default function AddTransactionModal({
           data: {
             amount: parseFloat(formData.amount),
             type: transactionType,
-            date: submissionDate,
-            time: submissionTime,
+            date: formData.date,
+            time: formData.time,
             notes: formData.notes,
             tag: tag || undefined,
             isBill: formData.isBill,
@@ -275,6 +357,23 @@ export default function AddTransactionModal({
           onChange={(e) => setFormData({ ...formData, amount: e.target.value })}
           placeholder="0.00"
         />
+
+        <div className="grid grid-cols-2 gap-3">
+          <Input
+            label="Date"
+            type="date"
+            required
+            value={formData.date}
+            onChange={(e) => setFormData({ ...formData, date: e.target.value })}
+          />
+          <Input
+            label="Time"
+            type="time"
+            required
+            value={formData.time}
+            onChange={(e) => setFormData({ ...formData, time: e.target.value })}
+          />
+        </div>
 
         {transactionType === "income" && (
           <div>

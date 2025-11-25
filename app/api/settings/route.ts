@@ -14,7 +14,7 @@ export async function GET() {
 
     await connectDB();
 
-    let settings = await UserSettings.findOne({ userId: session.user.id }).lean();
+    let settings = await UserSettings.findOne({ userId: session.user.id }).lean() as any;
 
     if (!settings) {
       const newSettings = await UserSettings.create({
@@ -27,11 +27,15 @@ export async function GET() {
       if (settings.irsMileageDeduction === undefined || settings.irsMileageDeduction === null) {
         settings.irsMileageDeduction = 0.70;
       }
-      // Ensure arrays exist
-      if (!settings.incomeSourceTags) {
+      // Ensure arrays exist (only set if they're undefined or null, not if they're empty arrays)
+      if (settings.incomeSourceTags === undefined || settings.incomeSourceTags === null) {
+        settings.incomeSourceTags = [];
+      } else if (!Array.isArray(settings.incomeSourceTags)) {
         settings.incomeSourceTags = [];
       }
-      if (!settings.expenseSourceTags) {
+      if (settings.expenseSourceTags === undefined || settings.expenseSourceTags === null) {
+        settings.expenseSourceTags = [];
+      } else if (!Array.isArray(settings.expenseSourceTags)) {
         settings.expenseSourceTags = [];
       }
       return NextResponse.json(settings);
@@ -66,35 +70,54 @@ export async function PUT(request: NextRequest) {
       }
     }
 
-    // Prepare update object
-    const updateData: any = {
-      irsMileageDeduction: parsedIrsMileage,
-    };
+    // Find or create the settings document
+    let settings = await UserSettings.findOne({ userId: session.user.id });
 
-    // Handle incomeSourceTags if provided
-    if (incomeSourceTags !== undefined) {
-      updateData.incomeSourceTags = Array.isArray(incomeSourceTags) ? incomeSourceTags : [];
-    }
-
-    // Handle expenseSourceTags if provided
-    if (expenseSourceTags !== undefined) {
-      updateData.expenseSourceTags = Array.isArray(expenseSourceTags) ? expenseSourceTags : [];
-    }
-
-    // Use findOneAndUpdate with explicit $set to ensure all fields are updated
-    const settings = await UserSettings.findOneAndUpdate(
-      { userId: session.user.id },
-      {
-        $set: updateData,
-      },
-      { 
-        new: true, 
-        upsert: true,
-        runValidators: true
+    if (!settings) {
+      // Create new settings
+      const newSettingsData: any = {
+        userId: session.user.id,
+        irsMileageDeduction: parsedIrsMileage,
+      };
+      
+      if (incomeSourceTags !== undefined) {
+        newSettingsData.incomeSourceTags = Array.isArray(incomeSourceTags) ? incomeSourceTags : [];
       }
-    );
+      
+      if (expenseSourceTags !== undefined) {
+        newSettingsData.expenseSourceTags = Array.isArray(expenseSourceTags) ? expenseSourceTags : [];
+      }
+      
+      settings = new UserSettings(newSettingsData);
+    } else {
+      // Update existing settings
+      settings.irsMileageDeduction = parsedIrsMileage;
+      
+      // Always update arrays if provided
+      if (incomeSourceTags !== undefined) {
+        settings.incomeSourceTags = Array.isArray(incomeSourceTags) ? incomeSourceTags : [];
+      }
+      
+      if (expenseSourceTags !== undefined) {
+        settings.expenseSourceTags = Array.isArray(expenseSourceTags) ? expenseSourceTags : [];
+      }
+    }
 
-    return NextResponse.json(settings.toObject());
+    // Save the document
+    await settings.save();
+
+    // Return the saved document
+    const result = settings.toObject();
+    
+    // Ensure arrays are always present in response
+    if (!Array.isArray(result.incomeSourceTags)) {
+      result.incomeSourceTags = [];
+    }
+    if (!Array.isArray(result.expenseSourceTags)) {
+      result.expenseSourceTags = [];
+    }
+
+    return NextResponse.json(result);
   } catch (error) {
     return handleApiError(error);
   }
