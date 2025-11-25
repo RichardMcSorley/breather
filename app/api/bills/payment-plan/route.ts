@@ -75,7 +75,12 @@ export async function POST(request: NextRequest) {
     });
 
     const dailyPaymentPlan: PaymentPlanEntry[] = [];
-    let currentDate = new Date(startDateObj);
+    // Create currentDate using UTC components to avoid timezone issues
+    let currentDate = new Date(Date.UTC(
+      startDateObj.getUTCFullYear(),
+      startDateObj.getUTCMonth(),
+      startDateObj.getUTCDate()
+    ));
     const billsCopy = processedBills.map((bill) => ({ ...bill }));
 
     // Allocate payments per day

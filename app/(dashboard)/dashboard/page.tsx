@@ -44,7 +44,7 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
   const [showAddModal, setShowAddModal] = useState(false);
   const [transactionType, setTransactionType] = useState<"income" | "expense">("income");
-  const [todayPayments, setTodayPayments] = useState<PaymentPlanEntry[]>([]);
+  const [upcomingPayments, setUpcomingPayments] = useState<PaymentPlanEntry[]>([]);
   const [paidPayments, setPaidPayments] = useState<Record<string, number>>({});
 
   useEffect(() => {
@@ -61,7 +61,8 @@ export default function DashboardPage() {
       if (!savedConfig) return;
 
       const config = JSON.parse(savedConfig);
-      const today = new Date().toISOString().split("T")[0];
+      const today = new Date();
+      const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
 
       // Fetch payment plan
       const res = await fetch("/api/bills/payment-plan", {
@@ -75,29 +76,32 @@ export default function DashboardPage() {
 
       if (res.ok) {
         const data = await res.json();
-        // Filter for today's payments
-        const todayEntries = data.paymentPlan.filter(
-          (entry: PaymentPlanEntry) => entry.date === today
+        // Filter for payments up to and including today (compare as strings in YYYY-MM-DD format)
+        const upcomingEntries = data.paymentPlan.filter(
+          (entry: PaymentPlanEntry) => entry.date <= todayStr
         );
-        setTodayPayments(todayEntries);
+        setUpcomingPayments(upcomingEntries);
 
-        // Fetch paid payments to show progress
+        // Fetch paid payments for all dates up to today
         const paymentsRes = await fetch("/api/bills/payments");
         if (paymentsRes.ok) {
           const paymentsData = await paymentsRes.json();
           const paidMap: Record<string, number> = {};
           paymentsData.payments.forEach((payment: any) => {
             const billId = payment.billId?._id || payment.billId?.toString() || payment.billId;
-            if (billId && payment.paymentDate === today) {
-              const key = `${billId}-${payment.paymentDate}`;
-              paidMap[key] = (paidMap[key] || 0) + payment.amount;
+            if (billId && payment.paymentDate) {
+              // Only include payments up to today (compare as strings)
+              if (payment.paymentDate <= todayStr) {
+                const key = `${billId}-${payment.paymentDate}`;
+                paidMap[key] = (paidMap[key] || 0) + payment.amount;
+              }
             }
           });
           setPaidPayments(paidMap);
         }
       }
     } catch (error) {
-      console.error("Error loading today's payments:", error);
+      console.error("Error loading upcoming payments:", error);
     }
   };
 
@@ -135,10 +139,26 @@ export default function DashboardPage() {
     }).format(miles);
 
   const formatDate = (dateString: string) => {
-    const date = new Date(dateString);
+    // Parse YYYY-MM-DD as local date to avoid timezone issues
+    const [year, month, day] = dateString.split("-").map(Number);
+    const date = new Date(year, month - 1, day);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const entryDate = new Date(date);
+    entryDate.setHours(0, 0, 0, 0);
+    
+    if (entryDate.getTime() === today.getTime()) {
+      return "Today";
+    }
+    const yesterday = new Date(today);
+    yesterday.setDate(yesterday.getDate() - 1);
+    if (entryDate.getTime() === yesterday.getTime()) {
+      return "Yesterday";
+    }
     return date.toLocaleDateString("en-US", {
       month: "short",
       day: "numeric",
+      year: date.getFullYear() !== today.getFullYear() ? "numeric" : undefined,
     });
   };
 
@@ -223,100 +243,113 @@ export default function DashboardPage() {
               </div>
             </Card>
 
-            {todayPayments.length > 0 && (
-              <Card className="p-6">
-                <div className="flex items-center justify-between mb-4">
-                  <h2 className="text-xl font-bold text-gray-900 dark:text-white">Today&apos;s Bills</h2>
-                  <Link href="/bills">
-                    <Button variant="outline" className="text-sm">
-                      View Plan
-                    </Button>
-                  </Link>
-                </div>
+            {upcomingPayments.length > 0 && (() => {
+              // Filter to only show unpaid bills
+              const unpaidEntries = upcomingPayments.filter((entry) => {
+                const paymentKey = `${entry.billId}-${entry.date}`;
+                const paidAmount = paidPayments[paymentKey] || 0;
+                return paidAmount < entry.payment;
+              });
 
-                <div className="space-y-3 mt-4">
-                  {todayPayments.map((entry, idx) => {
-                    const paymentKey = `${entry.billId}-${entry.date}`;
-                    const paidAmount = paidPayments[paymentKey] || 0;
-                    const remainingToPay = Math.max(0, entry.payment - paidAmount);
-                    const isPaid = paidAmount >= entry.payment;
-                    const progressPercent = entry.payment > 0 ? (paidAmount / entry.payment) * 100 : 0;
+              if (unpaidEntries.length === 0) return null;
 
-                    return (
-                      <div
-                        key={`${entry.date}-${entry.billId}-${idx}`}
-                        className={`p-3 rounded-lg border ${
-                          isPaid
-                            ? "bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800"
-                            : "bg-gray-50 dark:bg-gray-800 border-gray-200 dark:border-gray-700"
-                        }`}
-                      >
-                        <div className="flex items-center justify-between mb-2">
-                          <div className="flex-1">
-                            <div className="font-semibold text-gray-900 dark:text-white">
-                              {entry.bill}
+              return (
+                <Card className="p-6">
+                  <div className="flex items-center justify-between mb-4">
+                    <h2 className="text-xl font-bold text-gray-900 dark:text-white">Bills Due</h2>
+                    <Link href="/bills">
+                      <Button variant="outline" className="text-sm">
+                        View Plan
+                      </Button>
+                    </Link>
+                  </div>
+
+                  <div className="space-y-3 mt-4">
+                    {unpaidEntries
+                      .sort((a, b) => a.date.localeCompare(b.date))
+                      .map((entry, idx) => {
+                        const paymentKey = `${entry.billId}-${entry.date}`;
+                        const paidAmount = paidPayments[paymentKey] || 0;
+                        const remainingToPay = Math.max(0, entry.payment - paidAmount);
+                        const isPaid = paidAmount >= entry.payment;
+                        const progressPercent = entry.payment > 0 ? (paidAmount / entry.payment) * 100 : 0;
+
+                        return (
+                          <div
+                            key={`${entry.date}-${entry.billId}-${idx}`}
+                            className={`p-3 rounded-lg border ${
+                              isPaid
+                                ? "bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800"
+                                : "bg-gray-50 dark:bg-gray-800 border-gray-200 dark:border-gray-700"
+                            }`}
+                          >
+                            <div className="flex items-center justify-between mb-2">
+                              <div className="flex-1">
+                                <div className="font-semibold text-gray-900 dark:text-white">
+                                  {entry.bill}
+                                </div>
+                                <div className="text-xs text-gray-600 dark:text-gray-400 mt-0.5">
+                                  {formatDate(entry.date)} • Remaining: {formatCurrency(entry.remainingBalance)}
+                                </div>
+                              </div>
+                              <div className="text-right">
+                                {isPaid ? (
+                                  <>
+                                    <div className="text-lg font-bold text-green-600 dark:text-green-400">
+                                      {formatCurrency(entry.payment)}
+                                    </div>
+                                    <div className="text-xs text-green-600 dark:text-green-400">
+                                      ✓ Paid
+                                    </div>
+                                  </>
+                                ) : (
+                                  <>
+                                    <div className="text-lg font-bold text-gray-900 dark:text-white">
+                                      {formatCurrency(remainingToPay)}
+                                    </div>
+                                    <div className="text-xs text-gray-600 dark:text-gray-400">
+                                      of {formatCurrency(entry.payment)}
+                                    </div>
+                                  </>
+                                )}
+                              </div>
                             </div>
-                            <div className="text-xs text-gray-600 dark:text-gray-400 mt-0.5">
-                              Remaining: {formatCurrency(entry.remainingBalance)}
+                            {/* Progress bar */}
+                            <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-1.5 mt-2">
+                              <div
+                                className={`h-1.5 rounded-full transition-all ${
+                                  isPaid
+                                    ? "bg-green-600 dark:bg-green-500"
+                                    : "bg-blue-600 dark:bg-blue-500"
+                                }`}
+                                style={{ width: `${Math.min(100, progressPercent)}%` }}
+                              />
                             </div>
-                          </div>
-                          <div className="text-right">
-                            {isPaid ? (
-                              <>
-                                <div className="text-lg font-bold text-green-600 dark:text-green-400">
-                                  {formatCurrency(entry.payment)}
-                                </div>
-                                <div className="text-xs text-green-600 dark:text-green-400">
-                                  ✓ Paid
-                                </div>
-                              </>
-                            ) : (
-                              <>
-                                <div className="text-lg font-bold text-gray-900 dark:text-white">
-                                  {formatCurrency(remainingToPay)}
-                                </div>
-                                <div className="text-xs text-gray-600 dark:text-gray-400">
-                                  of {formatCurrency(entry.payment)}
-                                </div>
-                              </>
+                            {paidAmount > 0 && !isPaid && (
+                              <div className="text-xs text-blue-600 dark:text-blue-400 mt-1">
+                                Paid: {formatCurrency(paidAmount)} of {formatCurrency(entry.payment)}
+                              </div>
                             )}
                           </div>
-                        </div>
-                        {/* Progress bar */}
-                        <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-1.5 mt-2">
-                          <div
-                            className={`h-1.5 rounded-full transition-all ${
-                              isPaid
-                                ? "bg-green-600 dark:bg-green-500"
-                                : "bg-blue-600 dark:bg-blue-500"
-                            }`}
-                            style={{ width: `${Math.min(100, progressPercent)}%` }}
-                          />
-                        </div>
-                        {paidAmount > 0 && !isPaid && (
-                          <div className="text-xs text-blue-600 dark:text-blue-400 mt-1">
-                            Paid: {formatCurrency(paidAmount)} of {formatCurrency(entry.payment)}
-                          </div>
+                        );
+                      })}
+                    <div className="flex justify-between items-center pt-2 mt-2 border-t border-gray-200 dark:border-gray-700">
+                      <span className="font-semibold text-gray-900 dark:text-white">Total Due</span>
+                      <span className="font-bold text-lg text-gray-900 dark:text-white">
+                        {formatCurrency(
+                          unpaidEntries.reduce((sum, entry) => {
+                            const paymentKey = `${entry.billId}-${entry.date}`;
+                            const paidAmount = paidPayments[paymentKey] || 0;
+                            const remainingToPay = Math.max(0, entry.payment - paidAmount);
+                            return sum + remainingToPay;
+                          }, 0)
                         )}
-                      </div>
-                    );
-                  })}
-                  <div className="flex justify-between items-center pt-2 mt-2 border-t border-gray-200 dark:border-gray-700">
-                    <span className="font-semibold text-gray-900 dark:text-white">Total</span>
-                    <span className="font-bold text-lg text-gray-900 dark:text-white">
-                      {formatCurrency(
-                        todayPayments.reduce((sum, entry) => {
-                          const paymentKey = `${entry.billId}-${entry.date}`;
-                          const paidAmount = paidPayments[paymentKey] || 0;
-                          const remainingToPay = Math.max(0, entry.payment - paidAmount);
-                          return sum + remainingToPay;
-                        }, 0)
-                      )}
-                    </span>
+                      </span>
+                    </div>
                   </div>
-                </div>
-              </Card>
-            )}
+                </Card>
+              );
+            })()}
           </>
         )}
       </div>
