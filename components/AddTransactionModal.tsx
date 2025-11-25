@@ -15,9 +15,10 @@ interface AddTransactionModalProps {
   initialAmount?: number;
   initialNotes?: string;
   initialIsBill?: boolean;
+  initialType?: "income" | "expense";
 }
 
-const INCOME_TAGS = ["Instacart", "Uber", "DoorDash", "GrubHub", "ProxyPics"];
+const INCOME_TAGS = ["Instacart", "Uber", "DoorDash", "GrubHub", "ProxyPics", "Withdraw Fees"];
 
 const formatLocalDate = (value: Date | string) => {
   if (typeof value === "string") {
@@ -39,8 +40,10 @@ export default function AddTransactionModal({
   initialAmount,
   initialNotes,
   initialIsBill,
+  initialType,
 }: AddTransactionModalProps) {
   const [loading, setLoading] = useState(false);
+  const [transactionType, setTransactionType] = useState<"income" | "expense">(initialType || type);
   const [formData, setFormData] = useState({
     amount: initialAmount?.toString() || "",
     date: formatLocalDate(new Date()),
@@ -79,6 +82,7 @@ export default function AddTransactionModal({
       const res = await fetch(`/api/transactions/${transactionId}`);
       if (res.ok) {
         const data = await res.json();
+        setTransactionType(data.type || type);
         setFormData({
           amount: data.amount.toString(),
           date: formatLocalDate(data.date),
@@ -127,7 +131,7 @@ export default function AddTransactionModal({
 
       const requestBody = {
         amount: parseFloat(formData.amount),
-        type,
+        type: transactionType,
         date: submissionDate,
         time: submissionTime,
         notes: formData.notes,
@@ -175,7 +179,7 @@ export default function AddTransactionModal({
           method,
           data: {
             amount: parseFloat(formData.amount),
-            type,
+            type: transactionType,
             date: submissionDate,
             time: submissionTime,
             notes: formData.notes,
@@ -199,9 +203,41 @@ export default function AddTransactionModal({
     <Modal
       isOpen={isOpen}
       onClose={onClose}
-      title={transactionId ? "Edit Transaction" : `Add ${type === "income" ? "Income" : "Expense"}`}
+      title={transactionId ? "Edit Transaction" : `Add ${transactionType === "income" ? "Income" : "Expense"}`}
     >
       <form onSubmit={handleSubmit} className="space-y-4">
+        {transactionId && (
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+              Transaction Type
+            </label>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => setTransactionType("income")}
+                className={`flex-1 px-4 py-2 rounded-lg text-sm font-medium transition-colors min-h-[44px] ${
+                  transactionType === "income"
+                    ? "bg-green-600 text-white"
+                    : "bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600"
+                }`}
+              >
+                Income
+              </button>
+              <button
+                type="button"
+                onClick={() => setTransactionType("expense")}
+                className={`flex-1 px-4 py-2 rounded-lg text-sm font-medium transition-colors min-h-[44px] ${
+                  transactionType === "expense"
+                    ? "bg-red-600 text-white"
+                    : "bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600"
+                }`}
+              >
+                Expense
+              </button>
+            </div>
+          </div>
+        )}
+
         <Input
           label="Amount ($)"
           type="number"
@@ -214,7 +250,7 @@ export default function AddTransactionModal({
           placeholder="0.00"
         />
 
-        {type === "income" && (
+        {transactionType === "income" && (
           <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
               Income Source
@@ -231,6 +267,43 @@ export default function AddTransactionModal({
                   className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors min-h-[44px] ${
                     formData.tag === tag && !customTag
                       ? "bg-green-600 text-white"
+                      : "bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600"
+                  }`}
+                >
+                  {tag}
+                </button>
+              ))}
+            </div>
+            <Input
+              placeholder="Or enter custom source"
+              value={customTag}
+              onChange={(e) => {
+                setCustomTag(e.target.value);
+                if (e.target.value) {
+                  setFormData({ ...formData, tag: "" });
+                }
+              }}
+            />
+          </div>
+        )}
+
+        {transactionId && transactionType === "expense" && (
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+              Expense Source (optional)
+            </label>
+            <div className="flex flex-wrap gap-2 mb-2">
+              {INCOME_TAGS.map((tag) => (
+                <button
+                  key={tag}
+                  type="button"
+                  onClick={() => {
+                    setFormData({ ...formData, tag });
+                    setCustomTag("");
+                  }}
+                  className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors min-h-[44px] ${
+                    formData.tag === tag && !customTag
+                      ? "bg-red-600 text-white"
                       : "bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600"
                   }`}
                 >

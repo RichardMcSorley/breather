@@ -300,6 +300,7 @@ export default function HistoryPage() {
             setEditingTransaction(null);
           }}
           type={transactions.find((t) => t._id === editingTransaction)?.type || "income"}
+          initialType={transactions.find((t) => t._id === editingTransaction)?.type}
           onSuccess={() => {
             setShowAddModal(false);
             setEditingTransaction(null);
