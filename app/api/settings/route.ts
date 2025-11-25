@@ -6,6 +6,8 @@ import UserSettings from "@/lib/models/UserSettings";
 import { handleApiError } from "@/lib/api-error-handler";
 import { parseFloatSafe } from "@/lib/validation";
 
+export const dynamic = 'force-dynamic';
+
 export async function GET() {
   try {
     const session = await getServerSession(authOptions);

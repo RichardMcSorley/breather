@@ -11,6 +11,8 @@ import Bill from "@/lib/models/Bill";
 import { parseDateOnlyAsUTC } from "@/lib/date-utils";
 import { TransactionQuery } from "@/lib/types";
 
+export const dynamic = 'force-dynamic';
+
 export async function GET(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
