@@ -19,7 +19,7 @@ interface AddTransactionModalProps {
 }
 
 const INCOME_SOURCE_TAGS = ["DoorDash", "Uber", "Instacart", "GrubHub", "Roadie", "Shipt", "ProxyPics"];
-const EXPENSE_SOURCE_TAGS = ["Withdraw Fees"];
+const EXPENSE_SOURCE_TAGS = ["Gas", "Maintenance", "Insurance", "Tolls", "Parking", "Car Wash", "Oil Change", "Withdraw Fees"];
 
 const formatLocalDate = (value: Date | string) => {
   if (typeof value === "string") {
