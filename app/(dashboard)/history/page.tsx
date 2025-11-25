@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { useSession } from "next-auth/react";
 import { format, isToday, isYesterday } from "date-fns";
 import Layout from "@/components/Layout";
@@ -49,13 +49,7 @@ export default function HistoryPage() {
   const [filterType, setFilterType] = useState<string>("all");
   const [filterTag, setFilterTag] = useState<string>("all");
 
-  useEffect(() => {
-    if (session?.user?.id) {
-      fetchTransactions();
-    }
-  }, [session, filterType, filterTag]);
-
-  const fetchTransactions = async () => {
+  const fetchTransactions = useCallback(async () => {
     try {
       let url = "/api/transactions?limit=100";
       if (filterType !== "all") {
@@ -76,7 +70,13 @@ export default function HistoryPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [filterType, filterTag]);
+
+  useEffect(() => {
+    if (session?.user?.id) {
+      fetchTransactions();
+    }
+  }, [session, filterType, filterTag, fetchTransactions]);
 
   const handleDelete = async (id: string) => {
     if (!confirm("Are you sure you want to delete this transaction?")) {

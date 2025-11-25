@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { useSession } from "next-auth/react";
 import Layout from "@/components/Layout";
 import Card from "@/components/ui/Card";
@@ -76,15 +76,7 @@ export default function BillsPage() {
     }
   }, [session]);
 
-  useEffect(() => {
-    // Load saved payment plan after bills are loaded (only once)
-    if (bills.length > 0 && !loading && !planLoaded) {
-      loadSavedPaymentPlan();
-      setPlanLoaded(true);
-    }
-  }, [bills.length, loading, planLoaded]);
-
-  const loadSavedPaymentPlan = () => {
+  const loadSavedPaymentPlan = useCallback(() => {
     try {
       const savedConfig = localStorage.getItem("bills_payment_plan_config");
       if (savedConfig) {
@@ -98,7 +90,15 @@ export default function BillsPage() {
     } catch (error) {
       console.error("Error loading saved payment plan:", error);
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    // Load saved payment plan after bills are loaded (only once)
+    if (bills.length > 0 && !loading && !planLoaded) {
+      loadSavedPaymentPlan();
+      setPlanLoaded(true);
+    }
+  }, [bills.length, loading, planLoaded, loadSavedPaymentPlan]);
 
   const savePaymentPlanConfig = (config: { startDate: string; dailyPayment: string }) => {
     try {
@@ -598,7 +598,7 @@ export default function BillsPage() {
         <div className="space-y-4">
           {Object.keys(groupedPaymentPlan).length === 0 ? (
             <div className="text-center py-12 text-gray-500 dark:text-gray-400">
-              No payment plan generated. Click "Generate Plan" to create one.
+              No payment plan generated. Click &quot;Generate Plan&quot; to create one.
             </div>
           ) : (
             <>

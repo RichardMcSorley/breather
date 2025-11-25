@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { useSession } from "next-auth/react";
 import Layout from "@/components/Layout";
 import Card from "@/components/ui/Card";
@@ -35,26 +35,7 @@ export default function MileagePage() {
   const [editingEntryId, setEditingEntryId] = useState<string | null>(null);
   const [irsMileageDeduction, setIrsMileageDeduction] = useState<number>(0.67);
 
-  useEffect(() => {
-    if (session?.user?.id) {
-      fetchEntries();
-      fetchSettings();
-    }
-  }, [session]);
-
-  const fetchSettings = async () => {
-    try {
-      const res = await fetch("/api/settings");
-      if (res.ok) {
-        const data = await res.json();
-        setIrsMileageDeduction(data.irsMileageDeduction || 0.67);
-      }
-    } catch (error) {
-      console.error("Error fetching settings:", error);
-    }
-  };
-
-  const fetchEntries = async () => {
+  const fetchEntries = useCallback(async () => {
     try {
       const res = await fetch("/api/mileage");
       if (res.ok) {
@@ -68,6 +49,25 @@ export default function MileagePage() {
       console.error("Error fetching mileage entries:", error);
     } finally {
       setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (session?.user?.id) {
+      fetchEntries();
+      fetchSettings();
+    }
+  }, [session, fetchEntries]);
+
+  const fetchSettings = async () => {
+    try {
+      const res = await fetch("/api/settings");
+      if (res.ok) {
+        const data = await res.json();
+        setIrsMileageDeduction(data.irsMileageDeduction || 0.67);
+      }
+    } catch (error) {
+      console.error("Error fetching settings:", error);
     }
   };
 

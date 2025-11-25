@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import Modal from "./ui/Modal";
 import Input from "./ui/Input";
 import Button from "./ui/Button";
@@ -59,41 +59,18 @@ export default function AddMileageModal({
   const [dataLoaded, setDataLoaded] = useState(false);
   const odometerInputRef = useRef<HTMLInputElement | null>(null);
 
-  useEffect(() => {
-    if (!isOpen) {
-      // Reset form when modal closes
-      resetForm();
-      setDataLoaded(false);
-      return;
-    }
+  const resetForm = useCallback(() => {
+    const now = new Date();
+    setFormData({
+      odometer: "",
+      date: formatLocalDate(now),
+      notes: "",
+      classification: "work",
+    });
+    setError("");
+  }, []);
 
-    if (entryId) {
-      setDataLoaded(false);
-      // Clear form data before fetching to avoid stale data
-      setFormData({
-        odometer: "",
-        date: formatLocalDate(new Date()),
-        notes: "",
-        classification: "work",
-      });
-      fetchEntry();
-    } else {
-      resetForm();
-      setDataLoaded(true);
-    }
-  }, [entryId, isOpen]);
-
-  useEffect(() => {
-    if (!isOpen || !dataLoaded) return;
-    // Use setTimeout to ensure the modal is fully rendered and input is visible
-    const timeoutId = setTimeout(() => {
-      odometerInputRef.current?.focus();
-      odometerInputRef.current?.select();
-    }, 100);
-    return () => clearTimeout(timeoutId);
-  }, [isOpen, dataLoaded]);
-
-  const fetchEntry = async () => {
+  const fetchEntry = useCallback(async () => {
     if (!entryId) return;
     
     try {
@@ -118,18 +95,41 @@ export default function AddMileageModal({
       console.error("Error fetching mileage entry:", error);
       setDataLoaded(true);
     }
-  };
+  }, [entryId]);
 
-  const resetForm = () => {
-    const now = new Date();
-    setFormData({
-      odometer: "",
-      date: formatLocalDate(now),
-      notes: "",
-      classification: "work",
-    });
-    setError("");
-  };
+  useEffect(() => {
+    if (!isOpen) {
+      // Reset form when modal closes
+      resetForm();
+      setDataLoaded(false);
+      return;
+    }
+
+    if (entryId) {
+      setDataLoaded(false);
+      // Clear form data before fetching to avoid stale data
+      setFormData({
+        odometer: "",
+        date: formatLocalDate(new Date()),
+        notes: "",
+        classification: "work",
+      });
+      fetchEntry();
+    } else {
+      resetForm();
+      setDataLoaded(true);
+    }
+  }, [entryId, isOpen, fetchEntry, resetForm]);
+
+  useEffect(() => {
+    if (!isOpen || !dataLoaded) return;
+    // Use setTimeout to ensure the modal is fully rendered and input is visible
+    const timeoutId = setTimeout(() => {
+      odometerInputRef.current?.focus();
+      odometerInputRef.current?.select();
+    }, 100);
+    return () => clearTimeout(timeoutId);
+  }, [isOpen, dataLoaded]);
 
   const handleOdometerChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const inputValue = e.target.value;
