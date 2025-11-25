@@ -36,4 +36,11 @@ body {
   }
 }
 
+/* Ensure date inputs don't overflow on mobile */
+input[type="date"] {
+  max-width: 100%;
+  min-width: 0;
+  width: 100%;
+}
+
 
