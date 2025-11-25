@@ -230,20 +230,23 @@ describe("GET /api/analytics/heatmap", () => {
 
   it("should calculate averages correctly", async () => {
     const now = new Date();
-    const yesterday = new Date(now);
-    yesterday.setUTCDate(yesterday.getUTCDate() - 1);
-    const twoDaysAgo = new Date(now);
-    twoDaysAgo.setUTCDate(twoDaysAgo.getUTCDate() - 2);
+    // Create transactions within the last 30 days on the same day of week
+    // Find a date within the last 30 days
+    const date1 = new Date(now);
+    date1.setUTCDate(date1.getUTCDate() - 7); // 7 days ago (same day of week as today)
+    
+    const date2 = new Date(now);
+    date2.setUTCDate(date2.getUTCDate() - 14); // 14 days ago (same day of week)
 
-    // Get day of week for yesterday
-    const dayOfWeek = yesterday.getUTCDay();
+    // Get day of week
+    const dayOfWeek = date1.getUTCDay();
 
     // Create 2 transactions on the same day of week at 10:00
     await Transaction.create({
       userId: TEST_USER_ID,
       amount: 100,
       type: "income",
-      date: yesterday,
+      date: date1,
       time: "10:00",
     });
 
@@ -251,7 +254,7 @@ describe("GET /api/analytics/heatmap", () => {
       userId: TEST_USER_ID,
       amount: 200,
       type: "income",
-      date: twoDaysAgo,
+      date: date2,
       time: "10:00",
     });
 
@@ -262,11 +265,10 @@ describe("GET /api/analytics/heatmap", () => {
     expect(response.status).toBe(200);
     
     // Average should be (100 + 200) / 2 = 150
-    // But we need to check if both are on the same day of week
-    // If they are, the average for that day should be 150
-    const dayAvg = data.byDayOfWeek[dayOfWeek.toString()];
-    expect(dayAvg).toBeGreaterThan(0);
+    // Both transactions are on the same day of week
+    expect(data.byDayOfWeek[dayOfWeek.toString()]).toBe(150);
     expect(data.byHour["10"]).toBe(150);
+    expect(data.byDayAndHour[dayOfWeek.toString()]["10"]).toBe(150);
   });
 
   it("should handle time parsing edge cases", async () => {

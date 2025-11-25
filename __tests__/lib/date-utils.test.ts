@@ -47,13 +47,12 @@ describe("date-utils", () => {
       expect(() => parseDateAsUTC("not-a-date")).toThrow();
     });
 
-    it("should handle invalid time gracefully", () => {
-      // When time is invalid, the function still runs but creates an invalid date
-      // We just verify it doesn't throw and returns a Date object
-      const date = parseDateAsUTC("2024-01-15", "invalid");
-      expect(date).toBeInstanceOf(Date);
-      // The date will be invalid (NaN) when time parsing fails
-      expect(isNaN(date.getTime())).toBe(true);
+    it("should throw error for invalid time format", () => {
+      // Invalid time format should throw an error
+      expect(() => parseDateAsUTC("2024-01-15", "invalid")).toThrow("Invalid time format");
+      expect(() => parseDateAsUTC("2024-01-15", "25:00")).toThrow("Invalid time format"); // Hour out of range
+      expect(() => parseDateAsUTC("2024-01-15", "10:60")).toThrow("Invalid time format"); // Minute out of range
+      expect(() => parseDateAsUTC("2024-01-15", "10")).toThrow("Invalid time format"); // Missing colon
     });
   });
 
@@ -143,13 +142,12 @@ describe("date-utils", () => {
       expect(() => parseESTAsUTC("invalid-date")).toThrow("Invalid date value");
     });
 
-    it("should handle invalid time gracefully", () => {
-      // When time is invalid, the function still runs but creates an invalid date
-      // We just verify it doesn't throw and returns a Date object
-      const date = parseESTAsUTC("2024-01-15", "invalid");
-      expect(date).toBeInstanceOf(Date);
-      // The date will be invalid (NaN) when time parsing fails
-      expect(isNaN(date.getTime())).toBe(true);
+    it("should throw error for invalid time format", () => {
+      // Invalid time format should throw an error
+      expect(() => parseESTAsUTC("2024-01-15", "invalid")).toThrow("Invalid time format");
+      expect(() => parseESTAsUTC("2024-01-15", "25:00")).toThrow("Invalid time format"); // Hour out of range
+      expect(() => parseESTAsUTC("2024-01-15", "10:60")).toThrow("Invalid time format"); // Minute out of range
+      expect(() => parseESTAsUTC("2024-01-15", "10")).toThrow("Invalid time format"); // Missing colon
     });
   });
 

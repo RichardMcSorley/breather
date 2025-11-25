@@ -18,12 +18,25 @@ export function parseDateAsUTC(date: string, time?: string): Date {
     throw new Error("Invalid date value");
   }
   
-  const [hour, minute] = (time?.split(":").map(Number) ?? [0, 0]);
-  const hourValue = Number.isNaN(hour) ? 0 : hour;
-  const minuteValue = Number.isNaN(minute) ? 0 : minute;
+  // Validate time format if provided
+  if (time !== undefined && time !== null) {
+    const timeParts = time.split(":");
+    if (timeParts.length !== 2) {
+      throw new Error("Invalid time format");
+    }
+    const [hour, minute] = timeParts.map(Number);
+    if (Number.isNaN(hour) || Number.isNaN(minute)) {
+      throw new Error("Invalid time format");
+    }
+    if (hour < 0 || hour > 23 || minute < 0 || minute > 59) {
+      throw new Error("Invalid time format");
+    }
+    // Create date in UTC with validated time
+    return new Date(Date.UTC(year, month - 1, day, hour, minute));
+  }
   
-  // Create date in UTC
-  return new Date(Date.UTC(year, month - 1, day, hourValue, minuteValue));
+  // No time provided, default to midnight
+  return new Date(Date.UTC(year, month - 1, day, 0, 0));
 }
 
 /**
@@ -62,9 +75,24 @@ export function parseESTAsUTC(date: string, time?: string): Date {
     throw new Error("Invalid date value");
   }
   
-  const [hour, minute] = (time?.split(":").map(Number) ?? [0, 0]);
-  const hourValue = Number.isNaN(hour) ? 0 : hour;
-  const minuteValue = Number.isNaN(minute) ? 0 : minute;
+  // Validate time format if provided
+  let hourValue = 0;
+  let minuteValue = 0;
+  if (time !== undefined && time !== null) {
+    const timeParts = time.split(":");
+    if (timeParts.length !== 2) {
+      throw new Error("Invalid time format");
+    }
+    const [hour, minute] = timeParts.map(Number);
+    if (Number.isNaN(hour) || Number.isNaN(minute)) {
+      throw new Error("Invalid time format");
+    }
+    if (hour < 0 || hour > 23 || minute < 0 || minute > 59) {
+      throw new Error("Invalid time format");
+    }
+    hourValue = hour;
+    minuteValue = minute;
+  }
   
   // EST is UTC-5, so we add 5 hours to convert EST to UTC
   const EST_OFFSET_HOURS = 5;
