@@ -21,7 +21,6 @@ const BillPaymentSchema: Schema = new Schema(
       type: Schema.Types.ObjectId,
       ref: "Bill",
       required: true,
-      index: true,
     },
     amount: {
       type: Number,
