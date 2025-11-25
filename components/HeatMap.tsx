@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import Card from "./ui/Card";
+import { useHeatMapData } from "@/hooks/useQueries";
 
 interface HeatMapData {
   byDayOfWeek: Record<string, number>;
@@ -21,33 +21,14 @@ interface HeatMapProps {
 const DAY_NAMES = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
 export default function HeatMap({ days = 30 }: HeatMapProps) {
-  const [data, setData] = useState<HeatMapData | null>(null);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    fetchHeatMapData();
-  }, [days]);
-
-  const fetchHeatMapData = async () => {
-    try {
-      setLoading(true);
-      const res = await fetch(`/api/analytics/heatmap?days=${days}`);
-      if (res.ok) {
-        const heatMapData = await res.json();
-        setData(heatMapData);
-      }
-    } catch (error) {
-      console.error("Error fetching heat map data:", error);
-    } finally {
-      setLoading(false);
-    }
-  };
+  const { data, isLoading: loading } = useHeatMapData(days);
 
   const getMaxValue = () => {
     if (!data) return 1;
     let max = 0;
     Object.values(data.byDayAndHour).forEach((dayData) => {
-      Object.values(dayData).forEach((value) => {
+      const typedDayData = dayData as Record<string, number>;
+      Object.values(typedDayData).forEach((value: number) => {
         if (value > max) max = value;
       });
     });

@@ -1,10 +1,10 @@
 "use client";
 
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef } from "react";
 import Modal from "./ui/Modal";
 import Input from "./ui/Input";
 import Button from "./ui/Button";
-import { addToSyncQueue } from "@/lib/offline";
+import { useMileageEntry, useCreateMileageEntry, useUpdateMileageEntry } from "@/hooks/useQueries";
 
 interface AddMileageModalProps {
   isOpen: boolean;
@@ -48,7 +48,10 @@ export default function AddMileageModal({
   onSuccess,
   entryId,
 }: AddMileageModalProps) {
-  const [loading, setLoading] = useState(false);
+  const { data: entryData } = useMileageEntry(entryId);
+  const createMileageEntry = useCreateMileageEntry();
+  const updateMileageEntry = useUpdateMileageEntry();
+  
   const [formData, setFormData] = useState({
     odometer: "",
     date: formatLocalDate(new Date()),
@@ -59,67 +62,43 @@ export default function AddMileageModal({
   const [dataLoaded, setDataLoaded] = useState(false);
   const odometerInputRef = useRef<HTMLInputElement | null>(null);
 
-  const resetForm = useCallback(() => {
-    const now = new Date();
-    setFormData({
-      odometer: "",
-      date: formatLocalDate(now),
-      notes: "",
-      classification: "work",
-    });
-    setError("");
-  }, []);
-
-  const fetchEntry = useCallback(async () => {
-    if (!entryId) return;
-    
-    try {
-      const res = await fetch(`/api/mileage/${entryId}`);
-      if (res.ok) {
-        const data = await res.json();
-        // Debug logging (can be removed later)
-        console.log("Fetched mileage entry classification:", data.classification);
-        // Ensure we're setting the classification from the API response
-        setFormData({
-          odometer: formatOdometerInput(data.odometer.toString()),
-          date: formatLocalDate(data.date),
-          notes: data.notes || "",
-          classification: data.classification === "personal" ? "personal" : "work",
-        });
-        setDataLoaded(true);
-      } else {
-        console.error("Error fetching mileage entry:", res.statusText);
-        setDataLoaded(true);
-      }
-    } catch (error) {
-      console.error("Error fetching mileage entry:", error);
+  // Update form data when entry is loaded
+  useEffect(() => {
+    if (entryId && entryData) {
+      setFormData({
+        odometer: formatOdometerInput(entryData.odometer.toString()),
+        date: formatLocalDate(entryData.date),
+        notes: entryData.notes || "",
+        classification: entryData.classification === "personal" ? "personal" : "work",
+      });
+      setDataLoaded(true);
+    } else if (!entryId) {
+      const now = new Date();
+      setFormData({
+        odometer: "",
+        date: formatLocalDate(now),
+        notes: "",
+        classification: "work",
+      });
       setDataLoaded(true);
     }
-  }, [entryId]);
+  }, [entryId, entryData]);
 
   useEffect(() => {
     if (!isOpen) {
       // Reset form when modal closes
-      resetForm();
-      setDataLoaded(false);
-      return;
-    }
-
-    if (entryId) {
-      setDataLoaded(false);
-      // Clear form data before fetching to avoid stale data
+      const now = new Date();
       setFormData({
         odometer: "",
-        date: formatLocalDate(new Date()),
+        date: formatLocalDate(now),
         notes: "",
         classification: "work",
       });
-      fetchEntry();
-    } else {
-      resetForm();
-      setDataLoaded(true);
+      setError("");
+      setDataLoaded(false);
+      return;
     }
-  }, [entryId, isOpen, fetchEntry, resetForm]);
+  }, [isOpen]);
 
   useEffect(() => {
     if (!isOpen || !dataLoaded) return;
@@ -139,88 +118,47 @@ export default function AddMileageModal({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setLoading(true);
     setError("");
 
-    try {
-      const odometerValue = parseOdometerInput(formData.odometer);
-      if (isNaN(odometerValue) || odometerValue < 0) {
-        setError("Please enter a valid odometer reading");
-        setLoading(false);
-        return;
-      }
+    const odometerValue = parseOdometerInput(formData.odometer);
+    if (isNaN(odometerValue) || odometerValue < 0) {
+      setError("Please enter a valid odometer reading");
+      return;
+    }
 
-      const url = entryId ? `/api/mileage/${entryId}` : "/api/mileage";
-      const method = entryId ? "PUT" : "POST";
+    // Ensure classification is always set (should be "work" or "personal")
+    const classificationValue = formData.classification === "personal" ? "personal" : "work";
+    
+    const requestBody = {
+      odometer: odometerValue,
+      date: formData.date,
+      notes: formData.notes.trim() || undefined,
+      classification: classificationValue,
+    };
 
-      // Ensure classification is always set (should be "work" or "personal")
-      const classificationValue = formData.classification === "personal" ? "personal" : "work";
-      
-      const requestBody = {
-        odometer: odometerValue,
-        date: formData.date,
-        notes: formData.notes.trim() || undefined,
-        classification: classificationValue,
-      };
-      
-      // Debug logging (can be removed later)
-      console.log("Saving mileage entry with classification:", classificationValue, "formData.classification:", formData.classification);
-
-      // If offline, add to sync queue
-      if (!navigator.onLine) {
-        await addToSyncQueue({
-          type: method === "PUT" ? "update" : "create",
-          endpoint: url,
-          method,
-          data: {
-            ...requestBody,
-            classification: classificationValue,
+    if (entryId) {
+      updateMileageEntry.mutate(
+        { id: entryId, ...requestBody },
+        {
+          onSuccess: () => {
+            onSuccess();
+            onClose();
           },
-        });
-        onSuccess();
-        resetForm();
-        return;
-      }
-
-      const res = await fetch(url, {
-        method,
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(requestBody),
+          onError: (error: Error) => {
+            setError(error.message || "Error saving mileage entry");
+          },
+        }
+      );
+    } else {
+      createMileageEntry.mutate(requestBody, {
+        onSuccess: () => {
+          onSuccess();
+          onClose();
+        },
+        onError: (error: Error) => {
+          setError(error.message || "Error saving mileage entry");
+        },
       });
-
-      if (res.ok) {
-        onSuccess();
-        resetForm();
-      } else {
-        const errorData = await res.json();
-        setError(errorData.error || "Error saving mileage entry");
-      }
-    } catch (error) {
-      // If offline, queue the operation
-      if (!navigator.onLine) {
-        const odometerValue = parseOdometerInput(formData.odometer);
-        const url = entryId ? `/api/mileage/${entryId}` : "/api/mileage";
-        const method = entryId ? "PUT" : "POST";
-        const classificationValue = formData.classification === "personal" ? "personal" : "work";
-        await addToSyncQueue({
-          type: method === "PUT" ? "update" : "create",
-          endpoint: url,
-          method,
-          data: {
-            odometer: odometerValue,
-            date: formData.date,
-            notes: formData.notes.trim() || undefined,
-            classification: classificationValue,
-          },
-        });
-        onSuccess();
-        resetForm();
-      } else {
-        console.error("Error saving mileage entry:", error);
-        setError("Error saving mileage entry. Please try again.");
-      }
-    } finally {
-      setLoading(false);
     }
   };
 
@@ -298,8 +236,13 @@ export default function AddMileageModal({
           >
             Cancel
           </Button>
-          <Button type="submit" variant="primary" className="flex-1" disabled={loading}>
-            {loading ? "Saving..." : entryId ? "Update" : "Add"}
+          <Button 
+            type="submit" 
+            variant="primary" 
+            className="flex-1" 
+            disabled={createMileageEntry.isPending || updateMileageEntry.isPending}
+          >
+            {(createMileageEntry.isPending || updateMileageEntry.isPending) ? "Saving..." : entryId ? "Update" : "Add"}
           </Button>
         </div>
       </form>

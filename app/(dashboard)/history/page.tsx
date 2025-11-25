@@ -1,11 +1,11 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useState } from "react";
 import { useSession } from "next-auth/react";
 import { format, isToday, isYesterday } from "date-fns";
 import Layout from "@/components/Layout";
 import AddTransactionModal from "@/components/AddTransactionModal";
-import { useToast } from "@/lib/toast";
+import { useTransactions, useDeleteTransaction } from "@/hooks/useQueries";
 
 interface Transaction {
   _id: string;
@@ -43,73 +43,22 @@ const buildLocalDateFromParts = (dateString: string, timeString?: string) => {
 
 export default function HistoryPage() {
   const { data: session } = useSession();
-  const [transactions, setTransactions] = useState<Transaction[]>([]);
-  const [loading, setLoading] = useState(true);
   const [showAddModal, setShowAddModal] = useState(false);
   const [editingTransaction, setEditingTransaction] = useState<string | null>(null);
   const [transactionType, setTransactionType] = useState<"income" | "expense">("income");
   const [filterType, setFilterType] = useState<string>("all");
   const [filterTag, setFilterTag] = useState<string>("all");
-  const toast = useToast();
+  
+  const { data, isLoading: loading } = useTransactions(filterType, filterTag);
+  const deleteTransaction = useDeleteTransaction();
+  
+  const transactions = data?.transactions || [];
 
-  const fetchTransactions = useCallback(async (abortSignal?: AbortSignal) => {
-    try {
-      let url = "/api/transactions?limit=100";
-      if (filterType !== "all") {
-        url += `&type=${filterType}`;
-      }
-      if (filterTag !== "all") {
-        url += `&tag=${filterTag}`;
-      }
-
-      const res = await fetch(url, { signal: abortSignal });
-      if (res.ok) {
-        const data = await res.json();
-        // Filter out bills and balance adjustments from the transaction list
-        setTransactions(data.transactions.filter((t: Transaction) => !t.isBill && !t.isBalanceAdjustment));
-      }
-    } catch (error) {
-      if (error instanceof Error && error.name === "AbortError") {
-        return; // Request was aborted, ignore
-      }
-      console.error("Error fetching transactions:", error);
-    } finally {
-      setLoading(false);
-    }
-  }, [filterType, filterTag]);
-
-  useEffect(() => {
-    if (!session?.user?.id) return;
-
-    const abortController = new AbortController();
-    fetchTransactions(abortController.signal);
-
-    return () => {
-      abortController.abort();
-    };
-  }, [session?.user?.id, filterType, filterTag, fetchTransactions]);
-
-  const handleDelete = async (id: string) => {
+  const handleDelete = (id: string) => {
     if (!confirm("Are you sure you want to delete this transaction?")) {
       return;
     }
-
-    try {
-      const res = await fetch(`/api/transactions/${id}`, {
-        method: "DELETE",
-      });
-
-      if (res.ok) {
-        fetchTransactions();
-        toast.success("Transaction deleted successfully");
-      } else {
-        const errorData = await res.json().catch(() => ({ error: "Unknown error" }));
-        toast.error(errorData.error || "Error deleting transaction");
-      }
-    } catch (error) {
-      console.error("Error deleting transaction:", error);
-      toast.error("Error deleting transaction");
-    }
+    deleteTransaction.mutate(id);
   };
 
   const formatCurrency = (amount: number) => {
@@ -135,7 +84,7 @@ export default function HistoryPage() {
     return format(date, "h:mm a");
   };
 
-  const groupedTransactions = transactions.reduce((acc, transaction) => {
+  const groupedTransactions = transactions.reduce((acc: Record<string, Transaction[]>, transaction: Transaction) => {
     const dateKey = formatDate(transaction.date, transaction.time);
     if (!acc[dateKey]) {
       acc[dateKey] = [];
@@ -145,7 +94,7 @@ export default function HistoryPage() {
   }, {} as Record<string, Transaction[]>);
 
   const allTags = Array.from(
-    new Set(transactions.filter((t) => t.tag).map((t) => t.tag))
+    new Set(transactions.filter((t: Transaction) => t.tag).map((t: Transaction) => t.tag))
   ) as string[];
 
   if (loading) {
@@ -255,11 +204,13 @@ export default function HistoryPage() {
             No transactions found. Add your first transaction!
           </div>
         ) : (
-          Object.entries(groupedTransactions).map(([dateKey, dateTransactions]) => (
+          Object.entries(groupedTransactions).map(([dateKey, dateTransactions]) => {
+            const typedTransactions = dateTransactions as Transaction[];
+            return (
             <div key={dateKey}>
               <h3 className="text-sm font-bold text-gray-700 dark:text-gray-300 mb-2">{dateKey}</h3>
               <div className="space-y-2">
-                {dateTransactions.map((transaction) => {
+                {typedTransactions.map((transaction: Transaction) => {
                   const isIncome = transaction.type === "income";
                   return (
                     <div
@@ -323,7 +274,8 @@ export default function HistoryPage() {
                 })}
               </div>
             </div>
-          ))
+            );
+          })
         )}
       </div>
 
@@ -334,11 +286,10 @@ export default function HistoryPage() {
             setShowAddModal(false);
             setEditingTransaction(null);
           }}
-          type={editingTransaction ? (transactions.find((t) => t._id === editingTransaction)?.type || "income") : transactionType}
+          type={editingTransaction ? (transactions.find((t: Transaction) => t._id === editingTransaction)?.type || "income") : transactionType}
           onSuccess={() => {
             setShowAddModal(false);
             setEditingTransaction(null);
-            fetchTransactions();
           }}
           transactionId={editingTransaction || undefined}
         />

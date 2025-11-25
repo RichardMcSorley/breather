@@ -1,12 +1,12 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useState } from "react";
 import { useSession } from "next-auth/react";
 import Layout from "@/components/Layout";
 import Card from "@/components/ui/Card";
 import Button from "@/components/ui/Button";
 import AddMileageModal from "@/components/AddMileageModal";
-import { useToast } from "@/lib/toast";
+import { useMileageEntries, useSettings, useDeleteMileageEntry } from "@/hooks/useQueries";
 
 interface MileageEntry {
   _id: string;
@@ -19,62 +19,42 @@ interface MileageEntry {
 
 export default function MileagePage() {
   const { data: session } = useSession();
-  const [entries, setEntries] = useState<MileageEntry[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [deletingId, setDeletingId] = useState<string | null>(null);
   const [editingEntryId, setEditingEntryId] = useState<string | null>(null);
   const [showAddModal, setShowAddModal] = useState(false);
-  const [irsMileageDeduction, setIrsMileageDeduction] = useState<number>(0.67);
-  const toast = useToast();
+  
+  const { data: mileageData, isLoading: loading } = useMileageEntries();
+  const { data: settingsData } = useSettings();
+  const deleteMileageEntry = useDeleteMileageEntry();
+  
+  const irsMileageDeduction = settingsData?.irsMileageDeduction || 0.67;
 
-  const fetchEntries = useCallback(async (abortSignal?: AbortSignal) => {
-    try {
-      const res = await fetch("/api/mileage", { signal: abortSignal });
-      if (res.ok) {
-        const data = await res.json();
-        setEntries(sortEntriesByDate(data.entries || []));
-      } else {
-        const errorData = await res.json();
-        console.error("Error fetching mileage entries:", errorData.error);
-      }
-    } catch (error) {
-      if (error instanceof Error && error.name === "AbortError") {
-        return; // Request was aborted, ignore
-      }
-      console.error("Error fetching mileage entries:", error);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+  const sortEntriesByDate = (entriesToSort: MileageEntry[]) => {
+    return entriesToSort
+      .slice()
+      .sort((a, b) => {
+        // Parse dates as UTC for consistent sorting
+        let dateA: Date;
+        let dateB: Date;
+        
+        if (typeof a.date === 'string' && a.date.match(/^\d{4}-\d{2}-\d{2}$/)) {
+          const [year, month, day] = a.date.split('-').map(Number);
+          dateA = new Date(Date.UTC(year, month - 1, day, 0, 0, 0, 0));
+        } else {
+          dateA = new Date(a.date);
+        }
+        
+        if (typeof b.date === 'string' && b.date.match(/^\d{4}-\d{2}-\d{2}$/)) {
+          const [year, month, day] = b.date.split('-').map(Number);
+          dateB = new Date(Date.UTC(year, month - 1, day, 0, 0, 0, 0));
+        } else {
+          dateB = new Date(b.date);
+        }
+        
+        return dateB.getTime() - dateA.getTime();
+      });
+  };
 
-  const fetchSettings = useCallback(async (abortSignal?: AbortSignal) => {
-    try {
-      const res = await fetch("/api/settings", { signal: abortSignal });
-      if (res.ok) {
-        const data = await res.json();
-        setIrsMileageDeduction(data.irsMileageDeduction || 0.67);
-      }
-    } catch (error) {
-      if (error instanceof Error && error.name === "AbortError") {
-        return; // Request was aborted, ignore
-      }
-      console.error("Error fetching settings:", error);
-    }
-  }, []);
-
-  useEffect(() => {
-    if (!session?.user?.id) return;
-
-    const abortController = new AbortController();
-    fetchEntries(abortController.signal);
-    fetchSettings(abortController.signal);
-
-    return () => {
-      abortController.abort();
-    };
-  }, [session?.user?.id, fetchEntries, fetchSettings]);
-
-
+  const entries = mileageData ? sortEntriesByDate(mileageData.entries || []) : [];
 
   const formatDate = (dateString: string | Date) => {
     // Handle both Date objects and ISO strings
@@ -113,61 +93,16 @@ export default function MileagePage() {
     });
   };
 
-  const sortEntriesByDate = (entriesToSort: MileageEntry[]) => {
-    return entriesToSort
-      .slice()
-      .sort((a, b) => {
-        // Parse dates as UTC for consistent sorting
-        let dateA: Date;
-        let dateB: Date;
-        
-        if (typeof a.date === 'string' && a.date.match(/^\d{4}-\d{2}-\d{2}$/)) {
-          const [year, month, day] = a.date.split('-').map(Number);
-          dateA = new Date(Date.UTC(year, month - 1, day, 0, 0, 0, 0));
-        } else {
-          dateA = new Date(a.date);
-        }
-        
-        if (typeof b.date === 'string' && b.date.match(/^\d{4}-\d{2}-\d{2}$/)) {
-          const [year, month, day] = b.date.split('-').map(Number);
-          dateB = new Date(Date.UTC(year, month - 1, day, 0, 0, 0, 0));
-        } else {
-          dateB = new Date(b.date);
-        }
-        
-        return dateB.getTime() - dateA.getTime();
-      });
-  };
-
   const formatOdometer = (value: number) => {
     return value.toLocaleString("en-US");
   };
 
 
-  const handleDelete = async (id: string) => {
+  const handleDelete = (id: string) => {
     if (!confirm("Are you sure you want to delete this mileage entry?")) {
       return;
     }
-
-    setDeletingId(id);
-    try {
-      const res = await fetch(`/api/mileage/${id}`, {
-        method: "DELETE",
-      });
-
-      if (res.ok) {
-        setEntries(entries.filter((entry) => entry._id !== id));
-        toast.success("Mileage entry deleted successfully");
-      } else {
-        const errorData = await res.json();
-        toast.error(errorData.error || "Failed to delete entry");
-      }
-    } catch (error) {
-      console.error("Error deleting mileage entry:", error);
-      toast.error("Failed to delete entry. Please try again.");
-    } finally {
-      setDeletingId(null);
-    }
+    deleteMileageEntry.mutate(id);
   };
 
   if (loading) {
@@ -306,11 +241,11 @@ export default function MileagePage() {
                       </button>
                       <button
                         onClick={() => handleDelete(entry._id)}
-                        disabled={deletingId === entry._id}
+                        disabled={deleteMileageEntry.isPending}
                         className="p-2 text-red-600 dark:text-red-400 hover:text-red-800 dark:hover:text-red-300 disabled:opacity-50 min-w-[44px] min-h-[44px] flex items-center justify-center"
                         aria-label="Delete entry"
                       >
-                        {deletingId === entry._id ? (
+                        {deleteMileageEntry.isPending ? (
                           <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-red-600 dark:border-red-400"></div>
                         ) : (
                           <span className="text-xl">🗑️</span>
@@ -355,8 +290,6 @@ export default function MileagePage() {
           onSuccess={() => {
             setShowAddModal(false);
             setEditingEntryId(null);
-            fetchEntries();
-            fetchSettings(); // Refresh settings in case IRS rate changed
           }}
           entryId={editingEntryId || undefined}
         />

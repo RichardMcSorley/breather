@@ -1,11 +1,10 @@
 "use client";
 
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef } from "react";
 import Modal from "./ui/Modal";
 import Input from "./ui/Input";
 import Button from "./ui/Button";
-import { addToSyncQueue } from "@/lib/offline";
-import { useToast } from "@/lib/toast";
+import { useTransaction, useSettings, useCreateTransaction, useUpdateTransaction, useUpdateSettings } from "@/hooks/useQueries";
 
 interface AddTransactionModalProps {
   isOpen: boolean;
@@ -44,7 +43,12 @@ export default function AddTransactionModal({
   initialIsBill,
   initialType,
 }: AddTransactionModalProps) {
-  const [loading, setLoading] = useState(false);
+  const { data: transactionData } = useTransaction(transactionId);
+  const { data: settingsData } = useSettings();
+  const createTransaction = useCreateTransaction();
+  const updateTransaction = useUpdateTransaction();
+  const updateSettings = useUpdateSettings();
+  
   const [transactionType, setTransactionType] = useState<"income" | "expense">(initialType || type);
   const [formData, setFormData] = useState({
     amount: initialAmount?.toString() || "",
@@ -57,135 +61,30 @@ export default function AddTransactionModal({
   });
   const [customTag, setCustomTag] = useState("");
   const [dataLoaded, setDataLoaded] = useState(false);
-  const [incomeSourceTags, setIncomeSourceTags] = useState<string[]>(DEFAULT_INCOME_SOURCE_TAGS);
-  const [expenseSourceTags, setExpenseSourceTags] = useState<string[]>(DEFAULT_EXPENSE_SOURCE_TAGS);
   const amountInputRef = useRef<HTMLInputElement | null>(null);
-  const toast = useToast();
 
-  const resetForm = useCallback(() => {
-    const now = new Date();
-    setFormData({
-      amount: initialAmount?.toString() || "",
-      date: formatLocalDate(now),
-      time: now.toTimeString().slice(0, 5),
-      notes: initialNotes || "",
-      tag: "",
-      isBill: initialIsBill || false,
-      dueDate: "",
-    });
-    setCustomTag("");
-  }, [initialAmount, initialNotes, initialIsBill]);
+  const incomeSourceTags = settingsData?.incomeSourceTags?.length > 0 
+    ? settingsData.incomeSourceTags 
+    : DEFAULT_INCOME_SOURCE_TAGS;
+  const expenseSourceTags = settingsData?.expenseSourceTags?.length > 0 
+    ? settingsData.expenseSourceTags 
+    : DEFAULT_EXPENSE_SOURCE_TAGS;
 
-  const fetchTransaction = useCallback(async () => {
-    try {
-      const res = await fetch(`/api/transactions/${transactionId}`);
-      if (res.ok) {
-        const data = await res.json();
-        setTransactionType(data.type || type);
-        setFormData({
-          amount: data.amount.toString(),
-          date: formatLocalDate(data.date),
-          time: data.time,
-          notes: data.notes || "",
-          tag: data.tag || "",
-          isBill: data.isBill || false,
-          dueDate: data.dueDate || "",
-        });
-        setDataLoaded(true);
-      }
-    } catch (error) {
-      console.error("Error fetching transaction:", error);
+  // Update form data when transaction is loaded
+  useEffect(() => {
+    if (transactionId && transactionData) {
+      setTransactionType(transactionData.type || type);
+      setFormData({
+        amount: transactionData.amount.toString(),
+        date: formatLocalDate(transactionData.date),
+        time: transactionData.time,
+        notes: transactionData.notes || "",
+        tag: transactionData.tag || "",
+        isBill: transactionData.isBill || false,
+        dueDate: transactionData.dueDate || "",
+      });
       setDataLoaded(true);
-    }
-  }, [transactionId, type]);
-
-  const fetchUserSettings = useCallback(async () => {
-    try {
-      const res = await fetch("/api/settings");
-      if (res.ok) {
-        const data = await res.json();
-        if (data.incomeSourceTags && data.incomeSourceTags.length > 0) {
-          setIncomeSourceTags(data.incomeSourceTags);
-        }
-        if (data.expenseSourceTags && data.expenseSourceTags.length > 0) {
-          setExpenseSourceTags(data.expenseSourceTags);
-        }
-      }
-    } catch (error) {
-      console.error("Error fetching user settings:", error);
-    }
-  }, []);
-
-  const saveCustomTagToSettings = async (tag: string, type: "income" | "expense") => {
-    try {
-      // Fetch current settings
-      const res = await fetch("/api/settings");
-      if (!res.ok) return;
-      
-      const currentSettings = await res.json();
-      const currentTags = type === "income" 
-        ? (currentSettings.incomeSourceTags || [])
-        : (currentSettings.expenseSourceTags || []);
-      
-      // Check if tag already exists (case-insensitive)
-      const tagExists = currentTags.some(
-        (existingTag: string) => existingTag.toLowerCase() === tag.toLowerCase()
-      );
-      
-      if (!tagExists) {
-        // Add the new tag to the appropriate array
-        const updatedTags = [...currentTags, tag];
-        
-        // Update settings
-        const updateBody: any = {
-          irsMileageDeduction: currentSettings.irsMileageDeduction || 0.70,
-        };
-        
-        if (type === "income") {
-          updateBody.incomeSourceTags = updatedTags;
-          updateBody.expenseSourceTags = currentSettings.expenseSourceTags || [];
-        } else {
-          updateBody.incomeSourceTags = currentSettings.incomeSourceTags || [];
-          updateBody.expenseSourceTags = updatedTags;
-        }
-        
-        await fetch("/api/settings", {
-          method: "PUT",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(updateBody),
-        });
-        
-        // Update local state to reflect the new tag
-        if (type === "income") {
-          setIncomeSourceTags(updatedTags);
-        } else {
-          setExpenseSourceTags(updatedTags);
-        }
-      }
-    } catch (error) {
-      console.error("Error saving custom tag to settings:", error);
-      // Don't show error to user - this is a background operation
-    }
-  };
-
-  useEffect(() => {
-    if (isOpen) {
-      fetchUserSettings();
-    }
-  }, [isOpen, fetchUserSettings]);
-
-  useEffect(() => {
-    if (!isOpen) {
-      // Reset form when modal closes
-      resetForm();
-      setDataLoaded(false);
-      return;
-    }
-
-    if (transactionId) {
-      setDataLoaded(false);
-      fetchTransaction();
-    } else {
+    } else if (!transactionId) {
       // When opening for new transaction, ensure date is set to today
       const now = new Date();
       setFormData({
@@ -200,7 +99,26 @@ export default function AddTransactionModal({
       setCustomTag("");
       setDataLoaded(true);
     }
-  }, [transactionId, isOpen, initialAmount, initialNotes, initialIsBill, fetchTransaction]);
+  }, [transactionId, transactionData, type, initialAmount, initialNotes, initialIsBill]);
+
+  useEffect(() => {
+    if (!isOpen) {
+      // Reset form when modal closes
+      const now = new Date();
+      setFormData({
+        amount: initialAmount?.toString() || "",
+        date: formatLocalDate(now),
+        time: now.toTimeString().slice(0, 5),
+        notes: initialNotes || "",
+        tag: "",
+        isBill: initialIsBill || false,
+        dueDate: "",
+      });
+      setCustomTag("");
+      setDataLoaded(false);
+      return;
+    }
+  }, [isOpen, initialAmount, initialNotes, initialIsBill]);
 
   useEffect(() => {
     if (!isOpen || !dataLoaded) return;
@@ -214,101 +132,82 @@ export default function AddTransactionModal({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setLoading(true);
 
-    // Use form data for both new and edited transactions
-    const submissionDate = formData.date;
-    const submissionTime = formData.time;
+    const tag = customTag || formData.tag;
+    const requestBody = {
+      amount: parseFloat(formData.amount),
+      type: transactionType,
+      date: formData.date,
+      time: formData.time,
+      notes: formData.notes,
+      tag: tag || undefined,
+      isBill: formData.isBill,
+      dueDate: formData.dueDate || undefined,
+    };
 
-    try {
-      const tag = customTag || formData.tag;
-      const url = transactionId
-        ? `/api/transactions/${transactionId}`
-        : "/api/transactions";
-      const method = transactionId ? "PUT" : "POST";
-
-      const requestBody = {
-        amount: parseFloat(formData.amount),
-        type: transactionType,
-        date: submissionDate,
-        time: submissionTime,
-        notes: formData.notes,
-        tag: tag || undefined,
-        isBill: formData.isBill,
-        dueDate: formData.dueDate || undefined,
-      };
-
-      // If offline, add to sync queue
-      if (!navigator.onLine) {
-        await addToSyncQueue({
-          type: method === "PUT" ? "update" : "create",
-          endpoint: url,
-          method,
-          data: requestBody,
-        });
-        onSuccess();
-        resetForm();
-        return;
-      }
-
-      const res = await fetch(url, {
-        method,
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(requestBody),
-      });
-
-      if (res.ok) {
-        // If a custom tag was used, save it to settings
-        const finalTag = customTag || formData.tag;
-        if (finalTag && finalTag.trim()) {
-          // Check if it's a custom tag (not in the current tags list)
-          const currentTags = transactionType === "income" ? incomeSourceTags : expenseSourceTags;
-          const isCustomTag = !currentTags.includes(finalTag.trim());
-          
-          if (isCustomTag) {
-            await saveCustomTagToSettings(finalTag.trim(), transactionType);
-          }
+    const saveCustomTag = async (finalTag: string) => {
+      if (!settingsData) return;
+      
+      const currentTags = transactionType === "income" 
+        ? (settingsData.incomeSourceTags || [])
+        : (settingsData.expenseSourceTags || []);
+      
+      // Check if tag already exists (case-insensitive)
+      const tagExists = currentTags.some(
+        (existingTag: string) => existingTag.toLowerCase() === finalTag.toLowerCase()
+      );
+      
+      if (!tagExists) {
+        const updatedTags = [...currentTags, finalTag];
+        const updateBody: any = {
+          irsMileageDeduction: settingsData.irsMileageDeduction || 0.70,
+        };
+        
+        if (transactionType === "income") {
+          updateBody.incomeSourceTags = updatedTags;
+          updateBody.expenseSourceTags = settingsData.expenseSourceTags || [];
+        } else {
+          updateBody.incomeSourceTags = settingsData.incomeSourceTags || [];
+          updateBody.expenseSourceTags = updatedTags;
         }
         
-        onSuccess();
-        resetForm();
-        toast.success("Transaction saved successfully");
-      } else {
-        const errorData = await res.json().catch(() => ({ error: "Unknown error" }));
-        toast.error(errorData.error || "Error saving transaction");
+        updateSettings.mutate(updateBody);
       }
-    } catch (error) {
-      // If offline, queue the operation
-      if (!navigator.onLine) {
-        const tag = customTag || formData.tag;
-        const url = transactionId
-          ? `/api/transactions/${transactionId}`
-          : "/api/transactions";
-        const method = transactionId ? "PUT" : "POST";
-        await addToSyncQueue({
-          type: method === "PUT" ? "update" : "create",
-          endpoint: url,
-          method,
-          data: {
-            amount: parseFloat(formData.amount),
-            type: transactionType,
-            date: formData.date,
-            time: formData.time,
-            notes: formData.notes,
-            tag: tag || undefined,
-            isBill: formData.isBill,
-            dueDate: formData.dueDate || undefined,
+    };
+
+    if (transactionId) {
+      updateTransaction.mutate(
+        { id: transactionId, ...requestBody },
+        {
+          onSuccess: () => {
+            const finalTag = customTag || formData.tag;
+            if (finalTag && finalTag.trim()) {
+              const currentTags = transactionType === "income" ? incomeSourceTags : expenseSourceTags;
+              const isCustomTag = !currentTags.includes(finalTag.trim());
+              if (isCustomTag) {
+                saveCustomTag(finalTag.trim());
+              }
+            }
+            onSuccess();
+            onClose();
           },
-        });
-        onSuccess();
-        resetForm();
-        toast.success("Transaction queued for sync");
-      } else {
-        console.error("Error saving transaction:", error);
-        toast.error("Error saving transaction");
-      }
-    } finally {
-      setLoading(false);
+        }
+      );
+    } else {
+      createTransaction.mutate(requestBody, {
+        onSuccess: () => {
+          const finalTag = customTag || formData.tag;
+          if (finalTag && finalTag.trim()) {
+            const currentTags = transactionType === "income" ? incomeSourceTags : expenseSourceTags;
+            const isCustomTag = !currentTags.includes(finalTag.trim());
+            if (isCustomTag) {
+              saveCustomTag(finalTag.trim());
+            }
+          }
+          onSuccess();
+          onClose();
+        },
+      });
     }
   };
 
@@ -386,7 +285,7 @@ export default function AddTransactionModal({
               Income Source
             </label>
             <div className="flex flex-wrap gap-2 mb-2">
-              {incomeSourceTags.map((tag) => (
+              {incomeSourceTags.map((tag: string) => (
                 <button
                   key={tag}
                   type="button"
@@ -423,7 +322,7 @@ export default function AddTransactionModal({
               Expense Source (optional)
             </label>
             <div className="flex flex-wrap gap-2 mb-2">
-              {expenseSourceTags.map((tag) => (
+              {expenseSourceTags.map((tag: string) => (
                 <button
                   key={tag}
                   type="button"
@@ -471,8 +370,13 @@ export default function AddTransactionModal({
           >
             Cancel
           </Button>
-          <Button type="submit" variant="primary" className="flex-1" disabled={loading}>
-            {loading ? "Saving..." : transactionId ? "Update" : "Add"}
+          <Button 
+            type="submit" 
+            variant="primary" 
+            className="flex-1" 
+            disabled={createTransaction.isPending || updateTransaction.isPending}
+          >
+            {(createTransaction.isPending || updateTransaction.isPending) ? "Saving..." : transactionId ? "Update" : "Add"}
           </Button>
         </div>
       </form>

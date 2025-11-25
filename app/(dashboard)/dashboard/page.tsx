@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState, useMemo } from "react";
 import { useSession } from "next-auth/react";
 import Link from "next/link";
 import Layout from "@/components/Layout";
@@ -9,6 +9,7 @@ import Button from "@/components/ui/Button";
 import Input from "@/components/ui/Input";
 import AddTransactionModal from "@/components/AddTransactionModal";
 import HeatMap from "@/components/HeatMap";
+import { useSummary, usePaymentPlan, useBillPayments } from "@/hooks/useQueries";
 
 interface Summary {
   grossTotal: number;
@@ -43,12 +44,8 @@ interface PaymentPlanEntry {
 
 export default function DashboardPage() {
   const { data: session } = useSession();
-  const [summary, setSummary] = useState<Summary | null>(null);
-  const [loading, setLoading] = useState(true);
   const [showAddModal, setShowAddModal] = useState(false);
   const [transactionType, setTransactionType] = useState<"income" | "expense">("income");
-  const [upcomingPayments, setUpcomingPayments] = useState<PaymentPlanEntry[]>([]);
-  const [paidPayments, setPaidPayments] = useState<Record<string, number>>({});
   
   // Date navigation state
   const getTodayDateString = () => {
@@ -58,138 +55,90 @@ export default function DashboardPage() {
   const [selectedDate, setSelectedDate] = useState<string>(getTodayDateString());
   const [viewMode, setViewMode] = useState<"day" | "month" | "year">("day");
 
-  useEffect(() => {
-    if (!session?.user?.id) return;
+  // Get payment plan config from localStorage
+  const paymentPlanConfig = useMemo(() => {
+    if (typeof window === "undefined") return null;
+    const savedConfig = localStorage.getItem("bills_payment_plan_config");
+    if (!savedConfig) return null;
+    try {
+      return JSON.parse(savedConfig);
+    } catch {
+      return null;
+    }
+  }, []);
 
-    const abortController = new AbortController();
+  // Queries
+  const { data: summary, isLoading: summaryLoading } = useSummary(selectedDate, viewMode);
+  const { data: paymentPlanData } = usePaymentPlan(
+    paymentPlanConfig?.startDate || "",
+    parseFloat(paymentPlanConfig?.dailyPayment || "0"),
+    viewMode === "day" && !!paymentPlanConfig
+  );
+  const { data: paymentsData } = useBillPayments();
+
+  // Calculate paid payments map
+  const paidPayments = useMemo(() => {
+    if (!paymentsData?.payments) return {};
+    const paidMap: Record<string, number> = {};
+    paymentsData.payments.forEach((payment: any) => {
+      const billId = payment.billId?._id || payment.billId?.toString() || payment.billId;
+      if (billId && payment.paymentDate) {
+        const key = `${billId}-${payment.paymentDate}`;
+        paidMap[key] = (paidMap[key] || 0) + payment.amount;
+      }
+    });
+    return paidMap;
+  }, [paymentsData]);
+
+  // Calculate upcoming payments
+  const upcomingPayments = useMemo(() => {
+    if (!paymentPlanData?.paymentPlan || viewMode !== "day") return [];
     
-    fetchSummary(abortController.signal);
-    if (viewMode === "day") {
-      loadTodayPayments(abortController.signal);
-    }
+    const selectedDateStr = selectedDate;
+    const selectedDateEntries = paymentPlanData.paymentPlan.filter(
+      (entry: PaymentPlanEntry) => entry.date === selectedDateStr
+    );
+    const selectedDateAllPaid = selectedDateEntries.length > 0 && selectedDateEntries.every((entry: PaymentPlanEntry) => {
+      const paymentKey = `${entry.billId}-${entry.date}`;
+      const paidAmount = paidPayments[paymentKey] || 0;
+      return paidAmount >= entry.payment;
+    });
 
-    return () => {
-      abortController.abort();
-    };
-  }, [session?.user?.id, selectedDate, viewMode]);
-
-  const loadTodayPayments = async (abortSignal?: AbortSignal) => {
-    try {
-      // Get saved payment plan config
-      const savedConfig = localStorage.getItem("bills_payment_plan_config");
-      if (!savedConfig) return;
-
-      const config = JSON.parse(savedConfig);
-      const selectedDateStr = selectedDate;
-
-      // Fetch payment plan
-      const res = await fetch("/api/bills/payment-plan", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          startDate: config.startDate,
-          dailyPayment: parseFloat(config.dailyPayment),
-        }),
-        signal: abortSignal,
-      });
-
-      if (res.ok) {
-        const data = await res.json();
-        
-        // Fetch paid payments for all dates
-        const paymentsRes = await fetch("/api/bills/payments", { signal: abortSignal });
-        if (paymentsRes.ok) {
-          const paymentsData = await paymentsRes.json();
-          const paidMap: Record<string, number> = {};
-          paymentsData.payments.forEach((payment: any) => {
-            const billId = payment.billId?._id || payment.billId?.toString() || payment.billId;
-            if (billId && payment.paymentDate) {
-              const key = `${billId}-${payment.paymentDate}`;
-              paidMap[key] = (paidMap[key] || 0) + payment.amount;
-            }
-          });
-          setPaidPayments(paidMap);
-
-          // Check if selected date's entries are all paid
-          const selectedDateEntries = data.paymentPlan.filter(
-            (entry: PaymentPlanEntry) => entry.date === selectedDateStr
-          );
-          const selectedDateAllPaid = selectedDateEntries.length > 0 && selectedDateEntries.every((entry: PaymentPlanEntry) => {
-            const paymentKey = `${entry.billId}-${entry.date}`;
-            const paidAmount = paidMap[paymentKey] || 0;
-            return paidAmount >= entry.payment;
-          });
-
-          // If selected date is fully paid, show next unpaid dates; otherwise show unpaid entries up to selected date
-          if (selectedDateAllPaid) {
-            // Find the next unpaid date
-            const allEntries = data.paymentPlan.filter(
-              (entry: PaymentPlanEntry) => entry.date > selectedDateStr
-            );
-            // Find the earliest date with unpaid entries
-            const datesWithUnpaid = new Set<string>();
-            allEntries.forEach((entry: PaymentPlanEntry) => {
-              const paymentKey = `${entry.billId}-${entry.date}`;
-              const paidAmount = paidMap[paymentKey] || 0;
-              if (paidAmount < entry.payment) {
-                datesWithUnpaid.add(entry.date);
-              }
-            });
-            
-            if (datesWithUnpaid.size > 0) {
-              const nextUnpaidDate = Array.from(datesWithUnpaid).sort()[0];
-              const upcomingEntries = data.paymentPlan.filter(
-                (entry: PaymentPlanEntry) => entry.date === nextUnpaidDate
-              );
-              setUpcomingPayments(upcomingEntries);
-            } else {
-              setUpcomingPayments([]);
-            }
-          } else {
-            // Show unpaid entries up to and including selected date
-            const upcomingEntries = data.paymentPlan.filter(
-              (entry: PaymentPlanEntry) => {
-                if (entry.date > selectedDateStr) return false;
-                const paymentKey = `${entry.billId}-${entry.date}`;
-                const paidAmount = paidMap[paymentKey] || 0;
-                return paidAmount < entry.payment;
-              }
-            );
-            setUpcomingPayments(upcomingEntries);
-          }
+    if (selectedDateAllPaid) {
+      // Find the next unpaid date
+      const allEntries = paymentPlanData.paymentPlan.filter(
+        (entry: PaymentPlanEntry) => entry.date > selectedDateStr
+      );
+      const datesWithUnpaid = new Set<string>();
+      allEntries.forEach((entry: PaymentPlanEntry) => {
+        const paymentKey = `${entry.billId}-${entry.date}`;
+        const paidAmount = paidPayments[paymentKey] || 0;
+        if (paidAmount < entry.payment) {
+          datesWithUnpaid.add(entry.date);
         }
-      }
-    } catch (error) {
-      console.error("Error loading upcoming payments:", error);
-    }
-  };
-
-  const fetchSummary = async (abortSignal?: AbortSignal) => {
-    try {
-      setLoading(true);
-      const params = new URLSearchParams({
-        localDate: selectedDate,
-        viewMode: viewMode,
       });
-      const res = await fetch(`/api/summary?${params.toString()}`, { signal: abortSignal });
-      if (res.ok) {
-        const data = await res.json();
-        setSummary(data);
-      } else {
-        const errorData = await res.json();
-        if (res.status === 503) {
-          console.error("Database connection error:", errorData.error);
+      
+      if (datesWithUnpaid.size > 0) {
+        const nextUnpaidDate = Array.from(datesWithUnpaid).sort()[0];
+        return paymentPlanData.paymentPlan.filter(
+          (entry: PaymentPlanEntry) => entry.date === nextUnpaidDate
+        );
+      }
+      return [];
+    } else {
+      // Show unpaid entries up to and including selected date
+      return paymentPlanData.paymentPlan.filter(
+        (entry: PaymentPlanEntry) => {
+          if (entry.date > selectedDateStr) return false;
+          const paymentKey = `${entry.billId}-${entry.date}`;
+          const paidAmount = paidPayments[paymentKey] || 0;
+          return paidAmount < entry.payment;
         }
-      }
-    } catch (error) {
-      if (error instanceof Error && error.name === "AbortError") {
-        return; // Request was aborted, ignore
-      }
-      console.error("Error fetching summary:", error);
-    } finally {
-      setLoading(false);
+      );
     }
-  };
+  }, [paymentPlanData, paidPayments, selectedDate, viewMode]);
+
+  const loading = summaryLoading;
 
   const formatCurrency = (amount: number) =>
     new Intl.NumberFormat("en-US", {
@@ -309,7 +258,6 @@ export default function DashboardPage() {
 
   const handleTransactionAdded = () => {
     setShowAddModal(false);
-    fetchSummary();
   };
 
   if (loading) {
@@ -532,7 +480,7 @@ export default function DashboardPage() {
 
             {upcomingPayments.length > 0 && (() => {
               // Filter to only show unpaid bills
-              const unpaidEntries = upcomingPayments.filter((entry) => {
+              const unpaidEntries = upcomingPayments.filter((entry: PaymentPlanEntry) => {
                 const paymentKey = `${entry.billId}-${entry.date}`;
                 const paidAmount = paidPayments[paymentKey] || 0;
                 return paidAmount < entry.payment;
@@ -553,8 +501,8 @@ export default function DashboardPage() {
 
                   <div className="space-y-3 mt-4">
                     {unpaidEntries
-                      .sort((a, b) => a.date.localeCompare(b.date))
-                      .map((entry, idx) => {
+                      .sort((a: PaymentPlanEntry, b: PaymentPlanEntry) => a.date.localeCompare(b.date))
+                      .map((entry: PaymentPlanEntry, idx: number) => {
                         const paymentKey = `${entry.billId}-${entry.date}`;
                         const paidAmount = paidPayments[paymentKey] || 0;
                         const remainingToPay = Math.max(0, entry.payment - paidAmount);
@@ -624,7 +572,7 @@ export default function DashboardPage() {
                       <span className="font-semibold text-gray-900 dark:text-white">Total Due</span>
                       <span className="font-bold text-lg text-gray-900 dark:text-white">
                         {formatCurrency(
-                          unpaidEntries.reduce((sum, entry) => {
+                          unpaidEntries.reduce((sum: number, entry: PaymentPlanEntry) => {
                             const paymentKey = `${entry.billId}-${entry.date}`;
                             const paidAmount = paidPayments[paymentKey] || 0;
                             const remainingToPay = Math.max(0, entry.payment - paidAmount);

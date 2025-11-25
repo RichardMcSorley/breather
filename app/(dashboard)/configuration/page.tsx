@@ -1,18 +1,19 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState, useEffect } from "react";
 import { useSession } from "next-auth/react";
 import Layout from "@/components/Layout";
 import Input from "@/components/ui/Input";
 import Button from "@/components/ui/Button";
 import Card from "@/components/ui/Card";
 import Tag from "@/components/ui/Tag";
-import { useToast } from "@/lib/toast";
+import { useSettings, useUpdateSettings } from "@/hooks/useQueries";
 
 export default function ConfigurationPage() {
   const { data: session } = useSession();
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
+  const { data: settingsData, isLoading: loading } = useSettings();
+  const updateSettings = useUpdateSettings();
+  
   const [formData, setFormData] = useState({
     irsMileageDeduction: "",
     incomeSourceTags: [] as string[],
@@ -20,75 +21,34 @@ export default function ConfigurationPage() {
   });
   const [newIncomeTag, setNewIncomeTag] = useState("");
   const [newExpenseTag, setNewExpenseTag] = useState("");
-  const toast = useToast();
 
   // Default tags
   const DEFAULT_INCOME_TAGS = ["DoorDash", "Uber", "Instacart", "GrubHub", "Roadie", "Shipt", "ProxyPics"];
   const DEFAULT_EXPENSE_TAGS = ["Gas", "Maintenance", "Insurance", "Tolls", "Parking", "Car Wash", "Oil Change", "Withdraw Fees"];
 
-  const fetchSettings = useCallback(async (abortSignal?: AbortSignal) => {
-    try {
-      const res = await fetch("/api/settings", { signal: abortSignal });
-      if (res.ok) {
-        const data = await res.json();
-        setFormData({
-          irsMileageDeduction: data.irsMileageDeduction?.toString() || "0.70",
-          incomeSourceTags: data.incomeSourceTags?.length > 0 ? data.incomeSourceTags : DEFAULT_INCOME_TAGS,
-          expenseSourceTags: data.expenseSourceTags?.length > 0 ? data.expenseSourceTags : DEFAULT_EXPENSE_TAGS,
-        });
-      }
-    } catch (error) {
-      if (error instanceof Error && error.name === "AbortError") {
-        return; // Request was aborted, ignore
-      }
-      console.error("Error fetching settings:", error);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
+  // Update form data when settings are loaded
   useEffect(() => {
-    if (!session?.user?.id) return;
-
-    const abortController = new AbortController();
-    fetchSettings(abortController.signal);
-
-    return () => {
-      abortController.abort();
-    };
-  }, [session?.user?.id, fetchSettings]);
+    if (settingsData) {
+      setFormData({
+        irsMileageDeduction: settingsData.irsMileageDeduction?.toString() || "0.70",
+        incomeSourceTags: settingsData.incomeSourceTags?.length > 0 ? settingsData.incomeSourceTags : DEFAULT_INCOME_TAGS,
+        expenseSourceTags: settingsData.expenseSourceTags?.length > 0 ? settingsData.expenseSourceTags : DEFAULT_EXPENSE_TAGS,
+      });
+    }
+  }, [settingsData]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setSaving(true);
 
-    try {
-      const irsMileageValue = formData.irsMileageDeduction !== undefined && formData.irsMileageDeduction !== "" 
-        ? parseFloat(formData.irsMileageDeduction) 
-        : 0.70;
-      
-      const res = await fetch("/api/settings", {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          irsMileageDeduction: isNaN(irsMileageValue) ? 0.70 : irsMileageValue,
-          incomeSourceTags: formData.incomeSourceTags,
-          expenseSourceTags: formData.expenseSourceTags,
-        }),
-      });
-
-      if (res.ok) {
-        toast.success("Settings saved successfully!");
-      } else {
-        const errorData = await res.json().catch(() => ({ error: "Unknown error" }));
-        toast.error(errorData.error || "Error saving settings");
-      }
-    } catch (error) {
-      console.error("Error saving settings:", error);
-      toast.error("Error saving settings");
-    } finally {
-      setSaving(false);
-    }
+    const irsMileageValue = formData.irsMileageDeduction !== undefined && formData.irsMileageDeduction !== "" 
+      ? parseFloat(formData.irsMileageDeduction) 
+      : 0.70;
+    
+    updateSettings.mutate({
+      irsMileageDeduction: isNaN(irsMileageValue) ? 0.70 : irsMileageValue,
+      incomeSourceTags: formData.incomeSourceTags,
+      expenseSourceTags: formData.expenseSourceTags,
+    });
   };
 
   if (loading) {
@@ -239,8 +199,8 @@ export default function ConfigurationPage() {
             </div>
           </div>
 
-          <Button type="submit" variant="primary" className="w-full" disabled={saving}>
-            {saving ? "Saving..." : "Save Configuration"}
+          <Button type="submit" variant="primary" className="w-full" disabled={updateSettings.isPending}>
+            {updateSettings.isPending ? "Saving..." : "Save Configuration"}
           </Button>
         </form>
       </Card>

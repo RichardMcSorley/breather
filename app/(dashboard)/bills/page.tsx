@@ -1,13 +1,24 @@
 "use client";
 
-import { useEffect, useState, useCallback, useRef } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useSession } from "next-auth/react";
 import Layout from "@/components/Layout";
 import Card from "@/components/ui/Card";
 import Button from "@/components/ui/Button";
 import Input from "@/components/ui/Input";
 import Modal from "@/components/ui/Modal";
-import { useToast } from "@/lib/toast";
+import { 
+  useBills, 
+  useBillPayments, 
+  usePaymentPlan,
+  useCreateBill,
+  useUpdateBill,
+  useDeleteBill,
+  useCreateBillPayment,
+  useUpdateBillPayment,
+  useDeleteBillPayment,
+  useDeleteAllBillPayments
+} from "@/hooks/useQueries";
 
 interface Bill {
   _id: string;
@@ -33,8 +44,6 @@ interface PaymentPlanEntry {
 
 export default function BillsPage() {
   const { data: session } = useSession();
-  const [bills, setBills] = useState<Bill[]>([]);
-  const [loading, setLoading] = useState(true);
   const [showAddModal, setShowAddModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [showPaymentPlanModal, setShowPaymentPlanModal] = useState(false);
@@ -42,11 +51,7 @@ export default function BillsPage() {
   const [selectedBill, setSelectedBill] = useState<Bill | null>(null);
   const [selectedPlanEntry, setSelectedPlanEntry] = useState<PaymentPlanEntry | null>(null);
   const [editingBill, setEditingBill] = useState<Bill | null>(null);
-  const [paymentPlan, setPaymentPlan] = useState<PaymentPlanEntry[]>([]);
-  const [groupedPaymentPlan, setGroupedPaymentPlan] = useState<Record<string, PaymentPlanEntry[]>>({});
   const [viewMode, setViewMode] = useState<"bills" | "plan">("bills");
-  const [planLoaded, setPlanLoaded] = useState(false);
-  const toast = useToast();
   const [hidePaidEntries, setHidePaidEntries] = useState(() => {
     if (typeof window !== "undefined") {
       const saved = localStorage.getItem("bills_hide_paid_entries");
@@ -64,113 +69,97 @@ export default function BillsPage() {
     isActive: true,
     useInPlan: true,
   });
-  const [paymentPlanConfig, setPaymentPlanConfig] = useState({
-    startDate: new Date().toISOString().split("T")[0],
-    dailyPayment: "100",
-  });
   const [markPaidData, setMarkPaidData] = useState({
     amount: "",
     paymentDate: new Date().toISOString().split("T")[0],
     notes: "",
   });
 
-  const fetchBillsRef = useRef<((abortSignal?: AbortSignal) => Promise<void>) | null>(null);
-
-  const fetchBills = useCallback(async (abortSignal?: AbortSignal) => {
-    try {
-      const res = await fetch("/api/bills", { signal: abortSignal });
-      if (res.ok) {
-        const data = await res.json();
-        setBills(data.bills);
-      } else {
-        const errorData = await res.json();
-        if (res.status === 503) {
-          toast.error(`${errorData.error}${errorData.hint ? `\n\n${errorData.hint}` : ""}`);
+  // Get payment plan config from localStorage
+  const [paymentPlanConfig, setPaymentPlanConfig] = useState(() => {
+    if (typeof window !== "undefined") {
+      try {
+        const savedConfig = localStorage.getItem("bills_payment_plan_config");
+        if (savedConfig) {
+          return JSON.parse(savedConfig);
         }
+      } catch {
+        // Ignore parse errors
       }
-    } catch (error) {
-      if (error instanceof Error && error.name === "AbortError") {
-        return; // Request was aborted, ignore
-      }
-      console.error("Error fetching bills:", error);
-      toast.error("Failed to fetch bills. Please check your connection.");
-    } finally {
-      setLoading(false);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []); // toast is stable, don't include in deps
-
-  // Store the latest fetchBills in a ref
-  fetchBillsRef.current = fetchBills;
-
-  useEffect(() => {
-    if (!session?.user?.id) return;
-
-    const abortController = new AbortController();
-    fetchBillsRef.current?.(abortController.signal);
-
-    return () => {
-      abortController.abort();
+    return {
+      startDate: new Date().toISOString().split("T")[0],
+      dailyPayment: "100",
     };
-  }, [session?.user?.id]); // Only depend on session, not fetchBills
+  });
 
-  const loadSavedPaymentPlan = useCallback(() => {
-    try {
+  // Queries
+  const { data: billsData, isLoading: loading } = useBills();
+  const { data: paymentsData } = useBillPayments();
+  // Enable payment plan query if we have a valid config (regardless of viewMode)
+  // This ensures the plan persists across page refreshes
+  const hasValidConfig = !!paymentPlanConfig.startDate && !!paymentPlanConfig.dailyPayment && parseFloat(paymentPlanConfig.dailyPayment) > 0;
+  const { data: paymentPlanData } = usePaymentPlan(
+    paymentPlanConfig.startDate,
+    parseFloat(paymentPlanConfig.dailyPayment),
+    hasValidConfig
+  );
+
+  const bills = billsData?.bills || [];
+  const paymentPlan = paymentPlanData?.paymentPlan || [];
+  const groupedPaymentPlan = paymentPlanData?.groupedByDate || {};
+
+  // Mutations
+  const createBill = useCreateBill();
+  const updateBill = useUpdateBill();
+  const deleteBill = useDeleteBill();
+  const createBillPayment = useCreateBillPayment();
+  const updateBillPayment = useUpdateBillPayment();
+  const deleteBillPayment = useDeleteBillPayment();
+  const deleteAllBillPayments = useDeleteAllBillPayments();
+
+  // Calculate paid payments map
+  const paidPayments = useMemo(() => {
+    if (!paymentsData?.payments) return {};
+    const paidMap: Record<string, number> = {};
+    paymentsData.payments.forEach((payment: any) => {
+      const billId = payment.billId?._id || payment.billId?.toString() || payment.billId;
+      if (billId && payment.paymentDate) {
+        const key = `${billId}-${payment.paymentDate}`;
+        paidMap[key] = (paidMap[key] || 0) + payment.amount;
+      }
+    });
+    return paidMap;
+  }, [paymentsData]);
+
+  const allPayments = paymentsData?.payments || [];
+  const [editingPayment, setEditingPayment] = useState<any | null>(null);
+
+  // Auto-switch to plan view if we have a saved config and plan data
+  useEffect(() => {
+    if (bills.length > 0 && !loading && paymentPlan.length > 0 && viewMode === "bills") {
+      // If we have a saved config and plan data exists, switch to plan view
       const savedConfig = localStorage.getItem("bills_payment_plan_config");
       if (savedConfig) {
-        const config = JSON.parse(savedConfig);
-        setPaymentPlanConfig(config);
-        // Auto-generate plan if config exists
-        if (config.startDate && config.dailyPayment) {
-          generatePaymentPlanFromConfig(config);
+        try {
+          const config = JSON.parse(savedConfig);
+          if (config.startDate && config.dailyPayment) {
+            // Only auto-switch if we actually have plan data
+            setViewMode("plan");
+          }
+        } catch {
+          // Ignore parse errors
         }
       }
-    } catch (error) {
-      console.error("Error loading saved payment plan:", error);
     }
-  }, []);
-
-  useEffect(() => {
-    // Load saved payment plan after bills are loaded (only once)
-    if (bills.length > 0 && !loading && !planLoaded) {
-      loadSavedPaymentPlan();
-      setPlanLoaded(true);
-    }
-  }, [bills.length, loading, planLoaded, loadSavedPaymentPlan]);
+  }, [bills.length, loading, paymentPlan.length, viewMode]);
 
   const savePaymentPlanConfig = (config: { startDate: string; dailyPayment: string }) => {
     try {
       localStorage.setItem("bills_payment_plan_config", JSON.stringify(config));
+      setPaymentPlanConfig(config);
     } catch (error) {
       console.error("Error saving payment plan config:", error);
-    }
-  };
-
-  const generatePaymentPlanFromConfig = async (config?: { startDate: string; dailyPayment: string }) => {
-    const planConfig = config || paymentPlanConfig;
-    try {
-      const res = await fetch("/api/bills/payment-plan", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          startDate: planConfig.startDate,
-          dailyPayment: parseFloat(planConfig.dailyPayment),
-        }),
-      });
-
-      if (res.ok) {
-        const data = await res.json();
-        setPaymentPlan(data.paymentPlan);
-        setGroupedPaymentPlan(data.groupedByDate);
-        setViewMode("plan");
-        setShowPaymentPlanModal(false);
-      } else {
-        const errorData = await res.json();
-        toast.error(errorData.error || "Error generating payment plan");
-      }
-    } catch (error) {
-      console.error("Error generating payment plan:", error);
-      toast.error("Error generating payment plan");
     }
   };
 
@@ -208,99 +197,63 @@ export default function BillsPage() {
     e.preventDefault();
     const isEditing = !!editingBill;
 
-    try {
-      const url = isEditing ? `/api/bills/${editingBill._id}` : "/api/bills";
-      const method = isEditing ? "PUT" : "POST";
+    const requestBody: any = {
+      name: formData.name,
+      amount: parseFloat(formData.amount),
+      dueDate: parseInt(formData.dueDate),
+      isActive: true, // Always active since we removed the UI control
+      useInPlan: formData.useInPlan,
+    };
+    
+    // Include optional fields - send empty string if empty, not undefined
+    if (formData.company !== undefined) {
+      requestBody.company = formData.company.trim() || "";
+    }
+    if (formData.category !== undefined) {
+      requestBody.category = formData.category.trim() || "";
+    }
+    if (formData.notes !== undefined) {
+      requestBody.notes = formData.notes.trim() || "";
+    }
 
-      const requestBody: any = {
-        name: formData.name,
-        amount: parseFloat(formData.amount),
-        dueDate: parseInt(formData.dueDate),
-        isActive: true, // Always active since we removed the UI control
-        useInPlan: formData.useInPlan,
-      };
-      
-      // Include optional fields - send empty string if empty, not undefined
-      if (formData.company !== undefined) {
-        requestBody.company = formData.company.trim() || "";
-      }
-      if (formData.category !== undefined) {
-        requestBody.category = formData.category.trim() || "";
-      }
-      if (formData.notes !== undefined) {
-        requestBody.notes = formData.notes.trim() || "";
-      }
-
-      const res = await fetch(url, {
-        method,
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(requestBody),
+    if (isEditing && editingBill) {
+      updateBill.mutate(
+        { id: editingBill._id, ...requestBody },
+        {
+          onSuccess: () => {
+            setShowAddModal(false);
+            setShowEditModal(false);
+            setEditingBill(null);
+          },
+        }
+      );
+    } else {
+      createBill.mutate(requestBody, {
+        onSuccess: () => {
+          setShowAddModal(false);
+          setShowEditModal(false);
+          setEditingBill(null);
+        },
       });
-
-      if (res.ok) {
-        setShowAddModal(false);
-        setShowEditModal(false);
-        setEditingBill(null);
-        fetchBills();
-        toast.success("Bill saved successfully");
-      } else {
-        const errorData = await res.json().catch(() => ({ error: "Unknown error" }));
-        toast.error(errorData.error || "Error saving bill");
-      }
-    } catch (error) {
-      console.error("Error saving bill:", error);
-      toast.error("Error saving bill");
     }
   };
 
-  const handleToggleUseInPlan = async (bill: Bill) => {
-    try {
-      const currentValue = bill.useInPlan ?? true;
-      const res = await fetch(`/api/bills/${bill._id}`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          useInPlan: !currentValue,
-        }),
-      });
-
-      if (res.ok) {
-        fetchBills();
-        toast.success("Bill updated successfully");
-      } else {
-        const errorData = await res.json().catch(() => ({ error: "Unknown error" }));
-        toast.error(errorData.error || "Error updating bill");
-      }
-    } catch (error) {
-      console.error("Error updating bill:", error);
-      toast.error("Error updating bill");
-    }
+  const handleToggleUseInPlan = (bill: Bill) => {
+    const currentValue = bill.useInPlan ?? true;
+    updateBill.mutate({
+      id: bill._id,
+      useInPlan: !currentValue,
+    });
   };
 
-  const handleDeleteBill = async (id: string) => {
+  const handleDeleteBill = (id: string) => {
     if (!confirm("Are you sure you want to delete this bill?")) {
       return;
     }
-
-    try {
-      const res = await fetch(`/api/bills/${id}`, {
-        method: "DELETE",
-      });
-
-      if (res.ok) {
-        fetchBills();
-        toast.success("Bill deleted successfully");
-      } else {
-        const errorData = await res.json().catch(() => ({ error: "Unknown error" }));
-        toast.error(errorData.error || "Error deleting bill");
-      }
-    } catch (error) {
-      console.error("Error deleting bill:", error);
-      toast.error("Error deleting bill");
-    }
+    deleteBill.mutate(id);
   };
 
-  const handleGeneratePaymentPlan = async () => {
+  const handleGeneratePaymentPlan = () => {
     // Warn user if they have existing payments
     if (paymentPlan.length > 0) {
       const hasPayments = Object.keys(paidPayments).length > 0;
@@ -313,64 +266,21 @@ export default function BillsPage() {
         }
         
         // Clear all existing payments
-        try {
-          const res = await fetch("/api/bills/payments", {
-            method: "DELETE",
-          });
-          if (!res.ok) {
-            toast.error("Error clearing existing payments");
-            return;
-          }
-        } catch (error) {
-          console.error("Error clearing payments:", error);
-          toast.error("Error clearing existing payments");
-          return;
-        }
+        deleteAllBillPayments.mutate(undefined, {
+          onSuccess: () => {
+            savePaymentPlanConfig(paymentPlanConfig);
+            setViewMode("plan");
+            setShowPaymentPlanModal(false);
+          },
+        });
+        return;
       }
     }
-    
-    // Clear paid payments state
-    setPaidPayments({});
     
     // Save config before generating
     savePaymentPlanConfig(paymentPlanConfig);
-    await generatePaymentPlanFromConfig();
-  };
-
-  // Fetch existing payments to show which entries have been paid
-  const [paidPayments, setPaidPayments] = useState<Record<string, number>>({});
-  const [allPayments, setAllPayments] = useState<any[]>([]);
-  const [editingPayment, setEditingPayment] = useState<any | null>(null);
-  
-  useEffect(() => {
-    if (viewMode === "plan") {
-      fetchPaidPayments();
-    }
-  }, [viewMode, paymentPlan]);
-
-  const fetchPaidPayments = async () => {
-    try {
-      const res = await fetch("/api/bills/payments");
-      if (res.ok) {
-        const data = await res.json();
-        // Store all payments for editing/deleting
-        setAllPayments(data.payments || []);
-        
-        // Create a map of billId+date -> total paid amount
-        const paidMap: Record<string, number> = {};
-        data.payments.forEach((payment: any) => {
-          // Handle both populated and non-populated billId
-          const billId = payment.billId?._id || payment.billId?._id?.toString() || payment.billId?.toString() || payment.billId;
-          if (billId && payment.paymentDate) {
-            const key = `${billId}-${payment.paymentDate}`;
-            paidMap[key] = (paidMap[key] || 0) + payment.amount;
-          }
-        });
-        setPaidPayments(paidMap);
-      }
-    } catch (error) {
-      console.error("Error fetching payments:", error);
-    }
+    setViewMode("plan");
+    setShowPaymentPlanModal(false);
   };
 
   const handleMarkPaid = (bill: Bill) => {
@@ -386,7 +296,7 @@ export default function BillsPage() {
 
   const handlePayFromPlan = (entry: PaymentPlanEntry) => {
     // Find the bill by ID
-    const bill = bills.find((b) => b._id === entry.billId);
+    const bill = bills.find((b: Bill) => b._id === entry.billId);
     if (bill) {
       setSelectedBill(bill);
       setSelectedPlanEntry(entry);
@@ -400,51 +310,44 @@ export default function BillsPage() {
     }
   };
 
-  const handleSavePayment = async (e: React.FormEvent) => {
+  const handleSavePayment = (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedBill) return;
 
-    try {
-      const url = editingPayment 
-        ? `/api/bills/payments/${editingPayment._id}`
-        : "/api/bills/payments";
-      const method = editingPayment ? "PUT" : "POST";
+    const paymentData = {
+      billId: selectedBill._id,
+      amount: parseFloat(markPaidData.amount),
+      paymentDate: markPaidData.paymentDate,
+      notes: markPaidData.notes || undefined,
+    };
 
-      const res = await fetch(url, {
-        method,
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          billId: selectedBill._id,
-          amount: parseFloat(markPaidData.amount),
-          paymentDate: markPaidData.paymentDate,
-          notes: markPaidData.notes || undefined,
-        }),
-      });
-
-      if (res.ok) {
-        setShowMarkPaidModal(false);
-        setSelectedBill(null);
-        setSelectedPlanEntry(null);
-        setEditingPayment(null);
-        await fetchBills();
-        if (viewMode === "plan") {
-          // Refresh paid payments and regenerate payment plan
-          await fetchPaidPayments();
-          await generatePaymentPlanFromConfig();
+    if (editingPayment) {
+      updateBillPayment.mutate(
+        { id: editingPayment._id, ...paymentData },
+        {
+          onSuccess: () => {
+            setShowMarkPaidModal(false);
+            setSelectedBill(null);
+            setSelectedPlanEntry(null);
+            setEditingPayment(null);
+          },
         }
-      } else {
-        const errorData = await res.json();
-        toast.error(`Error ${editingPayment ? 'updating' : 'recording'} payment: ${errorData.error || "Unknown error"}`);
-      }
-    } catch (error) {
-      console.error(`Error ${editingPayment ? 'updating' : 'recording'} payment:`, error);
-      toast.error(`Error ${editingPayment ? 'updating' : 'recording'} payment`);
+      );
+    } else {
+      createBillPayment.mutate(paymentData, {
+        onSuccess: () => {
+          setShowMarkPaidModal(false);
+          setSelectedBill(null);
+          setSelectedPlanEntry(null);
+          setEditingPayment(null);
+        },
+      });
     }
   };
 
   const handleEditPayment = (payment: any) => {
     const billId = payment.billId?._id || payment.billId?.toString() || payment.billId;
-    const bill = bills.find((b) => b._id === billId);
+    const bill = bills.find((b: Bill) => b._id === billId);
     if (bill) {
       setSelectedBill(bill);
       setEditingPayment(payment);
@@ -458,31 +361,11 @@ export default function BillsPage() {
     }
   };
 
-  const handleDeletePayment = async (paymentId: string) => {
+  const handleDeletePayment = (paymentId: string) => {
     if (!confirm("Are you sure you want to delete this payment?")) {
       return;
     }
-
-    try {
-      const res = await fetch(`/api/bills/payments/${paymentId}`, {
-        method: "DELETE",
-      });
-
-      if (res.ok) {
-        await fetchBills();
-        if (viewMode === "plan") {
-          // Refresh paid payments and regenerate payment plan
-          await fetchPaidPayments();
-          await generatePaymentPlanFromConfig();
-        }
-      } else {
-        const errorData = await res.json();
-        toast.error(`Error deleting payment: ${errorData.error || "Unknown error"}`);
-      }
-    } catch (error) {
-      console.error("Error deleting payment:", error);
-      toast.error("Error deleting payment");
-    }
+    deleteBillPayment.mutate(paymentId);
   };
 
   const formatCurrency = (amount: number) => {
@@ -582,7 +465,7 @@ export default function BillsPage() {
                   </tr>
                 </thead>
                 <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
-                  {bills.map((bill) => (
+                  {bills.map((bill: Bill) => (
                     <tr
                       key={bill._id}
                       className="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
@@ -687,14 +570,15 @@ export default function BillsPage() {
               {Object.entries(groupedPaymentPlan)
               .sort(([dateA], [dateB]) => dateA.localeCompare(dateB))
               .map(([date, entries]) => {
+                const typedEntries = entries as PaymentPlanEntry[];
                 // Filter out fully paid entries only if hidePaidEntries filter is active
                 const filteredEntries = hidePaidEntries
-                  ? entries.filter((entry) => {
+                  ? typedEntries.filter((entry: PaymentPlanEntry) => {
                       const paymentKey = `${entry.billId}-${entry.date}`;
                       const paidAmount = paidPayments[paymentKey] || 0;
                       return paidAmount < entry.payment;
                     })
-                  : entries;
+                  : typedEntries;
 
                 // Don't render the card if all entries are filtered out
                 if (filteredEntries.length === 0) {
@@ -714,7 +598,7 @@ export default function BillsPage() {
                     )}
                   </div>
                   <div className="space-y-3">
-                    {filteredEntries.map((entry, idx) => {
+                    {filteredEntries.map((entry: PaymentPlanEntry, idx: number) => {
                       const paymentKey = `${entry.billId}-${entry.date}`;
                       const paidAmount = paidPayments[paymentKey] || 0;
                       const remainingToPay = Math.max(0, entry.payment - paidAmount);
@@ -1103,3 +987,4 @@ export default function BillsPage() {
     </Layout>
   );
 }
+
