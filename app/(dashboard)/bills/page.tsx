@@ -610,10 +610,7 @@ export default function BillsPage() {
                   </button>
                 </div>
               )}
-            </>
-          )}
-          {Object.keys(groupedPaymentPlan).length > 0 && (
-            Object.entries(groupedPaymentPlan)
+              {Object.entries(groupedPaymentPlan)
               .sort(([dateA], [dateB]) => dateA.localeCompare(dateB))
               .map(([date, entries]) => {
                 // Filter out fully paid entries only if hidePaidEntries filter is active
