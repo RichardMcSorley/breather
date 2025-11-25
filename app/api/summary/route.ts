@@ -4,7 +4,7 @@ import { authOptions } from "../auth/[...nextauth]/config";
 import connectDB from "@/lib/mongodb";
 import Transaction from "@/lib/models/Transaction";
 import UserSettings from "@/lib/models/UserSettings";
-import { startOfMonth, endOfMonth, subDays, startOfDay, endOfDay, differenceInDays } from "date-fns";
+import { startOfMonth, endOfMonth, startOfYear, endOfYear, subDays, startOfDay, endOfDay, differenceInDays } from "date-fns";
 import { handleApiError } from "@/lib/api-error-handler";
 import Mileage from "@/lib/models/Mileage";
 import Bill from "@/lib/models/Bill";
@@ -22,6 +22,7 @@ export async function GET(request: NextRequest) {
     // Get user's local date from query params if provided, otherwise use server date
     const { searchParams } = new URL(request.url);
     const localDateStr = searchParams.get("localDate");
+    const viewMode = searchParams.get("viewMode") || "day";
     
     let now: Date;
     if (localDateStr) {
@@ -38,68 +39,125 @@ export async function GET(request: NextRequest) {
       now = new Date(Date.UTC(utcYear, utcMonth, utcDay, 0, 0, 0, 0));
     }
 
-    // Use date-fns functions - they work with Date objects
-    // Since we're using UTC dates, the calculations will be correct
+    // Determine date range based on view mode
+    let rangeStart: Date;
+    let rangeEnd: Date;
+    let todayStart: Date;
+    let todayEnd: Date;
+    
+    if (viewMode === "year") {
+      rangeStart = startOfYear(now);
+      rangeEnd = endOfYear(now);
+      // For year view, use the full year range
+      todayStart = new Date(rangeStart);
+      todayStart.setUTCHours(0, 0, 0, 0);
+      todayEnd = new Date(rangeEnd);
+      todayEnd.setUTCHours(23, 59, 59, 999);
+    } else if (viewMode === "month") {
+      rangeStart = startOfMonth(now);
+      rangeEnd = endOfMonth(now);
+      // For month view, use the full month range
+      todayStart = new Date(rangeStart);
+      todayStart.setUTCHours(0, 0, 0, 0);
+      todayEnd = new Date(rangeEnd);
+      todayEnd.setUTCHours(23, 59, 59, 999);
+    } else {
+      // Day view - use the selected day
+      rangeStart = startOfMonth(now);
+      rangeEnd = endOfMonth(now);
+      // For today's range, manually set UTC hours to ensure we get the full day in UTC
+      todayStart = new Date(now);
+      todayStart.setUTCHours(0, 0, 0, 0);
+      todayEnd = new Date(now);
+      todayEnd.setUTCHours(23, 59, 59, 999);
+    }
+    
     const monthStart = startOfMonth(now);
     const monthEnd = endOfMonth(now);
     const thirtyDaysAgo = subDays(now, 30);
-    
-    // For today's range, manually set UTC hours to ensure we get the full day in UTC
-    const todayStart = new Date(now);
-    todayStart.setUTCHours(0, 0, 0, 0);
-    const todayEnd = new Date(now);
-    todayEnd.setUTCHours(23, 59, 59, 999);
 
     const settings = await UserSettings.findOne({ userId: session.user.id }).lean();
 
-    // Get transactions for the current month
+    // Get transactions for the selected range (day/month/year)
     const transactionQuery: any = {
       userId: session.user.id,
       date: {
-        $gte: monthStart,
-        $lte: monthEnd,
+        $gte: todayStart,
+        $lte: todayEnd,
       },
     };
 
     const transactions = await Transaction.find(transactionQuery).lean();
     const relevantTransactions = transactions;
 
-    // Get active bills for the current month
+    // Get active bills
     const activeBills = await Bill.find({
       userId: session.user.id,
       isActive: true,
     }).lean();
 
-    // Calculate bills due this month and their actual due dates
-    // Use UTC methods to get year/month
-    const currentYear = now.getUTCFullYear();
-    const currentMonth = now.getUTCMonth();
-
+    // Calculate bills due for the selected period
     let totalBillsDue = 0;
     let lastDueDate: Date | null = null;
 
-    for (const bill of activeBills) {
-      // Calculate the actual due date for this month in UTC
-      const dueDay = bill.dueDate;
-      // Create date for this month's due date in UTC
-      const billDueDate = new Date(Date.UTC(currentYear, currentMonth, dueDay, 23, 59, 59, 999));
-
-      totalBillsDue += bill.amount;
+    if (viewMode === "year") {
+      // For year view, calculate bills for all months in the year
+      const year = now.getUTCFullYear();
+      for (let month = 0; month < 12; month++) {
+        for (const bill of activeBills) {
+          const dueDay = bill.dueDate;
+          const billDueDate = new Date(Date.UTC(year, month, dueDay, 23, 59, 59, 999));
+          
+          // Only count bills within the year range
+          if (billDueDate >= todayStart && billDueDate <= todayEnd) {
+            totalBillsDue += bill.amount;
+            if (!lastDueDate || billDueDate > lastDueDate) {
+              lastDueDate = billDueDate;
+            }
+          }
+        }
+      }
+    } else if (viewMode === "month") {
+      // For month view, calculate bills for the selected month
+      const currentYear = now.getUTCFullYear();
+      const currentMonth = now.getUTCMonth();
       
-      // Track the latest due date (whether past or future)
-      if (!lastDueDate || billDueDate > lastDueDate) {
-        lastDueDate = billDueDate;
+      for (const bill of activeBills) {
+        const dueDay = bill.dueDate;
+        const billDueDate = new Date(Date.UTC(currentYear, currentMonth, dueDay, 23, 59, 59, 999));
+        
+        totalBillsDue += bill.amount;
+        if (!lastDueDate || billDueDate > lastDueDate) {
+          lastDueDate = billDueDate;
+        }
+      }
+    } else {
+      // For day view, calculate bills for the current month (existing logic)
+      const currentYear = now.getUTCFullYear();
+      const currentMonth = now.getUTCMonth();
+      
+      for (const bill of activeBills) {
+        const dueDay = bill.dueDate;
+        const billDueDate = new Date(Date.UTC(currentYear, currentMonth, dueDay, 23, 59, 59, 999));
+        
+        totalBillsDue += bill.amount;
+        if (!lastDueDate || billDueDate > lastDueDate) {
+          lastDueDate = billDueDate;
+        }
       }
     }
 
     // Calculate days until last bill is due (can be negative if overdue)
     const daysUntilLastBill = lastDueDate ? differenceInDays(lastDueDate, now) : 0;
 
-    // Get all mileage entries (for total calculation)
+    // Get all mileage entries for the selected range
+    const mileageStartDate = viewMode === "year" ? startOfYear(now) : viewMode === "month" ? startOfMonth(now) : thirtyDaysAgo;
+    
     const mileageEntries = await Mileage.find({
       userId: session.user.id,
       date: {
-        $gte: thirtyDaysAgo,
+        $gte: mileageStartDate,
+        $lte: todayEnd,
       },
     })
       .sort({ date: 1, createdAt: 1 })
@@ -109,7 +167,8 @@ export async function GET(request: NextRequest) {
     const workMileageEntries = await Mileage.find({
       userId: session.user.id,
       date: {
-        $gte: thirtyDaysAgo,
+        $gte: mileageStartDate,
+        $lte: todayEnd,
       },
       classification: "work",
     })
@@ -165,9 +224,26 @@ export async function GET(request: NextRequest) {
     // Free cash = income - variable expenses - total bills due (all bills for the month)
     const freeCash = grossTotal - variableExpenses - totalBillsDue;
 
-    // Calculate actual daily patterns from transactions
-    const daysInMonth = now.getDate(); // Days that have passed this month
-    const actualDays = Math.max(daysInMonth, 1); // At least 1 day to avoid division by zero
+    // Calculate actual days in the period
+    let actualDays: number;
+    const today = new Date();
+    today.setUTCHours(0, 0, 0, 0);
+    
+    if (viewMode === "year") {
+      const yearStart = startOfYear(now);
+      // Use the earlier of today or the end of the selected year
+      const endDate = today < todayEnd ? today : todayEnd;
+      const daysDiff = Math.floor((endDate.getTime() - yearStart.getTime()) / (1000 * 60 * 60 * 24));
+      actualDays = Math.max(daysDiff + 1, 1);
+    } else if (viewMode === "month") {
+      const monthStart = startOfMonth(now);
+      // Use the earlier of today or the end of the selected month
+      const endDate = today < todayEnd ? today : todayEnd;
+      const daysDiff = Math.floor((endDate.getTime() - monthStart.getTime()) / (1000 * 60 * 60 * 24));
+      actualDays = Math.max(daysDiff + 1, 1);
+    } else {
+      actualDays = 1; // Day view is always 1 day
+    }
     
     // Calculate average daily income
     const averageDailyIncome = grossTotal / actualDays;
@@ -222,9 +298,9 @@ export async function GET(request: NextRequest) {
       daysToBreakEven = Math.max(0, daysUntilLastBill);
     }
 
-    // For today's earnings, show ALL transactions from today
-    // Only exclude bills from today's display
-    const allTodayTransactions = await Transaction.find({
+    // For period earnings (day/month/year), show ALL transactions from the period
+    // Only exclude bills from the display
+    const allPeriodTransactions = await Transaction.find({
       userId: session.user.id,
       date: {
         $gte: todayStart,
@@ -232,22 +308,22 @@ export async function GET(request: NextRequest) {
       },
     }).lean();
     
-    const todayTransactions = allTodayTransactions.filter((t) => {
+    const periodTransactions = allPeriodTransactions.filter((t) => {
       return !t.isBill;
     });
 
-    const todayIncome = todayTransactions
+    const todayIncome = periodTransactions
       .filter((t) => t.type === "income")
       .reduce((sum, t) => sum + t.amount, 0);
 
-    const todayExpenses = todayTransactions
+    const todayExpenses = periodTransactions
       .filter((t) => t.type === "expense")
       .reduce((sum, t) => sum + t.amount, 0);
 
     const todayNet = todayIncome - todayExpenses;
 
-    // Calculate today's work mileage for tax deductions
-    const todayWorkMileageEntries = await Mileage.find({
+    // Calculate period's work mileage for tax deductions
+    const periodWorkMileageEntries = await Mileage.find({
       userId: session.user.id,
       date: {
         $gte: todayStart,
@@ -259,11 +335,11 @@ export async function GET(request: NextRequest) {
       .lean();
 
     let todayMileageMiles = 0;
-    if (todayWorkMileageEntries.length >= 2) {
+    if (periodWorkMileageEntries.length >= 2) {
       todayMileageMiles =
-        todayWorkMileageEntries[todayWorkMileageEntries.length - 1].odometer -
-        todayWorkMileageEntries[0].odometer;
-    } else if (todayWorkMileageEntries.length === 1) {
+        periodWorkMileageEntries[periodWorkMileageEntries.length - 1].odometer -
+        periodWorkMileageEntries[0].odometer;
+    } else if (periodWorkMileageEntries.length === 1) {
       const previousWorkEntry = await Mileage.findOne({
         userId: session.user.id,
         date: { $lt: todayStart },
@@ -274,7 +350,7 @@ export async function GET(request: NextRequest) {
 
       if (previousWorkEntry) {
         todayMileageMiles = Math.max(
-          todayWorkMileageEntries[0].odometer - previousWorkEntry.odometer,
+          periodWorkMileageEntries[0].odometer - previousWorkEntry.odometer,
           0
         );
       }

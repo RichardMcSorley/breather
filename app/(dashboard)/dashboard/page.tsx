@@ -55,13 +55,16 @@ export default function DashboardPage() {
     return `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
   };
   const [selectedDate, setSelectedDate] = useState<string>(getTodayDateString());
+  const [viewMode, setViewMode] = useState<"day" | "month" | "year">("day");
 
   useEffect(() => {
     if (session?.user?.id) {
       fetchSummary();
-      loadTodayPayments();
+      if (viewMode === "day") {
+        loadTodayPayments();
+      }
     }
-  }, [session, selectedDate]);
+  }, [session, selectedDate, viewMode]);
 
   const loadTodayPayments = async () => {
     try {
@@ -156,7 +159,11 @@ export default function DashboardPage() {
   const fetchSummary = async () => {
     try {
       setLoading(true);
-      const res = await fetch(`/api/summary?localDate=${selectedDate}`);
+      const params = new URLSearchParams({
+        localDate: selectedDate,
+        viewMode: viewMode,
+      });
+      const res = await fetch(`/api/summary?${params.toString()}`);
       if (res.ok) {
         const data = await res.json();
         setSummary(data);
@@ -208,45 +215,80 @@ export default function DashboardPage() {
     });
   };
 
-  const formatSelectedDateDisplay = (dateString: string) => {
-    const [year, month, day] = dateString.split("-").map(Number);
-    const date = new Date(year, month - 1, day);
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const selectedDateObj = new Date(date);
-    selectedDateObj.setHours(0, 0, 0, 0);
-    
-    if (selectedDateObj.getTime() === today.getTime()) {
-      return "Today";
-    }
-    const yesterday = new Date(today);
-    yesterday.setDate(yesterday.getDate() - 1);
-    if (selectedDateObj.getTime() === yesterday.getTime()) {
-      return "Yesterday";
-    }
-    return date.toLocaleDateString("en-US", {
-      weekday: "long",
-      month: "long",
-      day: "numeric",
-      year: date.getFullYear() !== today.getFullYear() ? "numeric" : undefined,
-    });
-  };
 
   const navigateDate = (direction: "prev" | "next") => {
     const [year, month, day] = selectedDate.split("-").map(Number);
     const currentDate = new Date(year, month - 1, day);
     const newDate = new Date(currentDate);
-    newDate.setDate(newDate.getDate() + (direction === "next" ? 1 : -1));
+    
+    if (viewMode === "day") {
+      newDate.setDate(newDate.getDate() + (direction === "next" ? 1 : -1));
+    } else if (viewMode === "month") {
+      newDate.setMonth(newDate.getMonth() + (direction === "next" ? 1 : -1));
+    } else if (viewMode === "year") {
+      newDate.setFullYear(newDate.getFullYear() + (direction === "next" ? 1 : -1));
+    }
+    
     const newDateString = `${newDate.getFullYear()}-${String(newDate.getMonth() + 1).padStart(2, '0')}-${String(newDate.getDate()).padStart(2, '0')}`;
     setSelectedDate(newDateString);
+  };
+  
+  const isDateBeyondToday = () => {
+    const [year, month, day] = selectedDate.split("-").map(Number);
+    const selected = new Date(year, month - 1, day);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    selected.setHours(0, 0, 0, 0);
+    
+    if (viewMode === "day") {
+      return selected > today;
+    } else if (viewMode === "month") {
+      const selectedMonth = new Date(year, month - 1, 1);
+      const todayMonth = new Date(today.getFullYear(), today.getMonth(), 1);
+      return selectedMonth > todayMonth;
+    } else if (viewMode === "year") {
+      return year > today.getFullYear();
+    }
+    return false;
   };
 
   const handleDateChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setSelectedDate(e.target.value);
   };
-
-  const goToToday = () => {
-    setSelectedDate(getTodayDateString());
+  
+  const getDisplayText = () => {
+    const [year, month, day] = selectedDate.split("-").map(Number);
+    const date = new Date(year, month - 1, day);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    
+    if (viewMode === "day") {
+      const selectedDateObj = new Date(date);
+      selectedDateObj.setHours(0, 0, 0, 0);
+      
+      if (selectedDateObj.getTime() === today.getTime()) {
+        return "Today";
+      }
+      const yesterday = new Date(today);
+      yesterday.setDate(yesterday.getDate() - 1);
+      if (selectedDateObj.getTime() === yesterday.getTime()) {
+        return "Yesterday";
+      }
+      return date.toLocaleDateString("en-US", {
+        weekday: "long",
+        month: "long",
+        day: "numeric",
+        year: date.getFullYear() !== today.getFullYear() ? "numeric" : undefined,
+      });
+    } else if (viewMode === "month") {
+      return date.toLocaleDateString("en-US", {
+        month: "long",
+        year: "numeric",
+      });
+    } else if (viewMode === "year") {
+      return year.toString();
+    }
+    return "";
   };
 
   const handleAddTransaction = (type: "income" | "expense") => {
@@ -273,47 +315,119 @@ export default function DashboardPage() {
     <Layout>
       {/* Date Navigation */}
       <Card className="p-4 mb-4">
-        <div className="flex items-center gap-3 flex-wrap">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => navigateDate("prev")}
-            className="min-w-[44px]"
-            aria-label="Previous day"
-          >
-            ←
-          </Button>
-          
-          <div className="flex-1 min-w-[200px]">
-            <Input
-              type="date"
-              value={selectedDate}
-              onChange={handleDateChange}
-              className="w-full"
-            />
+        <div className="space-y-3">
+          {/* View Mode Selector */}
+          <div className="flex items-center justify-center gap-2">
+            <button
+              onClick={() => {
+                setViewMode("day");
+                // Keep the current date when switching to day view
+              }}
+              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                viewMode === "day"
+                  ? "bg-green-600 dark:bg-green-700 text-white"
+                  : "bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700"
+              }`}
+            >
+              Day
+            </button>
+            <button
+              onClick={() => {
+                setViewMode("month");
+                // Set to first of the month when switching to month view
+                const [year, month] = selectedDate.split("-").map(Number);
+                setSelectedDate(`${year}-${String(month).padStart(2, '0')}-01`);
+              }}
+              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                viewMode === "month"
+                  ? "bg-green-600 dark:bg-green-700 text-white"
+                  : "bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700"
+              }`}
+            >
+              Month
+            </button>
+            <button
+              onClick={() => {
+                setViewMode("year");
+                // Set to January 1st when switching to year view
+                const [year] = selectedDate.split("-").map(Number);
+                setSelectedDate(`${year}-01-01`);
+              }}
+              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                viewMode === "year"
+                  ? "bg-green-600 dark:bg-green-700 text-white"
+                  : "bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700"
+              }`}
+            >
+              Year
+            </button>
           </div>
           
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => navigateDate("next")}
-            className="min-w-[44px]"
-            aria-label="Next day"
-          >
-            →
-          </Button>
+          {/* Date Navigation Controls */}
+          <div className="flex items-center gap-3">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => navigateDate("prev")}
+              className="min-w-[44px] h-10 flex items-center justify-center"
+              aria-label={`Previous ${viewMode}`}
+            >
+              ←
+            </Button>
+            
+            <div className="flex-1 min-w-[200px]">
+              {viewMode === "day" ? (
+                <Input
+                  type="date"
+                  value={selectedDate}
+                  onChange={handleDateChange}
+                  className="w-full h-10"
+                />
+              ) : viewMode === "month" ? (
+                <Input
+                  type="month"
+                  value={`${selectedDate.split("-")[0]}-${selectedDate.split("-")[1]}`}
+                  onChange={(e) => {
+                    const [year, month] = e.target.value.split("-");
+                    setSelectedDate(`${year}-${month}-01`);
+                  }}
+                  className="w-full h-10"
+                />
+              ) : (
+                <Input
+                  type="number"
+                  value={selectedDate.split("-")[0]}
+                  onChange={(e) => {
+                    const year = e.target.value;
+                    setSelectedDate(`${year}-01-01`);
+                  }}
+                  min="2000"
+                  max={new Date().getFullYear() + 10}
+                  className="w-full h-10"
+                  placeholder="Year"
+                />
+              )}
+            </div>
+            
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                if (!isDateBeyondToday()) {
+                  navigateDate("next");
+                }
+              }}
+              disabled={isDateBeyondToday()}
+              className="min-w-[44px] h-10 flex items-center justify-center"
+              aria-label={`Next ${viewMode}`}
+            >
+              →
+            </Button>
+          </div>
           
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={goToToday}
-            className="whitespace-nowrap"
-          >
-            Today
-          </Button>
-          
-          <div className="w-full text-center mt-2 text-sm font-medium text-gray-700 dark:text-gray-300">
-            {formatSelectedDateDisplay(selectedDate)}
+          {/* Display Text */}
+          <div className="text-center text-base font-semibold text-gray-900 dark:text-white">
+            {getDisplayText()}
           </div>
         </div>
       </Card>
@@ -324,7 +438,11 @@ export default function DashboardPage() {
             <Card className="p-6">
               <div className="flex items-center justify-between mb-4">
                 <h2 className="text-xl font-bold text-gray-900 dark:text-white">
-                  {formatSelectedDateDisplay(selectedDate)}&apos;s Earnings
+                  {viewMode === "day" 
+                    ? `${getDisplayText()}'s Earnings`
+                    : viewMode === "month"
+                    ? `${getDisplayText()} Earnings`
+                    : `${getDisplayText()} Earnings`}
                 </h2>
               </div>
 
