@@ -18,7 +18,8 @@ interface AddTransactionModalProps {
   initialType?: "income" | "expense";
 }
 
-const INCOME_TAGS = ["Instacart", "Uber", "DoorDash", "GrubHub", "ProxyPics", "Withdraw Fees"];
+const DEFAULT_INCOME_SOURCE_TAGS = ["DoorDash", "Uber", "Instacart", "GrubHub", "Roadie", "Shipt", "ProxyPics"];
+const DEFAULT_EXPENSE_SOURCE_TAGS = ["Gas", "Maintenance", "Insurance", "Tolls", "Parking", "Car Wash", "Oil Change", "Withdraw Fees"];
 
 const formatLocalDate = (value: Date | string) => {
   if (typeof value === "string") {
@@ -55,6 +56,8 @@ export default function AddTransactionModal({
   });
   const [customTag, setCustomTag] = useState("");
   const [dataLoaded, setDataLoaded] = useState(false);
+  const [incomeSourceTags, setIncomeSourceTags] = useState<string[]>(DEFAULT_INCOME_SOURCE_TAGS);
+  const [expenseSourceTags, setExpenseSourceTags] = useState<string[]>(DEFAULT_EXPENSE_SOURCE_TAGS);
   const amountInputRef = useRef<HTMLInputElement | null>(null);
 
   const resetForm = useCallback(() => {
@@ -93,6 +96,29 @@ export default function AddTransactionModal({
       setDataLoaded(true);
     }
   }, [transactionId, type]);
+
+  const fetchUserSettings = useCallback(async () => {
+    try {
+      const res = await fetch("/api/settings");
+      if (res.ok) {
+        const data = await res.json();
+        if (data.incomeSourceTags && data.incomeSourceTags.length > 0) {
+          setIncomeSourceTags(data.incomeSourceTags);
+        }
+        if (data.expenseSourceTags && data.expenseSourceTags.length > 0) {
+          setExpenseSourceTags(data.expenseSourceTags);
+        }
+      }
+    } catch (error) {
+      console.error("Error fetching user settings:", error);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (isOpen) {
+      fetchUserSettings();
+    }
+  }, [isOpen, fetchUserSettings]);
 
   useEffect(() => {
     if (transactionId) {
@@ -256,7 +282,7 @@ export default function AddTransactionModal({
               Income Source
             </label>
             <div className="flex flex-wrap gap-2 mb-2">
-              {INCOME_TAGS.map((tag) => (
+              {incomeSourceTags.map((tag) => (
                 <button
                   key={tag}
                   type="button"
@@ -293,7 +319,7 @@ export default function AddTransactionModal({
               Expense Source (optional)
             </label>
             <div className="flex flex-wrap gap-2 mb-2">
-              {INCOME_TAGS.map((tag) => (
+              {expenseSourceTags.map((tag) => (
                 <button
                   key={tag}
                   type="button"

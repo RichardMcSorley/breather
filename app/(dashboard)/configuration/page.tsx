@@ -6,6 +6,7 @@ import Layout from "@/components/Layout";
 import Input from "@/components/ui/Input";
 import Button from "@/components/ui/Button";
 import Card from "@/components/ui/Card";
+import Tag from "@/components/ui/Tag";
 
 export default function ConfigurationPage() {
   const { data: session } = useSession();
@@ -13,7 +14,15 @@ export default function ConfigurationPage() {
   const [saving, setSaving] = useState(false);
   const [formData, setFormData] = useState({
     irsMileageDeduction: "",
+    incomeSourceTags: [] as string[],
+    expenseSourceTags: [] as string[],
   });
+  const [newIncomeTag, setNewIncomeTag] = useState("");
+  const [newExpenseTag, setNewExpenseTag] = useState("");
+
+  // Default tags
+  const DEFAULT_INCOME_TAGS = ["DoorDash", "Uber", "Instacart", "GrubHub", "Roadie", "Shipt", "ProxyPics"];
+  const DEFAULT_EXPENSE_TAGS = ["Gas", "Maintenance", "Insurance", "Tolls", "Parking", "Car Wash", "Oil Change", "Withdraw Fees"];
 
   useEffect(() => {
     if (session?.user?.id) {
@@ -28,6 +37,8 @@ export default function ConfigurationPage() {
         const data = await res.json();
         setFormData({
           irsMileageDeduction: data.irsMileageDeduction?.toString() || "0.70",
+          incomeSourceTags: data.incomeSourceTags?.length > 0 ? data.incomeSourceTags : DEFAULT_INCOME_TAGS,
+          expenseSourceTags: data.expenseSourceTags?.length > 0 ? data.expenseSourceTags : DEFAULT_EXPENSE_TAGS,
         });
       }
     } catch (error) {
@@ -51,6 +62,8 @@ export default function ConfigurationPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           irsMileageDeduction: isNaN(irsMileageValue) ? 0.70 : irsMileageValue,
+          incomeSourceTags: formData.incomeSourceTags,
+          expenseSourceTags: formData.expenseSourceTags,
         }),
       });
 
@@ -97,6 +110,122 @@ export default function ConfigurationPage() {
             <p className="mt-1 text-gray-500 dark:text-gray-400">
               Current IRS standard mileage rate for business use (default: $0.70/mile).
             </p>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+              Income Source Tags
+            </label>
+            <div className="flex flex-wrap gap-2 mb-3">
+              {formData.incomeSourceTags.map((tag) => (
+                <Tag
+                  key={tag}
+                  label={tag}
+                  variant="income"
+                  showRemove={true}
+                  onRemove={() => {
+                    setFormData({
+                      ...formData,
+                      incomeSourceTags: formData.incomeSourceTags.filter((t) => t !== tag),
+                    });
+                  }}
+                />
+              ))}
+            </div>
+            <div className="flex gap-2">
+              <Input
+                placeholder="Add income source tag"
+                value={newIncomeTag}
+                onChange={(e) => setNewIncomeTag(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    const trimmed = newIncomeTag.trim();
+                    if (trimmed && !formData.incomeSourceTags.includes(trimmed)) {
+                      setFormData({
+                        ...formData,
+                        incomeSourceTags: [...formData.incomeSourceTags, trimmed],
+                      });
+                      setNewIncomeTag("");
+                    }
+                  }
+                }}
+              />
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => {
+                  const trimmed = newIncomeTag.trim();
+                  if (trimmed && !formData.incomeSourceTags.includes(trimmed)) {
+                    setFormData({
+                      ...formData,
+                      incomeSourceTags: [...formData.incomeSourceTags, trimmed],
+                    });
+                    setNewIncomeTag("");
+                  }
+                }}
+              >
+                Add
+              </Button>
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+              Expense Source Tags
+            </label>
+            <div className="flex flex-wrap gap-2 mb-3">
+              {formData.expenseSourceTags.map((tag) => (
+                <Tag
+                  key={tag}
+                  label={tag}
+                  variant="expense"
+                  showRemove={true}
+                  onRemove={() => {
+                    setFormData({
+                      ...formData,
+                      expenseSourceTags: formData.expenseSourceTags.filter((t) => t !== tag),
+                    });
+                  }}
+                />
+              ))}
+            </div>
+            <div className="flex gap-2">
+              <Input
+                placeholder="Add expense source tag"
+                value={newExpenseTag}
+                onChange={(e) => setNewExpenseTag(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    const trimmed = newExpenseTag.trim();
+                    if (trimmed && !formData.expenseSourceTags.includes(trimmed)) {
+                      setFormData({
+                        ...formData,
+                        expenseSourceTags: [...formData.expenseSourceTags, trimmed],
+                      });
+                      setNewExpenseTag("");
+                    }
+                  }
+                }}
+              />
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => {
+                  const trimmed = newExpenseTag.trim();
+                  if (trimmed && !formData.expenseSourceTags.includes(trimmed)) {
+                    setFormData({
+                      ...formData,
+                      expenseSourceTags: [...formData.expenseSourceTags, trimmed],
+                    });
+                    setNewExpenseTag("");
+                  }
+                }}
+              >
+                Add
+              </Button>
+            </div>
           </div>
 
           <Button type="submit" variant="primary" className="w-full" disabled={saving}>
