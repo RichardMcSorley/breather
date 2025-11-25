@@ -766,7 +766,8 @@ export default function BillsPage() {
                 </Card>
                 );
               })
-              .filter(Boolean)
+              .filter(Boolean)}
+            </>
           )}
         </div>
       )}
