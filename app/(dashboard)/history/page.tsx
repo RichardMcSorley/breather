@@ -243,15 +243,6 @@ export default function HistoryPage() {
                         </div>
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2">
-                            <span
-                              className={`text-sm font-medium ${
-                                isIncome 
-                                  ? "text-green-600 dark:text-green-400" 
-                                  : "text-red-600 dark:text-red-400"
-                              }`}
-                            >
-                              {transaction.type.charAt(0).toUpperCase() + transaction.type.slice(1)}
-                            </span>
                             {transaction.tag && (
                               <span className="text-xs text-gray-500 dark:text-gray-400 bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded">
                                 {transaction.tag}
