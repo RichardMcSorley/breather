@@ -43,18 +43,26 @@ export async function GET(request: NextRequest) {
     const monthStart = startOfMonth(now);
     const monthEnd = endOfMonth(now);
     const thirtyDaysAgo = subDays(now, 30);
-    const todayStart = startOfDay(now);
-    const todayEnd = endOfDay(now);
+    
+    // For today's range, manually set UTC hours to ensure we get the full day in UTC
+    const todayStart = new Date(now);
+    todayStart.setUTCHours(0, 0, 0, 0);
+    const todayEnd = new Date(now);
+    todayEnd.setUTCHours(23, 59, 59, 999);
 
-    const transactions = await Transaction.find({
+    const settings = await UserSettings.findOne({ userId: session.user.id }).lean();
+
+    // Get transactions for the current month
+    const transactionQuery: any = {
       userId: session.user.id,
       date: {
         $gte: monthStart,
         $lte: monthEnd,
       },
-    }).lean();
+    };
 
-    const settings = await UserSettings.findOne({ userId: session.user.id }).lean();
+    const transactions = await Transaction.find(transactionQuery).lean();
+    const relevantTransactions = transactions;
 
     // Get active bills for the current month
     const activeBills = await Bill.find({
@@ -117,34 +125,31 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    const irsMileageRate = settings?.irsMileageDeduction ?? 0.67;
+    const irsMileageRate = settings?.irsMileageDeduction ?? 0.70;
     const mileageSavings = mileageMilesLast30 * irsMileageRate;
 
-    const transactionGrossTotal = transactions
+    // Filter to only include income transactions
+    const transactionGrossTotal = relevantTransactions
       .filter((t) => t.type === "income")
       .reduce((sum, t) => sum + t.amount, 0);
 
-    const variableExpenses = transactions
+    const variableExpenses = relevantTransactions
       .filter((t) => t.type === "expense" && !t.isBill)
       .reduce((sum, t) => sum + t.amount, 0);
 
     // Bill expenses from transactions only (bills that have been paid this month)
-    const billExpenses = transactions
+    const billExpenses = relevantTransactions
       .filter((t) => t.type === "expense" && t.isBill)
       .reduce((sum, t) => sum + t.amount, 0);
 
     // Calculate unpaid bills (total bills due minus bills already paid)
     const unpaidBills = Math.max(0, totalBillsDue - billExpenses);
 
-    const liquidCash = settings?.liquidCash || 0;
-    const taxShield = transactionGrossTotal * ((settings?.estimatedTaxRate || 0) / 100);
-    const fixedExpenses = settings?.fixedExpenses || 0;
+    // Gross total is just income transactions
+    const grossTotal = transactionGrossTotal;
 
-    // Add liquid cash to gross total (it's already after-tax, so we add it after tax shield calculation)
-    const grossTotal = transactionGrossTotal + liquidCash;
-
-    // Free cash = income - variable expenses - bill expenses (from transactions) - tax shield - fixed expenses
-    const freeCash = grossTotal - variableExpenses - billExpenses - taxShield - fixedExpenses;
+    // Free cash = income - variable expenses - total bills due (all bills for the month)
+    const freeCash = grossTotal - variableExpenses - totalBillsDue;
 
     // Calculate actual daily patterns from transactions
     const daysInMonth = now.getDate(); // Days that have passed this month
@@ -157,30 +162,21 @@ export async function GET(request: NextRequest) {
     const totalExpenses = variableExpenses + billExpenses;
     const averageDailyExpenses = totalExpenses / actualDays;
     
-    // Net daily cash flow (income - expenses per day, excluding fixed expenses and tax shield)
+    // Net daily cash flow (income - expenses per day)
     const netDailyCashFlow = averageDailyIncome - averageDailyExpenses;
     
-    // Calculate total daily expenses including fixed expenses and tax shield
-    // Fixed expenses and tax shield are monthly, so divide by 30 for daily
-    const dailyFixedExpenses = fixedExpenses / 30;
-    const dailyTaxShield = taxShield / 30;
-    const totalDailyExpenses = averageDailyExpenses + dailyFixedExpenses + dailyTaxShield;
-    
-    // Net daily cash flow including all expenses (matches freeCash calculation)
-    const netDailyCashFlowWithAllExpenses = averageDailyIncome - totalDailyExpenses;
+    // Net daily cash flow matches freeCash calculation
+    const netDailyCashFlowWithAllExpenses = netDailyCashFlow;
     
     // Calculate daily burn rate for break-even calculation
     let dailyBurnRate = 0;
     
-    if (settings?.monthlyBurnRate && settings.monthlyBurnRate > 0) {
-      // Use configured monthly burn rate if set
-      dailyBurnRate = settings.monthlyBurnRate / 30;
-    } else if (netDailyCashFlowWithAllExpenses !== 0) {
-      // Estimate based on actual daily cash flow including all expenses
+    if (netDailyCashFlowWithAllExpenses !== 0) {
+      // Estimate based on actual daily cash flow
       dailyBurnRate = Math.abs(netDailyCashFlowWithAllExpenses);
-    } else if (totalDailyExpenses > 0) {
-      // If no income but there are expenses, use total expense rate
-      dailyBurnRate = totalDailyExpenses;
+    } else if (averageDailyExpenses > 0) {
+      // If no income but there are expenses, use expense rate
+      dailyBurnRate = averageDailyExpenses;
     }
 
     // Calculate days to break even based on unpaid bills
@@ -212,9 +208,18 @@ export async function GET(request: NextRequest) {
       daysToBreakEven = Math.max(0, daysUntilLastBill);
     }
 
-    const todayTransactions = transactions.filter((t) => {
-      const transactionDate = new Date(t.date);
-      return transactionDate >= todayStart && transactionDate <= todayEnd && !t.isBill;
+    // For today's earnings, show ALL transactions from today
+    // Only exclude bills from today's display
+    const allTodayTransactions = await Transaction.find({
+      userId: session.user.id,
+      date: {
+        $gte: todayStart,
+        $lte: todayEnd,
+      },
+    }).lean();
+    
+    const todayTransactions = allTodayTransactions.filter((t) => {
+      return !t.isBill;
     });
 
     const todayIncome = todayTransactions
@@ -264,10 +269,8 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({
       grossTotal,
       variableExpenses,
-      taxShield,
-      fixedExpenses,
       freeCash,
-      dailyBurnRate: dailyBurnRate || (settings?.monthlyBurnRate || 0) / 30,
+      dailyBurnRate,
       netDailyCashFlow,
       netDailyCashFlowWithAllExpenses,
       daysToBreakEven,

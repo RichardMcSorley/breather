@@ -2,11 +2,11 @@
 
 import { useEffect, useState } from "react";
 import { useSession } from "next-auth/react";
-import { useRouter } from "next/navigation";
 import Layout from "@/components/Layout";
 import Card from "@/components/ui/Card";
 import Button from "@/components/ui/Button";
 import Input from "@/components/ui/Input";
+import AddMileageModal from "@/components/AddMileageModal";
 
 interface MileageEntry {
   _id: string;
@@ -18,15 +18,20 @@ interface MileageEntry {
 
 export default function MileagePage() {
   const { data: session } = useSession();
-  const router = useRouter();
   const [entries, setEntries] = useState<MileageEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [odometer, setOdometer] = useState("");
-  const [date, setDate] = useState(new Date().toISOString().split("T")[0]);
+  // Use local date components (not UTC) to match dashboard behavior
+  const getLocalDateString = () => {
+    const now = new Date();
+    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+  };
+  const [date, setDate] = useState(getLocalDateString());
   const [notes, setNotes] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [editingEntryId, setEditingEntryId] = useState<string | null>(null);
   const [irsMileageDeduction, setIrsMileageDeduction] = useState<number>(0.67);
 
   useEffect(() => {
@@ -95,7 +100,7 @@ export default function MileagePage() {
         setEntries((prev) => sortEntriesByDate([newEntry, ...prev]));
         setOdometer("");
         setNotes("");
-        setDate(new Date().toISOString().split("T")[0]);
+        setDate(getLocalDateString());
         fetchSettings(); // Refresh settings in case IRS rate changed
       } else {
         const errorData = await res.json();
@@ -111,26 +116,35 @@ export default function MileagePage() {
 
   const formatDate = (dateString: string | Date) => {
     // Handle both Date objects and ISO strings
-    let date: Date;
+    let year: number, month: number, day: number;
+    
     if (dateString instanceof Date) {
-      date = dateString;
+      // If it's a Date object, use UTC components to avoid timezone issues
+      year = dateString.getUTCFullYear();
+      month = dateString.getUTCMonth();
+      day = dateString.getUTCDate();
     } else if (typeof dateString === 'string') {
-      // If it's already in YYYY-MM-DD format, parse as UTC date
-      // The browser will display it in the user's local timezone
+      // If it's already in YYYY-MM-DD format, parse directly without timezone conversion
       if (dateString.match(/^\d{4}-\d{2}-\d{2}$/)) {
-        const [year, month, day] = dateString.split('-').map(Number);
-        // Parse as UTC - browser will display in user's timezone
-        date = new Date(Date.UTC(year, month - 1, day, 0, 0, 0, 0));
+        [year, month, day] = dateString.split('-').map(Number);
+        month = month - 1; // JavaScript months are 0-indexed
       } else {
-        // Otherwise parse as ISO string (which is already UTC-aware)
-        date = new Date(dateString);
+        // Otherwise parse as ISO string and use UTC components
+        const date = new Date(dateString);
+        year = date.getUTCFullYear();
+        month = date.getUTCMonth();
+        day = date.getUTCDate();
       }
     } else {
-      date = new Date(dateString);
+      const date = new Date(dateString);
+      year = date.getUTCFullYear();
+      month = date.getUTCMonth();
+      day = date.getUTCDate();
     }
     
-    // toLocaleDateString automatically converts to user's timezone
-    return date.toLocaleDateString("en-US", {
+    // Format directly using the date components to avoid timezone conversion
+    const dateObj = new Date(year, month, day);
+    return dateObj.toLocaleDateString("en-US", {
       month: "short",
       day: "numeric",
       year: "numeric",
@@ -363,24 +377,33 @@ export default function MileagePage() {
                         </div>
                       )}
                     </div>
-                    <button
-                      onClick={() => handleDelete(entry._id)}
-                      disabled={deletingId === entry._id}
-                      className="ml-4 text-red-600 dark:text-red-400 hover:text-red-800 dark:hover:text-red-300 disabled:opacity-50 min-w-[44px] min-h-[44px] flex items-center justify-center"
-                      aria-label="Delete entry"
-                    >
-                      {deletingId === entry._id ? (
-                        <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-red-600 dark:border-red-400"></div>
-                      ) : (
-                        <span className="text-xl">🗑️</span>
-                      )}
-                    </button>
+                    <div className="flex items-center gap-2 ml-4">
+                      <button
+                        onClick={() => setEditingEntryId(entry._id)}
+                        className="p-2 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white min-w-[44px] min-h-[44px] flex items-center justify-center"
+                        aria-label="Edit entry"
+                      >
+                        ✏️
+                      </button>
+                      <button
+                        onClick={() => handleDelete(entry._id)}
+                        disabled={deletingId === entry._id}
+                        className="p-2 text-red-600 dark:text-red-400 hover:text-red-800 dark:hover:text-red-300 disabled:opacity-50 min-w-[44px] min-h-[44px] flex items-center justify-center"
+                        aria-label="Delete entry"
+                      >
+                        {deletingId === entry._id ? (
+                          <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-red-600 dark:border-red-400"></div>
+                        ) : (
+                          <span className="text-xl">🗑️</span>
+                        )}
+                      </button>
+                    </div>
                   </div>
                   {milesDifference !== null && index < entries.length - 1 && (
                     <div className="border-b border-gray-200 dark:border-gray-700 py-2">
                       <div className="flex justify-center items-center">
-                        <span className="text-xs text-gray-500 dark:text-gray-400">
-                          {formatOdometer(milesDifference)} miles since last entry
+                        <span className="text-sm font-medium text-gray-600 dark:text-gray-400">
+                          {formatOdometer(milesDifference)} miles
                         </span>
                       </div>
                     </div>
@@ -398,6 +421,21 @@ export default function MileagePage() {
             No mileage entries yet. Add your first odometer reading above.
           </div>
         </Card>
+      )}
+
+      {editingEntryId && (
+        <AddMileageModal
+          isOpen={!!editingEntryId}
+          onClose={() => {
+            setEditingEntryId(null);
+          }}
+          onSuccess={() => {
+            setEditingEntryId(null);
+            fetchEntries();
+            fetchSettings(); // Refresh settings in case IRS rate changed
+          }}
+          entryId={editingEntryId}
+        />
       )}
     </Layout>
   );

@@ -19,17 +19,12 @@ export interface BillFormData {
 }
 
 export interface UserSettingsFormData {
-  liquidCash: number;
-  monthlyBurnRate: number;
-  fixedExpenses: number;
-  estimatedTaxRate: number;
+  irsMileageDeduction: number;
 }
 
 export interface FinancialSummary {
   grossTotal: number;
   variableExpenses: number;
-  taxShield: number;
-  fixedExpenses: number;
   freeCash: number;
   breathingRoom: number; // days
 }

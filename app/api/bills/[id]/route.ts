@@ -18,7 +18,7 @@ export async function PUT(
     await connectDB();
 
     const body = await request.json();
-    const { name, amount, dueDate, category, notes, isActive } = body;
+    const { name, amount, dueDate, company, category, notes, isActive } = body;
 
     const updateData: any = {};
     if (name !== undefined) updateData.name = name;
@@ -27,8 +27,9 @@ export async function PUT(
       updateData.lastAmount = parseFloat(amount);
     }
     if (dueDate !== undefined) updateData.dueDate = parseInt(dueDate);
-    if (category !== undefined) updateData.category = category;
-    if (notes !== undefined) updateData.notes = notes;
+    if (company !== undefined) updateData.company = company || null;
+    if (category !== undefined) updateData.category = category || null;
+    if (notes !== undefined) updateData.notes = notes || null;
     if (isActive !== undefined) updateData.isActive = isActive;
 
     const bill = await Bill.findOneAndUpdate(

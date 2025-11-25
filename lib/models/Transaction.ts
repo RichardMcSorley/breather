@@ -7,6 +7,7 @@ export interface ITransaction extends Document {
   date: Date;
   time: string;
   isBill: boolean;
+  isBalanceAdjustment?: boolean;
   notes?: string;
   tag?: string;
   dueDate?: Date;
@@ -40,6 +41,10 @@ const TransactionSchema: Schema = new Schema(
       required: true,
     },
     isBill: {
+      type: Boolean,
+      default: false,
+    },
+    isBalanceAdjustment: {
       type: Boolean,
       default: false,
     },

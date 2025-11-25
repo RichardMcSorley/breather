@@ -61,6 +61,15 @@ export async function PUT(
     const body = await request.json();
     const { amount, type, date, time, isBill, notes, tag, dueDate } = body;
 
+    const existingTransaction = await Transaction.findOne({
+      _id: params.id,
+      userId: session.user.id,
+    }).lean();
+
+    if (!existingTransaction) {
+      return NextResponse.json({ error: "Transaction not found" }, { status: 404 });
+    }
+
     // Parse dueDate as UTC date
     let parsedDueDate: Date | undefined;
     if (dueDate) {

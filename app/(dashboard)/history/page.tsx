@@ -2,10 +2,9 @@
 
 import { useEffect, useState } from "react";
 import { useSession } from "next-auth/react";
-import { format, isToday, isYesterday, parseISO } from "date-fns";
+import { format, isToday, isYesterday } from "date-fns";
 import Layout from "@/components/Layout";
 import AddTransactionModal from "@/components/AddTransactionModal";
-import Button from "@/components/ui/Button";
 
 interface Transaction {
   _id: string;
@@ -16,15 +15,13 @@ interface Transaction {
   notes?: string;
   tag?: string;
   isBill: boolean;
+  isBalanceAdjustment?: boolean; // Kept for filtering out existing balance adjustments
   dueDate?: string;
 }
 
 /**
- * Parses a UTC date string (YYYY-MM-DD) and optional UTC time string (HH:MM)
- * and returns a Date object that will display correctly in the user's timezone.
- * 
- * Since dates are stored in UTC in the database, we parse them as UTC
- * and the browser will automatically display them in the user's local timezone.
+ * Parses a date string (YYYY-MM-DD) and time string (HH:MM) as LOCAL time.
+ * The time string represents the user's local time, not UTC.
  */
 const buildLocalDateFromParts = (dateString: string, timeString?: string) => {
   if (!dateString) return new Date();
@@ -38,10 +35,9 @@ const buildLocalDateFromParts = (dateString: string, timeString?: string) => {
     Number.isNaN(value) ? 0 : value
   );
   
-  // Parse as UTC date/time - the browser will display it in the user's timezone
-  // This ensures that a date stored as "2024-01-15 14:00 UTC" displays correctly
-  // in the user's local timezone (e.g., "2024-01-15 09:00 EST" if user is in EST)
-  return new Date(Date.UTC(year, month - 1, day, hour, minute));
+  // Parse as LOCAL date/time - the time string is already in the user's local timezone
+  // Create a local Date object directly without UTC conversion
+  return new Date(year, month - 1, day, hour, minute);
 };
 
 export default function HistoryPage() {
@@ -72,7 +68,8 @@ export default function HistoryPage() {
       const res = await fetch(url);
       if (res.ok) {
         const data = await res.json();
-        setTransactions(data.transactions);
+        // Filter out bills and balance adjustments from the transaction list
+        setTransactions(data.transactions.filter((t: Transaction) => !t.isBill && !t.isBalanceAdjustment));
       }
     } catch (error) {
       console.error("Error fetching transactions:", error);
@@ -112,17 +109,17 @@ export default function HistoryPage() {
   const formatDate = (dateString: string, timeString?: string) => {
     const date = buildLocalDateFromParts(dateString, timeString);
     if (isToday(date)) {
-      return "TODAY";
+      return "Today";
     } else if (isYesterday(date)) {
-      return "YESTERDAY";
+      return "Yesterday";
     } else {
-      return format(date, "MMM d, yyyy").toUpperCase();
+      return format(date, "MMM d, yyyy");
     }
   };
 
   const formatTime = (dateString: string, timeString: string) => {
     const date = buildLocalDateFromParts(dateString, timeString);
-    return format(date, "h:mm a").toUpperCase();
+    return format(date, "h:mm a");
   };
 
   const groupedTransactions = transactions.reduce((acc, transaction) => {
@@ -151,7 +148,9 @@ export default function HistoryPage() {
   return (
     <Layout>
       <div className="mb-6">
-        <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-4">HISTORY</h2>
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-2xl font-bold text-gray-900 dark:text-white">History</h2>
+        </div>
 
         <div className="flex gap-2 mb-4 overflow-x-auto">
           <button
@@ -235,7 +234,9 @@ export default function HistoryPage() {
                       <div className="flex items-center gap-3 flex-1">
                         <div
                           className={`w-10 h-10 rounded-lg flex items-center justify-center ${
-                            isIncome ? "bg-green-100 dark:bg-green-900/30" : "bg-red-100 dark:bg-red-900/30"
+                            isIncome 
+                              ? "bg-green-100 dark:bg-green-900/30" 
+                              : "bg-red-100 dark:bg-red-900/30"
                           }`}
                         >
                           <span className="text-xl">📊</span>
@@ -244,10 +245,12 @@ export default function HistoryPage() {
                           <div className="flex items-center gap-2">
                             <span
                               className={`text-sm font-medium ${
-                                isIncome ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400"
+                                isIncome 
+                                  ? "text-green-600 dark:text-green-400" 
+                                  : "text-red-600 dark:text-red-400"
                               }`}
                             >
-                              {transaction.type.toUpperCase()}
+                              {transaction.type.charAt(0).toUpperCase() + transaction.type.slice(1)}
                             </span>
                             {transaction.tag && (
                               <span className="text-xs text-gray-500 dark:text-gray-400 bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded">
@@ -258,16 +261,7 @@ export default function HistoryPage() {
                           <div className="text-xs text-gray-500 dark:text-gray-400">
                             {formatTime(transaction.date, transaction.time)}
                           </div>
-                          {transaction.isBill && transaction.dueDate ? (
-                            <div className="text-sm text-gray-600 dark:text-gray-300 mt-1">
-                              {transaction.notes && (
-                                <span className="font-medium">{transaction.notes}</span>
-                              )}
-                              <span className={transaction.notes ? " ml-1" : ""}>
-                                - Bill due on {format(parseISO(transaction.dueDate), "MMM d, yyyy")}
-                              </span>
-                            </div>
-                          ) : transaction.notes ? (
+                          {transaction.notes ? (
                             <div className="text-sm text-gray-600 dark:text-gray-300 mt-1 truncate">
                               {transaction.notes}
                             </div>
@@ -275,7 +269,9 @@ export default function HistoryPage() {
                         </div>
                         <div
                           className={`text-lg font-bold ${
-                            isIncome ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400"
+                            isIncome 
+                              ? "text-green-600 dark:text-green-400" 
+                              : "text-red-600 dark:text-red-400"
                           }`}
                         >
                           {isIncome ? "+" : "-"}

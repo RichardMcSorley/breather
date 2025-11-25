@@ -40,7 +40,7 @@ export async function POST(request: NextRequest) {
     await connectDB();
 
     const body = await request.json();
-    const { name, amount, dueDate, category, notes, isActive } = body;
+    const { name, amount, dueDate, company, category, notes, isActive } = body;
 
     if (!name || amount === undefined || !dueDate) {
       return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
@@ -51,8 +51,9 @@ export async function POST(request: NextRequest) {
       name,
       amount: parseFloat(amount),
       dueDate: parseInt(dueDate),
-      category,
-      notes,
+      company: company || null,
+      category: category || null,
+      notes: notes || null,
       isActive: isActive !== undefined ? isActive : true,
       lastAmount: parseFloat(amount),
     });

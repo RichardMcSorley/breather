@@ -13,10 +13,19 @@ interface Bill {
   name: string;
   amount: number;
   dueDate: number;
+  company?: string;
   category?: string;
   notes?: string;
   isActive: boolean;
   lastAmount: number;
+}
+
+interface PaymentPlanEntry {
+  date: string;
+  bill: string;
+  billId: string;
+  payment: number;
+  remainingBalance: number;
 }
 
 export default function BillsPage() {
@@ -25,20 +34,32 @@ export default function BillsPage() {
   const [loading, setLoading] = useState(true);
   const [showAddModal, setShowAddModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
-  const [editingBill, setEditingBill] = useState<Bill | null>(null);
-  const [showAddToMonthModal, setShowAddToMonthModal] = useState(false);
+  const [showPaymentPlanModal, setShowPaymentPlanModal] = useState(false);
+  const [showMarkPaidModal, setShowMarkPaidModal] = useState(false);
   const [selectedBill, setSelectedBill] = useState<Bill | null>(null);
-  const [monthAmount, setMonthAmount] = useState("");
-  const [selectedMonth, setSelectedMonth] = useState<"this" | "next">("this");
-  const [customDate, setCustomDate] = useState("");
-  const [useCustomDate, setUseCustomDate] = useState(false);
+  const [selectedPlanEntry, setSelectedPlanEntry] = useState<PaymentPlanEntry | null>(null);
+  const [editingBill, setEditingBill] = useState<Bill | null>(null);
+  const [paymentPlan, setPaymentPlan] = useState<PaymentPlanEntry[]>([]);
+  const [groupedPaymentPlan, setGroupedPaymentPlan] = useState<Record<string, PaymentPlanEntry[]>>({});
+  const [viewMode, setViewMode] = useState<"bills" | "plan">("bills");
+  const [planLoaded, setPlanLoaded] = useState(false);
   const [formData, setFormData] = useState({
     name: "",
     amount: "",
     dueDate: "",
+    company: "",
     category: "",
     notes: "",
     isActive: true,
+  });
+  const [paymentPlanConfig, setPaymentPlanConfig] = useState({
+    startDate: new Date().toISOString().split("T")[0],
+    dailyPayment: "100",
+  });
+  const [markPaidData, setMarkPaidData] = useState({
+    amount: "",
+    paymentDate: new Date().toISOString().split("T")[0],
+    notes: "",
   });
 
   useEffect(() => {
@@ -46,6 +67,66 @@ export default function BillsPage() {
       fetchBills();
     }
   }, [session]);
+
+  useEffect(() => {
+    // Load saved payment plan after bills are loaded (only once)
+    if (bills.length > 0 && !loading && !planLoaded) {
+      loadSavedPaymentPlan();
+      setPlanLoaded(true);
+    }
+  }, [bills.length, loading, planLoaded]);
+
+  const loadSavedPaymentPlan = () => {
+    try {
+      const savedConfig = localStorage.getItem("bills_payment_plan_config");
+      if (savedConfig) {
+        const config = JSON.parse(savedConfig);
+        setPaymentPlanConfig(config);
+        // Auto-generate plan if config exists
+        if (config.startDate && config.dailyPayment) {
+          generatePaymentPlanFromConfig(config);
+        }
+      }
+    } catch (error) {
+      console.error("Error loading saved payment plan:", error);
+    }
+  };
+
+  const savePaymentPlanConfig = (config: { startDate: string; dailyPayment: string }) => {
+    try {
+      localStorage.setItem("bills_payment_plan_config", JSON.stringify(config));
+    } catch (error) {
+      console.error("Error saving payment plan config:", error);
+    }
+  };
+
+  const generatePaymentPlanFromConfig = async (config?: { startDate: string; dailyPayment: string }) => {
+    const planConfig = config || paymentPlanConfig;
+    try {
+      const res = await fetch("/api/bills/payment-plan", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          startDate: planConfig.startDate,
+          dailyPayment: parseFloat(planConfig.dailyPayment),
+        }),
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        setPaymentPlan(data.paymentPlan);
+        setGroupedPaymentPlan(data.groupedByDate);
+        setViewMode("plan");
+        setShowPaymentPlanModal(false);
+      } else {
+        const errorData = await res.json();
+        alert(`Error generating payment plan: ${errorData.error}`);
+      }
+    } catch (error) {
+      console.error("Error generating payment plan:", error);
+      alert("Error generating payment plan");
+    }
+  };
 
   const fetchBills = async () => {
     try {
@@ -72,6 +153,7 @@ export default function BillsPage() {
       name: "",
       amount: "",
       dueDate: "",
+      company: "",
       category: "",
       notes: "",
       isActive: true,
@@ -85,6 +167,7 @@ export default function BillsPage() {
       name: bill.name,
       amount: bill.amount.toString(),
       dueDate: bill.dueDate.toString(),
+      company: bill.company || "",
       category: bill.category || "",
       notes: bill.notes || "",
       isActive: bill.isActive,
@@ -100,17 +183,28 @@ export default function BillsPage() {
       const url = isEditing ? `/api/bills/${editingBill._id}` : "/api/bills";
       const method = isEditing ? "PUT" : "POST";
 
+      const requestBody: any = {
+        name: formData.name,
+        amount: parseFloat(formData.amount),
+        dueDate: parseInt(formData.dueDate),
+        isActive: true, // Always active since we removed the UI control
+      };
+      
+      // Include optional fields - send empty string if empty, not undefined
+      if (formData.company !== undefined) {
+        requestBody.company = formData.company.trim() || "";
+      }
+      if (formData.category !== undefined) {
+        requestBody.category = formData.category.trim() || "";
+      }
+      if (formData.notes !== undefined) {
+        requestBody.notes = formData.notes.trim() || "";
+      }
+
       const res = await fetch(url, {
         method,
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          name: formData.name,
-          amount: parseFloat(formData.amount),
-          dueDate: parseInt(formData.dueDate),
-          category: formData.category || undefined,
-          notes: formData.notes || undefined,
-          isActive: formData.isActive,
-        }),
+        body: JSON.stringify(requestBody),
       });
 
       if (res.ok) {
@@ -148,69 +242,133 @@ export default function BillsPage() {
     }
   };
 
-  const handleAddToMonth = (bill: Bill) => {
-    setSelectedBill(bill);
-    setMonthAmount(bill.lastAmount.toString());
-    setSelectedMonth("this");
-    setCustomDate("");
-    setUseCustomDate(false);
-    setShowAddToMonthModal(true);
+  const handleGeneratePaymentPlan = async () => {
+    // Warn user if they have existing payments
+    if (paymentPlan.length > 0) {
+      const hasPayments = Object.keys(paidPayments).length > 0;
+      if (hasPayments) {
+        const confirmed = confirm(
+          "Generating a new plan will reset all progress and delete all existing payment records. This cannot be undone. Continue?"
+        );
+        if (!confirmed) {
+          return;
+        }
+        
+        // Clear all existing payments
+        try {
+          const res = await fetch("/api/bills/payments", {
+            method: "DELETE",
+          });
+          if (!res.ok) {
+            alert("Error clearing existing payments");
+            return;
+          }
+        } catch (error) {
+          console.error("Error clearing payments:", error);
+          alert("Error clearing existing payments");
+          return;
+        }
+      }
+    }
+    
+    // Clear paid payments state
+    setPaidPayments({});
+    
+    // Save config before generating
+    savePaymentPlanConfig(paymentPlanConfig);
+    await generatePaymentPlanFromConfig();
   };
 
-  const handleAddToMonthSubmit = async (e: React.FormEvent) => {
+  // Fetch existing payments to show which entries have been paid
+  const [paidPayments, setPaidPayments] = useState<Record<string, number>>({});
+  
+  useEffect(() => {
+    if (viewMode === "plan") {
+      fetchPaidPayments();
+    }
+  }, [viewMode, paymentPlan]);
+
+  const fetchPaidPayments = async () => {
+    try {
+      const res = await fetch("/api/bills/payments");
+      if (res.ok) {
+        const data = await res.json();
+        // Create a map of billId+date -> total paid amount
+        const paidMap: Record<string, number> = {};
+        data.payments.forEach((payment: any) => {
+          // Handle both populated and non-populated billId
+          const billId = payment.billId?._id || payment.billId?._id?.toString() || payment.billId?.toString() || payment.billId;
+          if (billId && payment.paymentDate) {
+            const key = `${billId}-${payment.paymentDate}`;
+            paidMap[key] = (paidMap[key] || 0) + payment.amount;
+          }
+        });
+        setPaidPayments(paidMap);
+      }
+    } catch (error) {
+      console.error("Error fetching payments:", error);
+    }
+  };
+
+  const handleMarkPaid = (bill: Bill) => {
+    setSelectedBill(bill);
+    setSelectedPlanEntry(null);
+    setMarkPaidData({
+      amount: bill.amount.toString(),
+      paymentDate: new Date().toISOString().split("T")[0],
+      notes: "",
+    });
+    setShowMarkPaidModal(true);
+  };
+
+  const handlePayFromPlan = (entry: PaymentPlanEntry) => {
+    // Find the bill by ID
+    const bill = bills.find((b) => b._id === entry.billId);
+    if (bill) {
+      setSelectedBill(bill);
+      setSelectedPlanEntry(entry);
+      setMarkPaidData({
+        amount: entry.payment.toString(),
+        paymentDate: entry.date,
+        notes: "",
+      });
+      setShowMarkPaidModal(true);
+    }
+  };
+
+  const handleSavePayment = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedBill) return;
 
-    const amount = parseFloat(monthAmount);
-    if (isNaN(amount) || amount <= 0) {
-      alert("Please enter a valid amount");
-      return;
-    }
-
     try {
-      const now = new Date();
-      let dueDateStr: string;
-
-      if (useCustomDate && customDate) {
-        // Use custom date if provided
-        dueDateStr = customDate;
-      } else {
-        // Calculate due date based on selected month and bill's dueDate
-        const currentYear = now.getFullYear();
-        const currentMonth = now.getMonth();
-        const targetMonth = selectedMonth === "this" ? currentMonth : currentMonth + 1;
-        const targetYear = targetMonth > 11 ? currentYear + 1 : currentYear;
-        const finalMonth = targetMonth > 11 ? 0 : targetMonth;
-        
-        // Format as YYYY-MM-DD to avoid timezone issues
-        dueDateStr = `${targetYear}-${String(finalMonth + 1).padStart(2, '0')}-${String(selectedBill.dueDate).padStart(2, '0')}`;
-      }
-      
-      const res = await fetch("/api/transactions", {
+      const res = await fetch("/api/bills/payments", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          amount: amount,
-          type: "expense",
-          date: now.toISOString().split("T")[0],
-          time: now.toTimeString().slice(0, 5),
-          notes: selectedBill.name,
-          isBill: true,
-          dueDate: dueDateStr,
+          billId: selectedBill._id,
+          amount: parseFloat(markPaidData.amount),
+          paymentDate: markPaidData.paymentDate,
+          notes: markPaidData.notes || undefined,
         }),
       });
 
       if (res.ok) {
-        setShowAddToMonthModal(false);
+        setShowMarkPaidModal(false);
         setSelectedBill(null);
-        setMonthAmount("");
-        fetchBills();
+        setSelectedPlanEntry(null);
+        await fetchBills();
+        if (viewMode === "plan") {
+          // Refresh paid payments and regenerate payment plan
+          await fetchPaidPayments();
+          await generatePaymentPlanFromConfig();
+        }
       } else {
-        alert("Error adding bill to this month");
+        const errorData = await res.json();
+        alert(`Error recording payment: ${errorData.error}`);
       }
     } catch (error) {
-      console.error("Error adding bill to this month:", error);
-      alert("Error adding bill to this month");
+      console.error("Error recording payment:", error);
+      alert("Error recording payment");
     }
   };
 
@@ -219,6 +377,15 @@ export default function BillsPage() {
       style: "currency",
       currency: "USD",
     }).format(amount);
+  };
+
+  const formatDate = (dateString: string) => {
+    const date = new Date(dateString);
+    return date.toLocaleDateString("en-US", {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+    });
   };
 
   if (loading) {
@@ -233,71 +400,229 @@ export default function BillsPage() {
 
   return (
     <Layout>
-      <div className="mb-6 flex items-center justify-between">
-        <h2 className="text-2xl font-bold text-gray-900 dark:text-white">BILLS</h2>
-        <Button variant="primary" onClick={handleAddBill}>
-          + Add Bill
-        </Button>
-      </div>
-
-      <div className="space-y-3">
-        {bills.length === 0 ? (
-          <div className="text-center py-12 text-gray-500 dark:text-gray-400">
-            No bills found. Add your first recurring bill!
+      <div className="mb-6">
+        <div className="flex items-center justify-between mb-3">
+          <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Bills</h2>
+          <Button variant="primary" onClick={handleAddBill} className="text-sm px-3 py-2">
+            + Add Bill
+          </Button>
+        </div>
+        {bills.length > 0 && (
+          <div className="flex flex-wrap gap-2">
+            <Button
+              variant="outline"
+              onClick={() => setShowPaymentPlanModal(true)}
+              className="text-sm px-3 py-2"
+            >
+              Generate Plan
+            </Button>
+            {paymentPlan.length > 0 && (
+              <Button 
+                variant={viewMode === "plan" ? "primary" : "outline"}
+                onClick={() => setViewMode(viewMode === "bills" ? "plan" : "bills")}
+                className="text-sm px-3 py-2"
+              >
+                {viewMode === "bills" ? "View Plan" : "View Bills"}
+              </Button>
+            )}
           </div>
-        ) : (
-          bills.map((bill) => (
-            <Card key={bill._id} className="p-4">
-              <div className="flex items-center justify-between">
-                <div className="flex-1">
-                  <div className="flex items-center gap-2">
-                    <h3 className="font-semibold text-gray-900 dark:text-white">{bill.name}</h3>
-                    {!bill.isActive && (
-                      <span className="text-xs bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400 px-2 py-1 rounded">
-                        Inactive
-                      </span>
-                    )}
-                  </div>
-                  <div className="text-sm text-gray-700 dark:text-gray-300 mt-1">
-                    Due on day {bill.dueDate} of each month
-                  </div>
-                  <div className="text-lg font-bold text-gray-900 dark:text-white mt-1">
-                    {formatCurrency(bill.lastAmount)}
-                  </div>
-                  {bill.category && (
-                    <div className="text-xs text-gray-700 dark:text-gray-300 mt-1">
-                      Category: {bill.category}
-                    </div>
-                  )}
-                  {bill.notes && (
-                    <div className="text-sm text-gray-700 dark:text-gray-300 mt-1">{bill.notes}</div>
-                  )}
-                </div>
-                <div className="flex items-center gap-2 ml-4">
-                  <button
-                    onClick={() => handleAddToMonth(bill)}
-                    className="px-4 py-2 bg-green-600 dark:bg-green-700 text-white rounded-lg text-sm font-medium hover:bg-green-700 dark:hover:bg-green-600 min-h-[44px]"
-                  >
-                    Add to this month
-                  </button>
-                  <button
-                    onClick={() => handleEditBill(bill)}
-                    className="p-2 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white min-w-[44px] min-h-[44px] flex items-center justify-center"
-                  >
-                    ✏️
-                  </button>
-                  <button
-                    onClick={() => handleDeleteBill(bill._id)}
-                    className="p-2 text-red-600 dark:text-red-400 hover:text-red-900 dark:hover:text-red-300 min-w-[44px] min-h-[44px] flex items-center justify-center"
-                  >
-                    🗑️
-                  </button>
-                </div>
-              </div>
-            </Card>
-          ))
         )}
       </div>
+
+      {viewMode === "bills" ? (
+        <Card className="overflow-hidden">
+          {bills.length === 0 ? (
+            <div className="text-center py-12 text-gray-500 dark:text-gray-400">
+              No bills found. Add your first recurring bill!
+            </div>
+          ) : (
+            <div className="overflow-x-auto -mx-4 px-4 sm:mx-0 sm:px-0">
+              <table className="w-full min-w-[640px]">
+                <thead className="bg-gray-50 dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700">
+                  <tr>
+                    <th className="px-2 sm:px-4 py-2 sm:py-3 text-left text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider">
+                      Bill Name
+                    </th>
+                    <th className="px-2 sm:px-4 py-2 sm:py-3 text-left text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider hidden sm:table-cell">
+                      Company
+                    </th>
+                    <th className="px-2 sm:px-4 py-2 sm:py-3 text-left text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider">
+                      Due Date
+                    </th>
+                    <th className="px-2 sm:px-4 py-2 sm:py-3 text-left text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider">
+                      Amount
+                    </th>
+                    <th className="px-2 sm:px-4 py-2 sm:py-3 text-left text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider hidden md:table-cell">
+                      Category
+                    </th>
+                    <th className="px-2 sm:px-4 py-2 sm:py-3 text-left text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider hidden lg:table-cell">
+                      Notes
+                    </th>
+                    <th className="px-2 sm:px-4 py-2 sm:py-3 text-right text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider">
+                      Actions
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
+                  {bills.map((bill) => (
+                    <tr
+                      key={bill._id}
+                      className="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
+                    >
+                      <td className="px-2 sm:px-4 py-2 sm:py-3 whitespace-nowrap">
+                        <div className="font-semibold text-sm sm:text-base text-gray-900 dark:text-white">
+                          {bill.name}
+                        </div>
+                        {bill.company && (
+                          <div className="text-xs text-gray-600 dark:text-gray-400 sm:hidden mt-0.5">
+                            {bill.company}
+                          </div>
+                        )}
+                      </td>
+                      <td className="px-2 sm:px-4 py-2 sm:py-3 whitespace-nowrap hidden sm:table-cell">
+                        <div className="text-sm text-gray-700 dark:text-gray-300">
+                          {bill.company || "-"}
+                        </div>
+                      </td>
+                      <td className="px-2 sm:px-4 py-2 sm:py-3 whitespace-nowrap">
+                        <div className="text-xs sm:text-sm text-gray-700 dark:text-gray-300">
+                          Day {bill.dueDate}
+                        </div>
+                      </td>
+                      <td className="px-2 sm:px-4 py-2 sm:py-3 whitespace-nowrap">
+                        <div className="font-semibold text-sm sm:text-base text-gray-900 dark:text-white">
+                          {formatCurrency(bill.lastAmount)}
+                        </div>
+                      </td>
+                      <td className="px-2 sm:px-4 py-2 sm:py-3 whitespace-nowrap hidden md:table-cell">
+                        <div className="text-sm text-gray-700 dark:text-gray-300">
+                          {bill.category || "-"}
+                        </div>
+                      </td>
+                      <td className="px-2 sm:px-4 py-2 sm:py-3 hidden lg:table-cell">
+                        <div className="text-sm text-gray-700 dark:text-gray-300 max-w-xs truncate">
+                          {bill.notes || "-"}
+                        </div>
+                      </td>
+                      <td className="px-2 sm:px-4 py-2 sm:py-3 whitespace-nowrap text-right">
+                        <div className="flex items-center justify-end gap-1 sm:gap-2">
+                          <button
+                            onClick={() => handleEditBill(bill)}
+                            className="p-1.5 sm:p-2 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white min-w-[36px] min-h-[36px] sm:min-w-[44px] sm:min-h-[44px] flex items-center justify-center rounded hover:bg-gray-100 dark:hover:bg-gray-700"
+                            title="Edit"
+                          >
+                            ✏️
+                          </button>
+                          <button
+                            onClick={() => handleDeleteBill(bill._id)}
+                            className="p-1.5 sm:p-2 text-red-600 dark:text-red-400 hover:text-red-900 dark:hover:text-red-300 min-w-[36px] min-h-[36px] sm:min-w-[44px] sm:min-h-[44px] flex items-center justify-center rounded hover:bg-red-50 dark:hover:bg-red-900/20"
+                            title="Delete"
+                          >
+                            🗑️
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </Card>
+      ) : (
+        <div className="space-y-4">
+          {Object.keys(groupedPaymentPlan).length === 0 ? (
+            <div className="text-center py-12 text-gray-500 dark:text-gray-400">
+              No payment plan generated. Click "Generate Plan" to create one.
+            </div>
+          ) : (
+            Object.entries(groupedPaymentPlan)
+              .sort(([dateA], [dateB]) => dateA.localeCompare(dateB))
+              .map(([date, entries]) => (
+                <Card key={date} className="p-4">
+                  <h3 className="font-bold text-lg text-gray-900 dark:text-white mb-3">
+                    {formatDate(date)}
+                  </h3>
+                  <div className="space-y-3">
+                    {entries.map((entry, idx) => {
+                      const paymentKey = `${entry.billId}-${entry.date}`;
+                      const paidAmount = paidPayments[paymentKey] || 0;
+                      const remainingToPay = Math.max(0, entry.payment - paidAmount);
+                      const isPaid = paidAmount >= entry.payment;
+                      const progressPercent = entry.payment > 0 ? (paidAmount / entry.payment) * 100 : 0;
+                      
+                      return (
+                        <div
+                          key={`${entry.date}-${entry.billId}-${idx}`}
+                          className={`py-3 border-b border-gray-200 dark:border-gray-700 last:border-0 ${
+                            isPaid ? "opacity-60" : ""
+                          }`}
+                        >
+                          <div className="flex items-center justify-between mb-2">
+                            <div className="flex-1">
+                              <div className="font-medium text-gray-900 dark:text-white">
+                                {entry.bill}
+                              </div>
+                              <div className="text-sm text-gray-600 dark:text-gray-400">
+                                Remaining: {formatCurrency(entry.remainingBalance)}
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-3">
+                              {isPaid ? (
+                                <div className="text-right">
+                                  <div className="text-lg font-bold text-green-600 dark:text-green-400">
+                                    {formatCurrency(entry.payment)}
+                                  </div>
+                                  <div className="text-xs text-green-600 dark:text-green-400 mt-1">
+                                    ✓ Paid
+                                  </div>
+                                </div>
+                              ) : (
+                                <>
+                                  <div className="text-right">
+                                    <div className="text-lg font-bold text-gray-900 dark:text-white">
+                                      {formatCurrency(remainingToPay)}
+                                    </div>
+                                    <div className="text-xs text-gray-600 dark:text-gray-400">
+                                      of {formatCurrency(entry.payment)}
+                                    </div>
+                                  </div>
+                                  <Button
+                                    variant="primary"
+                                    onClick={() => handlePayFromPlan(entry)}
+                                    className="min-h-[44px]"
+                                  >
+                                    Pay
+                                  </Button>
+                                </>
+                              )}
+                            </div>
+                          </div>
+                          {/* Progress bar */}
+                          <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2 mt-2">
+                            <div
+                              className={`h-2 rounded-full transition-all ${
+                                isPaid
+                                  ? "bg-green-600 dark:bg-green-500"
+                                  : "bg-blue-600 dark:bg-blue-500"
+                              }`}
+                              style={{ width: `${Math.min(100, progressPercent)}%` }}
+                            />
+                          </div>
+                          {paidAmount > 0 && !isPaid && (
+                            <div className="text-xs text-blue-600 dark:text-blue-400 mt-1">
+                              Paid: {formatCurrency(paidAmount)} of {formatCurrency(entry.payment)}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </Card>
+              ))
+          )}
+        </div>
+      )}
 
       {showAddModal && (
         <Modal
@@ -312,7 +637,14 @@ export default function BillsPage() {
               required
               value={formData.name}
               onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-              placeholder="e.g., Rent, Internet"
+              placeholder="e.g., Car Loan, Rent"
+            />
+            <Input
+              label="Company"
+              type="text"
+              value={formData.company}
+              onChange={(e) => setFormData({ ...formData, company: e.target.value })}
+              placeholder="e.g., Bridgecrest, Rocket Mortgage"
             />
             <Input
               label="Amount ($)"
@@ -347,20 +679,6 @@ export default function BillsPage() {
               onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
               placeholder="Add any notes..."
             />
-            <div className="flex items-center gap-2">
-              <input
-                type="checkbox"
-                id="isActive"
-                checked={formData.isActive}
-                onChange={(e) =>
-                  setFormData({ ...formData, isActive: e.target.checked })
-                }
-                className="w-5 h-5"
-              />
-              <label htmlFor="isActive" className="text-sm text-gray-700 dark:text-gray-300">
-                Active
-              </label>
-            </div>
             <div className="flex gap-3 pt-4">
               <Button
                 type="button"
@@ -396,6 +714,12 @@ export default function BillsPage() {
               onChange={(e) => setFormData({ ...formData, name: e.target.value })}
             />
             <Input
+              label="Company"
+              type="text"
+              value={formData.company}
+              onChange={(e) => setFormData({ ...formData, company: e.target.value })}
+            />
+            <Input
               label="Amount ($)"
               type="number"
               step="0.01"
@@ -424,20 +748,6 @@ export default function BillsPage() {
               value={formData.notes}
               onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
             />
-            <div className="flex items-center gap-2">
-              <input
-                type="checkbox"
-                id="isActiveEdit"
-                checked={formData.isActive}
-                onChange={(e) =>
-                  setFormData({ ...formData, isActive: e.target.checked })
-                }
-                className="w-5 h-5"
-              />
-              <label htmlFor="isActiveEdit" className="text-sm text-gray-700 dark:text-gray-300">
-                Active
-              </label>
-            </div>
             <div className="flex gap-3 pt-4">
               <Button
                 type="button"
@@ -458,118 +768,108 @@ export default function BillsPage() {
         </Modal>
       )}
 
-      {showAddToMonthModal && selectedBill && (
+      {showPaymentPlanModal && (
         <Modal
-          isOpen={showAddToMonthModal}
-          onClose={() => {
-            setShowAddToMonthModal(false);
-            setSelectedBill(null);
-            setMonthAmount("");
-            setSelectedMonth("this");
-            setCustomDate("");
-            setUseCustomDate(false);
-          }}
-          title={`Add ${selectedBill.name}`}
+          isOpen={showPaymentPlanModal}
+          onClose={() => setShowPaymentPlanModal(false)}
+          title="Generate Payment Plan"
         >
-          <form onSubmit={handleAddToMonthSubmit} className="space-y-4">
+          <form onSubmit={(e) => { e.preventDefault(); handleGeneratePaymentPlan(); }} className="space-y-4">
             <Input
-              label="Amount ($)"
+              label="Start Date"
+              type="date"
+              required
+              value={paymentPlanConfig.startDate}
+              onChange={(e) =>
+                setPaymentPlanConfig({ ...paymentPlanConfig, startDate: e.target.value })
+              }
+            />
+            <Input
+              label="Daily Payment Amount ($)"
               type="number"
               step="0.01"
               required
-              value={monthAmount}
-              onChange={(e) => setMonthAmount(e.target.value)}
-              placeholder="0.00"
-              autoFocus
+              value={paymentPlanConfig.dailyPayment}
+              onChange={(e) =>
+                setPaymentPlanConfig({ ...paymentPlanConfig, dailyPayment: e.target.value })
+              }
+              placeholder="100.00"
             />
+            <div className="flex gap-3 pt-4">
+              <Button
+                type="button"
+                variant="outline"
+                className="flex-1"
+                onClick={() => setShowPaymentPlanModal(false)}
+              >
+                Cancel
+              </Button>
+              <Button type="submit" variant="primary" className="flex-1">
+                Generate Plan
+              </Button>
+            </div>
+          </form>
+        </Modal>
+      )}
 
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                Select Month
-              </label>
-              <div className="flex gap-2">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setSelectedMonth("this");
-                    setUseCustomDate(false);
-                  }}
-                  className={`flex-1 px-4 py-2 rounded-lg text-sm font-medium min-h-[44px] ${
-                    selectedMonth === "this" && !useCustomDate
-                      ? "bg-green-600 text-white"
-                      : "bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600"
-                  }`}
-                >
-                  This Month
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setSelectedMonth("next");
-                    setUseCustomDate(false);
-                  }}
-                  className={`flex-1 px-4 py-2 rounded-lg text-sm font-medium min-h-[44px] ${
-                    selectedMonth === "next" && !useCustomDate
-                      ? "bg-green-600 text-white"
-                      : "bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600"
-                  }`}
-                >
-                  Next Month
-                </button>
+      {showMarkPaidModal && selectedBill && (
+        <Modal
+          isOpen={showMarkPaidModal}
+          onClose={() => {
+            setShowMarkPaidModal(false);
+            setSelectedBill(null);
+            setSelectedPlanEntry(null);
+          }}
+          title={selectedPlanEntry ? `Pay ${selectedBill.name}` : `Mark ${selectedBill.name} as Paid`}
+        >
+          <form onSubmit={handleSavePayment} className="space-y-4">
+            <Input
+              label="Payment Amount ($)"
+              type="number"
+              step="0.01"
+              required
+              value={markPaidData.amount}
+              onChange={(e) =>
+                setMarkPaidData({ ...markPaidData, amount: e.target.value })
+              }
+            />
+            {selectedPlanEntry && (
+              <div className="text-sm text-gray-600 dark:text-gray-400">
+                Planned amount: {formatCurrency(selectedPlanEntry.payment)}
               </div>
-            </div>
-
-            <div className="flex items-center gap-2">
-              <input
-                type="checkbox"
-                id="useCustomDate"
-                checked={useCustomDate}
-                onChange={(e) => {
-                  setUseCustomDate(e.target.checked);
-                  if (e.target.checked) {
-                    // Set default custom date to bill's due date for current month
-                    const now = new Date();
-                    const currentYear = now.getFullYear();
-                    const currentMonth = now.getMonth();
-                    const defaultDate = `${currentYear}-${String(currentMonth + 1).padStart(2, '0')}-${String(selectedBill.dueDate).padStart(2, '0')}`;
-                    setCustomDate(defaultDate);
-                  }
-                }}
-                className="w-5 h-5"
-              />
-              <label htmlFor="useCustomDate" className="text-sm text-gray-700 dark:text-gray-300">
-                Override specific date
-              </label>
-            </div>
-
-            {useCustomDate && (
-              <Input
-                label="Due Date"
-                type="date"
-                required
-                value={customDate}
-                onChange={(e) => setCustomDate(e.target.value)}
-              />
             )}
-
+            <Input
+              label="Payment Date"
+              type="date"
+              required
+              value={markPaidData.paymentDate}
+              onChange={(e) =>
+                setMarkPaidData({ ...markPaidData, paymentDate: e.target.value })
+              }
+            />
+            <Input
+              label="Notes (optional)"
+              type="text"
+              value={markPaidData.notes}
+              onChange={(e) =>
+                setMarkPaidData({ ...markPaidData, notes: e.target.value })
+              }
+              placeholder="Add any notes..."
+            />
             <div className="flex gap-3 pt-4">
               <Button
                 type="button"
                 variant="outline"
                 className="flex-1"
                 onClick={() => {
-                  setShowAddToMonthModal(false);
+                  setShowMarkPaidModal(false);
                   setSelectedBill(null);
-                  setMonthAmount("");
-                  setSelectedMonth("this");
-                  setCustomDate("");
-                  setUseCustomDate(false);
                 }}
               >
                 Cancel
               </Button>
               <Button type="submit" variant="primary" className="flex-1">
-                Add Bill
+                Record Payment
               </Button>
             </div>
           </form>
@@ -578,4 +878,3 @@ export default function BillsPage() {
     </Layout>
   );
 }
-

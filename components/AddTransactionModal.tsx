@@ -51,24 +51,28 @@ export default function AddTransactionModal({
     dueDate: "",
   });
   const [customTag, setCustomTag] = useState("");
+  const [dataLoaded, setDataLoaded] = useState(false);
   const amountInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
     if (transactionId) {
+      setDataLoaded(false);
       fetchTransaction();
     } else {
       resetForm();
+      setDataLoaded(true);
     }
   }, [transactionId, isOpen, initialAmount, initialNotes, initialIsBill]);
 
   useEffect(() => {
-    if (!isOpen) return;
-    const frame = requestAnimationFrame(() => {
+    if (!isOpen || !dataLoaded) return;
+    // Use setTimeout to ensure the modal is fully rendered and input is visible
+    const timeoutId = setTimeout(() => {
       amountInputRef.current?.focus();
       amountInputRef.current?.select();
-    });
-    return () => cancelAnimationFrame(frame);
-  }, [isOpen, transactionId]);
+    }, 100);
+    return () => clearTimeout(timeoutId);
+  }, [isOpen, dataLoaded]);
 
   const fetchTransaction = async () => {
     try {
@@ -84,9 +88,11 @@ export default function AddTransactionModal({
           isBill: data.isBill || false,
           dueDate: data.dueDate || "",
         });
+        setDataLoaded(true);
       }
     } catch (error) {
       console.error("Error fetching transaction:", error);
+      setDataLoaded(true);
     }
   };
 

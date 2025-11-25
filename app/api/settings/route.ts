@@ -19,17 +19,13 @@ export async function GET() {
     if (!settings) {
       const newSettings = await UserSettings.create({
         userId: session.user.id,
-        liquidCash: 0,
-        monthlyBurnRate: 0,
-        fixedExpenses: 0,
-        estimatedTaxRate: 0,
-        irsMileageDeduction: 0.67,
+        irsMileageDeduction: 0.70,
       });
       return NextResponse.json(newSettings.toObject());
     } else {
       // Ensure irsMileageDeduction exists for existing users
       if (settings.irsMileageDeduction === undefined || settings.irsMileageDeduction === null) {
-        settings.irsMileageDeduction = 0.67;
+        settings.irsMileageDeduction = 0.70;
       }
       return NextResponse.json(settings);
     }
@@ -48,10 +44,10 @@ export async function PUT(request: NextRequest) {
     await connectDB();
 
     const body = await request.json();
-    const { liquidCash, monthlyBurnRate, fixedExpenses, estimatedTaxRate, irsMileageDeduction } = body;
+    const { irsMileageDeduction } = body;
 
     // Parse irsMileageDeduction - handle both number and string inputs
-    let parsedIrsMileage: number = 0.67; // default
+    let parsedIrsMileage: number = 0.70; // default
     if (irsMileageDeduction !== undefined && irsMileageDeduction !== null && irsMileageDeduction !== '') {
       if (typeof irsMileageDeduction === 'number') {
         parsedIrsMileage = irsMileageDeduction;
@@ -63,24 +59,12 @@ export async function PUT(request: NextRequest) {
       }
     }
 
-    const updateData: any = {
-      liquidCash: liquidCash !== undefined && liquidCash !== "" ? parseFloat(liquidCash) : 0,
-      monthlyBurnRate: monthlyBurnRate !== undefined && monthlyBurnRate !== "" ? parseFloat(monthlyBurnRate) : 0,
-      fixedExpenses: fixedExpenses !== undefined && fixedExpenses !== "" ? parseFloat(fixedExpenses) : 0,
-      estimatedTaxRate: estimatedTaxRate !== undefined && estimatedTaxRate !== "" ? parseFloat(estimatedTaxRate) : 0,
-      irsMileageDeduction: parsedIrsMileage,
-    };
-
     // Use findOneAndUpdate with explicit $set to ensure all fields are updated
     const settings = await UserSettings.findOneAndUpdate(
       { userId: session.user.id },
       {
         $set: {
-          liquidCash: updateData.liquidCash,
-          monthlyBurnRate: updateData.monthlyBurnRate,
-          fixedExpenses: updateData.fixedExpenses,
-          estimatedTaxRate: updateData.estimatedTaxRate,
-          irsMileageDeduction: updateData.irsMileageDeduction,
+          irsMileageDeduction: parsedIrsMileage,
         }
       },
       { 

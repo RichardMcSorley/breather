@@ -5,6 +5,7 @@ export interface IBill extends Document {
   name: string;
   amount: number;
   dueDate: number; // Day of month (1-31)
+  company?: string;
   category?: string;
   notes?: string;
   isActive: boolean;
@@ -33,6 +34,9 @@ const BillSchema: Schema = new Schema(
       required: true,
       min: 1,
       max: 31,
+    },
+    company: {
+      type: String,
     },
     category: {
       type: String,
