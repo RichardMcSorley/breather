@@ -281,6 +281,8 @@ export default function BillsPage() {
 
   // Fetch existing payments to show which entries have been paid
   const [paidPayments, setPaidPayments] = useState<Record<string, number>>({});
+  const [allPayments, setAllPayments] = useState<any[]>([]);
+  const [editingPayment, setEditingPayment] = useState<any | null>(null);
   
   useEffect(() => {
     if (viewMode === "plan") {
@@ -293,6 +295,9 @@ export default function BillsPage() {
       const res = await fetch("/api/bills/payments");
       if (res.ok) {
         const data = await res.json();
+        // Store all payments for editing/deleting
+        setAllPayments(data.payments || []);
+        
         // Create a map of billId+date -> total paid amount
         const paidMap: Record<string, number> = {};
         data.payments.forEach((payment: any) => {
@@ -327,6 +332,7 @@ export default function BillsPage() {
     if (bill) {
       setSelectedBill(bill);
       setSelectedPlanEntry(entry);
+      setEditingPayment(null);
       setMarkPaidData({
         amount: entry.payment.toString(),
         paymentDate: entry.date,
@@ -341,8 +347,13 @@ export default function BillsPage() {
     if (!selectedBill) return;
 
     try {
-      const res = await fetch("/api/bills/payments", {
-        method: "POST",
+      const url = editingPayment 
+        ? `/api/bills/payments/${editingPayment._id}`
+        : "/api/bills/payments";
+      const method = editingPayment ? "PUT" : "POST";
+
+      const res = await fetch(url, {
+        method,
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           billId: selectedBill._id,
@@ -356,6 +367,7 @@ export default function BillsPage() {
         setShowMarkPaidModal(false);
         setSelectedBill(null);
         setSelectedPlanEntry(null);
+        setEditingPayment(null);
         await fetchBills();
         if (viewMode === "plan") {
           // Refresh paid payments and regenerate payment plan
@@ -364,11 +376,54 @@ export default function BillsPage() {
         }
       } else {
         const errorData = await res.json();
-        alert(`Error recording payment: ${errorData.error}`);
+        alert(`Error ${editingPayment ? 'updating' : 'recording'} payment: ${errorData.error}`);
       }
     } catch (error) {
-      console.error("Error recording payment:", error);
-      alert("Error recording payment");
+      console.error(`Error ${editingPayment ? 'updating' : 'recording'} payment:`, error);
+      alert(`Error ${editingPayment ? 'updating' : 'recording'} payment`);
+    }
+  };
+
+  const handleEditPayment = (payment: any) => {
+    const billId = payment.billId?._id || payment.billId?.toString() || payment.billId;
+    const bill = bills.find((b) => b._id === billId);
+    if (bill) {
+      setSelectedBill(bill);
+      setEditingPayment(payment);
+      setSelectedPlanEntry(null);
+      setMarkPaidData({
+        amount: payment.amount.toString(),
+        paymentDate: payment.paymentDate,
+        notes: payment.notes || "",
+      });
+      setShowMarkPaidModal(true);
+    }
+  };
+
+  const handleDeletePayment = async (paymentId: string) => {
+    if (!confirm("Are you sure you want to delete this payment?")) {
+      return;
+    }
+
+    try {
+      const res = await fetch(`/api/bills/payments/${paymentId}`, {
+        method: "DELETE",
+      });
+
+      if (res.ok) {
+        await fetchBills();
+        if (viewMode === "plan") {
+          // Refresh paid payments and regenerate payment plan
+          await fetchPaidPayments();
+          await generatePaymentPlanFromConfig();
+        }
+      } else {
+        const errorData = await res.json();
+        alert(`Error deleting payment: ${errorData.error}`);
+      }
+    } catch (error) {
+      console.error("Error deleting payment:", error);
+      alert("Error deleting payment");
     }
   };
 
@@ -553,6 +608,12 @@ export default function BillsPage() {
                       const isPaid = paidAmount >= entry.payment;
                       const progressPercent = entry.payment > 0 ? (paidAmount / entry.payment) * 100 : 0;
                       
+                      // Get individual payments for this entry
+                      const entryPayments = allPayments.filter((payment: any) => {
+                        const billId = payment.billId?._id || payment.billId?.toString() || payment.billId;
+                        return billId === entry.billId && payment.paymentDate === entry.date;
+                      });
+                      
                       return (
                         <div
                           key={`${entry.date}-${entry.billId}-${idx}`}
@@ -614,6 +675,49 @@ export default function BillsPage() {
                           {paidAmount > 0 && !isPaid && (
                             <div className="text-xs text-blue-600 dark:text-blue-400 mt-1">
                               Paid: {formatCurrency(paidAmount)} of {formatCurrency(entry.payment)}
+                            </div>
+                          )}
+                          {/* Show individual payments with edit/delete */}
+                          {entryPayments.length > 0 && (
+                            <div className="mt-3 pt-3 border-t border-gray-200 dark:border-gray-700">
+                              <div className="text-xs font-medium text-gray-600 dark:text-gray-400 mb-2">
+                                Payments:
+                              </div>
+                              <div className="space-y-2">
+                                {entryPayments.map((payment: any) => (
+                                  <div
+                                    key={payment._id}
+                                    className="flex items-center justify-between bg-gray-50 dark:bg-gray-800/50 rounded p-2"
+                                  >
+                                    <div className="flex-1">
+                                      <div className="text-sm font-medium text-gray-900 dark:text-white">
+                                        {formatCurrency(payment.amount)}
+                                      </div>
+                                      {payment.notes && (
+                                        <div className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                                          {payment.notes}
+                                        </div>
+                                      )}
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                      <button
+                                        onClick={() => handleEditPayment(payment)}
+                                        className="p-1.5 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white min-w-[36px] min-h-[36px] flex items-center justify-center rounded hover:bg-gray-100 dark:hover:bg-gray-700"
+                                        title="Edit payment"
+                                      >
+                                        ✏️
+                                      </button>
+                                      <button
+                                        onClick={() => handleDeletePayment(payment._id)}
+                                        className="p-1.5 text-red-600 dark:text-red-400 hover:text-red-800 dark:hover:text-red-300 min-w-[36px] min-h-[36px] flex items-center justify-center rounded hover:bg-red-50 dark:hover:bg-red-900/20"
+                                        title="Delete payment"
+                                      >
+                                        🗑️
+                                      </button>
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
                             </div>
                           )}
                         </div>
@@ -821,8 +925,9 @@ export default function BillsPage() {
             setShowMarkPaidModal(false);
             setSelectedBill(null);
             setSelectedPlanEntry(null);
+            setEditingPayment(null);
           }}
-          title={selectedPlanEntry ? `Pay ${selectedBill.name}` : `Mark ${selectedBill.name} as Paid`}
+          title={editingPayment ? `Edit Payment` : selectedPlanEntry ? `Pay ${selectedBill.name}` : `Mark ${selectedBill.name} as Paid`}
         >
           <form onSubmit={handleSavePayment} className="space-y-4">
             <Input
@@ -866,13 +971,15 @@ export default function BillsPage() {
                 onClick={() => {
                   setShowMarkPaidModal(false);
                   setSelectedBill(null);
+                  setSelectedPlanEntry(null);
+                  setEditingPayment(null);
                 }}
               >
                 Cancel
               </Button>
-              <Button type="submit" variant="primary" className="flex-1">
-                Record Payment
-              </Button>
+            <Button type="submit" variant="primary" className="flex-1">
+              {editingPayment ? "Update Payment" : "Record Payment"}
+            </Button>
             </div>
           </form>
         </Modal>
