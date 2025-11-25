@@ -9,6 +9,7 @@ import Card from "@/components/ui/Card";
 import Button from "@/components/ui/Button";
 import Input from "@/components/ui/Input";
 import AddTransactionModal from "@/components/AddTransactionModal";
+import HeatMap from "@/components/HeatMap";
 
 interface Summary {
   grossTotal: number;
@@ -28,6 +29,8 @@ interface Summary {
   todayNet?: number;
   todayMileageMiles?: number;
   todayMileageSavings?: number;
+  earningsPerMile?: number | null;
+  earningsPerHour?: number | null;
 }
 
 interface PaymentPlanEntry {
@@ -495,8 +498,29 @@ export default function DashboardPage() {
                   </div>
                   <div className="text-xs text-gray-500 dark:text-gray-500">After expenses and mileage</div>
                 </div>
+
+                {/* Efficiency Metrics */}
+                {(summary.earningsPerMile !== null && summary.earningsPerMile !== undefined) ||
+                 (summary.earningsPerHour !== null && summary.earningsPerHour !== undefined) ? (
+                  <div className="pt-3 border-t border-gray-200 dark:border-gray-700">
+                    <div className="text-sm font-semibold text-gray-900 dark:text-white mb-3">Efficiency Metrics</div>
+                    <div className="flex justify-between items-center">
+                      {summary.earningsPerMile !== null && summary.earningsPerMile !== undefined && (
+                        <span className="font-medium text-blue-600 dark:text-blue-400">
+                          {formatCurrency(summary.earningsPerMile)}/mile
+                        </span>
+                      )}
+                      {summary.earningsPerHour !== null && summary.earningsPerHour !== undefined && (
+                        <span className="font-medium text-blue-600 dark:text-blue-400">
+                          {formatCurrency(summary.earningsPerHour)}/hour
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                ) : null}
               </div>
             </Card>
+
 
             {upcomingPayments.length > 0 && (() => {
               // Filter to only show unpaid bills
@@ -607,6 +631,11 @@ export default function DashboardPage() {
             })()}
           </>
         )}
+      </div>
+
+      {/* Heat Map */}
+      <div className="mb-6">
+        <HeatMap days={30} />
       </div>
 
       <div className="grid grid-cols-2 gap-4">

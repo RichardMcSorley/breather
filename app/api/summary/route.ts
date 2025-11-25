@@ -358,6 +358,38 @@ export async function GET(request: NextRequest) {
 
     const todayMileageSavings = todayMileageMiles * irsMileageRate;
 
+    // Calculate earnings per mile for the selected period
+    let earningsPerMile: number | null = null;
+    if (todayMileageMiles > 0 && todayIncome > 0) {
+      earningsPerMile = todayIncome / todayMileageMiles;
+    }
+
+    // Calculate earnings per hour based on time span from first to last income transaction
+    let earningsPerHour: number | null = null;
+    const incomeTransactions = periodTransactions.filter((t) => t.type === "income");
+    if (incomeTransactions.length > 0 && todayIncome > 0) {
+      // Parse times and find earliest and latest
+      const times = incomeTransactions
+        .map((t) => {
+          const [hours, minutes] = (t.time || "00:00").split(":").map(Number);
+          return hours * 60 + minutes; // Convert to minutes for easier comparison
+        })
+        .filter((minutes) => !isNaN(minutes));
+
+      if (times.length > 0) {
+        const earliestMinutes = Math.min(...times);
+        const latestMinutes = Math.max(...times);
+        const timeSpanMinutes = latestMinutes - earliestMinutes;
+        
+        // If there's only one transaction or they're at the same time, use a minimum of 1 hour
+        const hoursWorked = Math.max(timeSpanMinutes / 60, 1.0);
+        
+        if (hoursWorked > 0) {
+          earningsPerHour = todayIncome / hoursWorked;
+        }
+      }
+    }
+
     return NextResponse.json({
       grossTotal,
       variableExpenses,
@@ -377,6 +409,8 @@ export async function GET(request: NextRequest) {
       todayNet,
       todayMileageMiles,
       todayMileageSavings,
+      earningsPerMile,
+      earningsPerHour,
     });
   } catch (error) {
     return handleApiError(error);
