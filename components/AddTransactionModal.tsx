@@ -18,7 +18,8 @@ interface AddTransactionModalProps {
   initialType?: "income" | "expense";
 }
 
-const INCOME_TAGS = ["Instacart", "Uber", "DoorDash", "GrubHub", "ProxyPics", "Roadie", "Withdraw Fees"];
+const INCOME_SOURCE_TAGS = ["DoorDash", "Uber", "Instacart", "GrubHub", "Roadie", "Shipt", "ProxyPics"];
+const EXPENSE_SOURCE_TAGS = ["DoorDash", "Uber", "Instacart", "GrubHub", "Roadie", "Shipt", "ProxyPics", "Withdraw Fees"];
 
 const formatLocalDate = (value: Date | string) => {
   if (typeof value === "string") {
@@ -256,7 +257,7 @@ export default function AddTransactionModal({
               Income Source
             </label>
             <div className="flex flex-wrap gap-2 mb-2">
-              {INCOME_TAGS.map((tag) => (
+              {INCOME_SOURCE_TAGS.map((tag) => (
                 <button
                   key={tag}
                   type="button"
@@ -293,7 +294,7 @@ export default function AddTransactionModal({
               Expense Source (optional)
             </label>
             <div className="flex flex-wrap gap-2 mb-2">
-              {INCOME_TAGS.map((tag) => (
+              {EXPENSE_SOURCE_TAGS.map((tag) => (
                 <button
                   key={tag}
                   type="button"
