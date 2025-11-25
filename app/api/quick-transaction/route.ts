@@ -9,7 +9,7 @@ export async function POST(request: NextRequest) {
     await connectDB();
 
     const body = await request.json();
-    const { userId, amount, source } = body;
+    const { userId, amount, source, localDate, localTime } = body;
 
     // Validate required fields
     if (!userId) {
@@ -39,38 +39,54 @@ export async function POST(request: NextRequest) {
     const transactionType = parsedAmount > 0 ? "income" : "expense";
     const transactionAmount = Math.abs(parsedAmount);
 
-    // Create transaction for today
-    const now = new Date();
-    const year = now.getFullYear();
-    const timeString = now.toTimeString().slice(0, 5); // HH:MM format
-
-    // Create the transaction only if amount is not 0
-    if (shouldCreateTransaction) {
-      // Build local date to avoid timezone issues (same approach as existing transactions)
+    // Use client's local date/time if provided, otherwise use server's current time
+    let userDate: Date;
+    let timeString: string;
+    
+    if (localDate && localTime) {
+      // Parse user's local date and time
+      const [year, month, day] = localDate.split("-").map(Number);
+      const [hour, minute] = localTime.split(":").map(Number);
+      userDate = new Date(year, month - 1, day, hour, minute);
+      timeString = localTime.slice(0, 5); // HH:MM format
+    } else {
+      // Fallback to server time (for backward compatibility)
+      const now = new Date();
+      const year = now.getFullYear();
+      timeString = now.toTimeString().slice(0, 5); // HH:MM format
       const [hour, minute] = timeString.split(":").map(Number);
-      const transactionDate = new Date(
+      userDate = new Date(
         year,
         now.getMonth(),
         now.getDate(),
         hour,
         minute
       );
+    }
 
-      // Create the transaction
+    // Create the transaction only if amount is not 0
+    if (shouldCreateTransaction) {
+      // Create the transaction with user's local date/time
       await Transaction.create({
         userId,
         amount: transactionAmount,
         type: transactionType,
-        date: transactionDate,
+        date: userDate,
         time: timeString,
         isBill: false,
         tag: source || undefined,
       });
     }
 
-    // Calculate today's earnings
-    const todayStart = startOfDay(now);
-    const todayEnd = endOfDay(now);
+    // Calculate today's earnings using user's local date
+    // Extract just the date part (without time) to get start/end of day in user's timezone
+    const userLocalDate = new Date(
+      userDate.getFullYear(),
+      userDate.getMonth(),
+      userDate.getDate()
+    );
+    const todayStart = startOfDay(userLocalDate);
+    const todayEnd = endOfDay(userLocalDate);
 
     const todayTransactions = await Transaction.find({
       userId,

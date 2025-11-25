@@ -44,7 +44,10 @@ export default function DashboardPage() {
 
   const fetchSummary = async () => {
     try {
-      const res = await fetch("/api/summary");
+      // Get user's local date to ensure timezone-correct calculations
+      const now = new Date();
+      const localDate = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+      const res = await fetch(`/api/summary?localDate=${localDate}`);
       if (res.ok) {
         const data = await res.json();
         setSummary(data);

@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "../auth/[...nextauth]/config";
 import connectDB from "@/lib/mongodb";
@@ -9,7 +9,7 @@ import { handleApiError } from "@/lib/api-error-handler";
 import Mileage from "@/lib/models/Mileage";
 import Bill from "@/lib/models/Bill";
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
     if (!session?.user?.id) {
@@ -18,7 +18,20 @@ export async function GET() {
 
     await connectDB();
 
-    const now = new Date();
+    // Get user's local date from query params if provided, otherwise use server date
+    const { searchParams } = new URL(request.url);
+    const localDateStr = searchParams.get("localDate");
+    
+    let now: Date;
+    if (localDateStr) {
+      // Parse user's local date (YYYY-MM-DD format)
+      const [year, month, day] = localDateStr.split("-").map(Number);
+      now = new Date(year, month - 1, day);
+    } else {
+      // Fallback to server's current date/time
+      now = new Date();
+    }
+
     const monthStart = startOfMonth(now);
     const monthEnd = endOfMonth(now);
     const thirtyDaysAgo = subDays(now, 30);
