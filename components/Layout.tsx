@@ -27,7 +27,7 @@ export default function Layout({ children }: LayoutProps) {
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900 pb-20">
       <OfflineIndicator />
-      <header className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 sticky top-0 z-40">
+      <header className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 sticky top-0 z-40 safe-area-inset-top">
         <div className="px-4 py-3 flex items-center justify-between">
           <h1 className="text-xl font-bold text-gray-900 dark:text-white">Breather</h1>
           <div className="flex items-center gap-2">
@@ -60,7 +60,7 @@ export default function Layout({ children }: LayoutProps) {
       <main className="px-4 py-6">{children}</main>
 
       <nav className="fixed bottom-0 left-0 right-0 bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 safe-area-inset-bottom">
-        <div className="flex justify-around items-center px-2 py-2">
+        <div className="flex justify-around items-center px-2 py-2" style={{ paddingBottom: `max(0.5rem, env(safe-area-inset-bottom))` }}>
           {navItems.map((item) => {
             const isActive = pathname === item.href;
             return (
