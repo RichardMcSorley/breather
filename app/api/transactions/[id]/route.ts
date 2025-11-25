@@ -4,25 +4,7 @@ import { authOptions } from "../../auth/[...nextauth]/config";
 import connectDB from "@/lib/mongodb";
 import Transaction from "@/lib/models/Transaction";
 import { handleApiError } from "@/lib/api-error-handler";
-
-const buildLocalDate = (date: string, time?: string) => {
-  if (!date) {
-    throw new Error("Missing date");
-  }
-  const [baseDate] = date.split("T");
-  const [year, month, day] = baseDate.split("-").map(Number);
-  const [hour, minute] = (time?.split(":").map(Number) ?? [0, 0]);
-  if ([year, month, day].some((value) => Number.isNaN(value))) {
-    throw new Error("Invalid date value");
-  }
-  return new Date(
-    year,
-    month - 1,
-    day,
-    Number.isNaN(hour) ? 0 : hour,
-    Number.isNaN(minute) ? 0 : minute
-  );
-};
+import { parseDateAsUTC, parseDateOnlyAsUTC, formatDateAsUTC } from "@/lib/date-utils";
 
 export async function GET(
   request: NextRequest,
@@ -45,25 +27,17 @@ export async function GET(
       return NextResponse.json({ error: "Transaction not found" }, { status: 404 });
     }
 
-    // Format dates as YYYY-MM-DD strings to avoid timezone issues
+    // Format dates as YYYY-MM-DD strings using UTC
     const transactionObj: any = { ...transaction };
     
     // Format the transaction date
     if (transactionObj.date) {
-      const dateObj = new Date(transactionObj.date);
-      const year = dateObj.getUTCFullYear();
-      const month = String(dateObj.getUTCMonth() + 1).padStart(2, '0');
-      const day = String(dateObj.getUTCDate()).padStart(2, '0');
-      transactionObj.date = `${year}-${month}-${day}`;
+      transactionObj.date = formatDateAsUTC(new Date(transactionObj.date));
     }
     
     // Format dueDate
     if (transactionObj.dueDate) {
-      const dueDateObj = new Date(transactionObj.dueDate);
-      const year = dueDateObj.getUTCFullYear();
-      const month = String(dueDateObj.getUTCMonth() + 1).padStart(2, '0');
-      const day = String(dueDateObj.getUTCDate()).padStart(2, '0');
-      transactionObj.dueDate = `${year}-${month}-${day}`;
+      transactionObj.dueDate = formatDateAsUTC(new Date(transactionObj.dueDate));
     }
 
     return NextResponse.json(transactionObj);
@@ -87,20 +61,29 @@ export async function PUT(
     const body = await request.json();
     const { amount, type, date, time, isBill, notes, tag, dueDate } = body;
 
-    // Parse dueDate as local date to avoid timezone shifts
+    // Parse dueDate as UTC date
     let parsedDueDate: Date | undefined;
     if (dueDate) {
-      // If it's in YYYY-MM-DD format, parse it as local date
-      const [year, month, day] = dueDate.split('-').map(Number);
-      parsedDueDate = new Date(year, month - 1, day);
+      try {
+        parsedDueDate = parseDateOnlyAsUTC(dueDate);
+      } catch (error) {
+        return NextResponse.json({ error: "Invalid dueDate format" }, { status: 400 });
+      }
     }
 
     let transactionDate: Date | undefined;
     if (date && time) {
       try {
-        transactionDate = buildLocalDate(date, time);
+        transactionDate = parseDateAsUTC(date, time);
       } catch (error) {
         return NextResponse.json({ error: "Invalid date or time format" }, { status: 400 });
+      }
+    } else if (date) {
+      // If only date is provided, parse as UTC at midnight
+      try {
+        transactionDate = parseDateOnlyAsUTC(date);
+      } catch (error) {
+        return NextResponse.json({ error: "Invalid date format" }, { status: 400 });
       }
     }
 
@@ -109,7 +92,7 @@ export async function PUT(
       {
         amount: parseFloat(amount),
         type,
-        ...(transactionDate ? { date: transactionDate } : date ? { date: new Date(date) } : {}),
+        ...(transactionDate ? { date: transactionDate } : {}),
         ...(time ? { time } : {}),
         isBill: isBill || false,
         notes,
@@ -123,27 +106,19 @@ export async function PUT(
       return NextResponse.json({ error: "Transaction not found" }, { status: 404 });
     }
 
-    // Convert to plain object and format dates as YYYY-MM-DD strings
+    // Convert to plain object and format dates as YYYY-MM-DD strings using UTC
     const transactionObj = transaction.toObject();
     
     // Format the transaction date
     let formattedDate: string | undefined;
     if (transactionObj.date) {
-      const dateObj = new Date(transactionObj.date);
-      const year = dateObj.getUTCFullYear();
-      const month = String(dateObj.getUTCMonth() + 1).padStart(2, '0');
-      const day = String(dateObj.getUTCDate()).padStart(2, '0');
-      formattedDate = `${year}-${month}-${day}`;
+      formattedDate = formatDateAsUTC(new Date(transactionObj.date));
     }
     
     // Format dueDate
     let formattedDueDate: string | undefined;
     if (transactionObj.dueDate) {
-      const dueDateObj = new Date(transactionObj.dueDate);
-      const year = dueDateObj.getUTCFullYear();
-      const month = String(dueDateObj.getUTCMonth() + 1).padStart(2, '0');
-      const day = String(dueDateObj.getUTCDate()).padStart(2, '0');
-      formattedDueDate = `${year}-${month}-${day}`;
+      formattedDueDate = formatDateAsUTC(new Date(transactionObj.dueDate));
     }
 
     return NextResponse.json({

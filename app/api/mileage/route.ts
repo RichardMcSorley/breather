@@ -4,6 +4,7 @@ import { authOptions } from "../auth/[...nextauth]/config";
 import connectDB from "@/lib/mongodb";
 import Mileage from "@/lib/models/Mileage";
 import { handleApiError } from "@/lib/api-error-handler";
+import { parseDateOnlyAsUTC, formatDateAsUTC } from "@/lib/date-utils";
 
 export async function GET(request: NextRequest) {
   try {
@@ -24,8 +25,13 @@ export async function GET(request: NextRequest) {
 
     if (startDate || endDate) {
       query.date = {};
-      if (startDate) query.date.$gte = new Date(startDate);
-      if (endDate) query.date.$lte = new Date(endDate);
+      if (startDate) query.date.$gte = parseDateOnlyAsUTC(startDate);
+      if (endDate) {
+        // For end date, include the entire day (end of day in UTC)
+        const endDateUTC = parseDateOnlyAsUTC(endDate);
+        endDateUTC.setUTCHours(23, 59, 59, 999);
+        query.date.$lte = endDateUTC;
+      }
     }
 
     const mileageEntries = await Mileage.find(query)
@@ -34,13 +40,9 @@ export async function GET(request: NextRequest) {
       .limit(limit)
       .lean();
 
-    // Format dates as YYYY-MM-DD strings to avoid timezone issues
+    // Format dates as YYYY-MM-DD strings using UTC
     const formattedEntries = mileageEntries.map((entry: any) => {
-      const dateObj = new Date(entry.date);
-      const year = dateObj.getFullYear();
-      const month = String(dateObj.getMonth() + 1).padStart(2, '0');
-      const day = String(dateObj.getDate()).padStart(2, '0');
-      return { ...entry, date: `${year}-${month}-${day}` };
+      return { ...entry, date: formatDateAsUTC(new Date(entry.date)) };
     });
 
     const total = await Mileage.countDocuments(query);
@@ -75,29 +77,29 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Missing required fields or invalid odometer value" }, { status: 400 });
     }
 
-    // Parse date as local date to avoid timezone issues
+    // Parse date as UTC date
     // date is in YYYY-MM-DD format
-    const [year, month, day] = date.split('-').map(Number);
-    const localDate = new Date(year, month - 1, day);
+    let parsedDate: Date;
+    try {
+      parsedDate = parseDateOnlyAsUTC(date);
+    } catch (error) {
+      return NextResponse.json({ error: "Invalid date format" }, { status: 400 });
+    }
 
     const mileageEntry = await Mileage.create({
       userId: session.user.id,
       odometer: parseFloat(odometer),
-      date: localDate,
+      date: parsedDate,
       notes,
     });
 
-    // Format date as YYYY-MM-DD string to avoid timezone issues
+    // Format date as YYYY-MM-DD string using UTC
     const entryObj = mileageEntry.toObject();
-    const dateObj = new Date(entryObj.date);
-    const formattedYear = dateObj.getFullYear();
-    const formattedMonth = String(dateObj.getMonth() + 1).padStart(2, '0');
-    const formattedDay = String(dateObj.getDate()).padStart(2, '0');
     
     // Create response object with string date
     const responseObj = {
       ...entryObj,
-      date: `${formattedYear}-${formattedMonth}-${formattedDay}`,
+      date: formatDateAsUTC(new Date(entryObj.date)),
     };
 
     return NextResponse.json(responseObj, { status: 201 });

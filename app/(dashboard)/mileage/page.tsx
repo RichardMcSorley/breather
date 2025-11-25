@@ -115,18 +115,21 @@ export default function MileagePage() {
     if (dateString instanceof Date) {
       date = dateString;
     } else if (typeof dateString === 'string') {
-      // If it's already in YYYY-MM-DD format, parse as local date
+      // If it's already in YYYY-MM-DD format, parse as UTC date
+      // The browser will display it in the user's local timezone
       if (dateString.match(/^\d{4}-\d{2}-\d{2}$/)) {
         const [year, month, day] = dateString.split('-').map(Number);
-        date = new Date(year, month - 1, day);
+        // Parse as UTC - browser will display in user's timezone
+        date = new Date(Date.UTC(year, month - 1, day, 0, 0, 0, 0));
       } else {
-        // Otherwise parse as ISO string
+        // Otherwise parse as ISO string (which is already UTC-aware)
         date = new Date(dateString);
       }
     } else {
       date = new Date(dateString);
     }
     
+    // toLocaleDateString automatically converts to user's timezone
     return date.toLocaleDateString("en-US", {
       month: "short",
       day: "numeric",
@@ -137,10 +140,27 @@ export default function MileagePage() {
   const sortEntriesByDate = (entriesToSort: MileageEntry[]) => {
     return entriesToSort
       .slice()
-      .sort(
-        (a, b) =>
-          new Date(b.date).getTime() - new Date(a.date).getTime()
-      );
+      .sort((a, b) => {
+        // Parse dates as UTC for consistent sorting
+        let dateA: Date;
+        let dateB: Date;
+        
+        if (typeof a.date === 'string' && a.date.match(/^\d{4}-\d{2}-\d{2}$/)) {
+          const [year, month, day] = a.date.split('-').map(Number);
+          dateA = new Date(Date.UTC(year, month - 1, day, 0, 0, 0, 0));
+        } else {
+          dateA = new Date(a.date);
+        }
+        
+        if (typeof b.date === 'string' && b.date.match(/^\d{4}-\d{2}-\d{2}$/)) {
+          const [year, month, day] = b.date.split('-').map(Number);
+          dateB = new Date(Date.UTC(year, month - 1, day, 0, 0, 0, 0));
+        } else {
+          dateB = new Date(b.date);
+        }
+        
+        return dateB.getTime() - dateA.getTime();
+      });
   };
 
   const formatOdometer = (value: number) => {

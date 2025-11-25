@@ -19,6 +19,13 @@ interface Transaction {
   dueDate?: string;
 }
 
+/**
+ * Parses a UTC date string (YYYY-MM-DD) and optional UTC time string (HH:MM)
+ * and returns a Date object that will display correctly in the user's timezone.
+ * 
+ * Since dates are stored in UTC in the database, we parse them as UTC
+ * and the browser will automatically display them in the user's local timezone.
+ */
 const buildLocalDateFromParts = (dateString: string, timeString?: string) => {
   if (!dateString) return new Date();
   const baseDate = dateString.split("T")[0] || dateString;
@@ -30,7 +37,11 @@ const buildLocalDateFromParts = (dateString: string, timeString?: string) => {
   const [hour, minute] = (timeString?.split(":").map(Number) ?? [0, 0]).map((value) =>
     Number.isNaN(value) ? 0 : value
   );
-  return new Date(year, month - 1, day, hour, minute);
+  
+  // Parse as UTC date/time - the browser will display it in the user's timezone
+  // This ensures that a date stored as "2024-01-15 14:00 UTC" displays correctly
+  // in the user's local timezone (e.g., "2024-01-15 09:00 EST" if user is in EST)
+  return new Date(Date.UTC(year, month - 1, day, hour, minute));
 };
 
 export default function HistoryPage() {

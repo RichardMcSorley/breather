@@ -8,6 +8,7 @@ import { startOfMonth, endOfMonth, subDays, startOfDay, endOfDay, differenceInDa
 import { handleApiError } from "@/lib/api-error-handler";
 import Mileage from "@/lib/models/Mileage";
 import Bill from "@/lib/models/Bill";
+import { parseDateOnlyAsUTC } from "@/lib/date-utils";
 
 export async function GET(request: NextRequest) {
   try {
@@ -24,14 +25,21 @@ export async function GET(request: NextRequest) {
     
     let now: Date;
     if (localDateStr) {
-      // Parse user's local date (YYYY-MM-DD format)
-      const [year, month, day] = localDateStr.split("-").map(Number);
-      now = new Date(year, month - 1, day);
+      // Parse user's local date (YYYY-MM-DD format) as UTC
+      // The date string represents the user's local date, but we treat it as UTC for consistency
+      now = parseDateOnlyAsUTC(localDateStr);
     } else {
-      // Fallback to server's current date/time
-      now = new Date();
+      // Fallback to server's current UTC date/time
+      const serverNow = new Date();
+      // Get UTC date components and create a UTC date at midnight
+      const utcYear = serverNow.getUTCFullYear();
+      const utcMonth = serverNow.getUTCMonth();
+      const utcDay = serverNow.getUTCDate();
+      now = new Date(Date.UTC(utcYear, utcMonth, utcDay, 0, 0, 0, 0));
     }
 
+    // Use date-fns functions - they work with Date objects
+    // Since we're using UTC dates, the calculations will be correct
     const monthStart = startOfMonth(now);
     const monthEnd = endOfMonth(now);
     const thirtyDaysAgo = subDays(now, 30);
@@ -55,19 +63,18 @@ export async function GET(request: NextRequest) {
     }).lean();
 
     // Calculate bills due this month and their actual due dates
-    const currentYear = now.getFullYear();
-    const currentMonth = now.getMonth();
+    // Use UTC methods to get year/month
+    const currentYear = now.getUTCFullYear();
+    const currentMonth = now.getUTCMonth();
 
     let totalBillsDue = 0;
     let lastDueDate: Date | null = null;
 
     for (const bill of activeBills) {
-      // Calculate the actual due date for this month
+      // Calculate the actual due date for this month in UTC
       const dueDay = bill.dueDate;
-      // Create date for this month's due date
-      const billDueDate = new Date(currentYear, currentMonth, dueDay);
-      // Set time to end of day to avoid timezone issues
-      billDueDate.setHours(23, 59, 59, 999);
+      // Create date for this month's due date in UTC
+      const billDueDate = new Date(Date.UTC(currentYear, currentMonth, dueDay, 23, 59, 59, 999));
 
       totalBillsDue += bill.amount;
       
