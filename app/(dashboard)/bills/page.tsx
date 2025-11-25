@@ -44,7 +44,13 @@ export default function BillsPage() {
   const [groupedPaymentPlan, setGroupedPaymentPlan] = useState<Record<string, PaymentPlanEntry[]>>({});
   const [viewMode, setViewMode] = useState<"bills" | "plan">("bills");
   const [planLoaded, setPlanLoaded] = useState(false);
-  const [hidePaidEntries, setHidePaidEntries] = useState(false);
+  const [hidePaidEntries, setHidePaidEntries] = useState(() => {
+    if (typeof window !== "undefined") {
+      const saved = localStorage.getItem("bills_hide_paid_entries");
+      return saved === "true";
+    }
+    return false;
+  });
   const [formData, setFormData] = useState({
     name: "",
     amount: "",
@@ -599,7 +605,11 @@ export default function BillsPage() {
               {paymentPlan.length > 0 && (
                 <div className="flex items-center justify-end mb-2">
                   <button
-                    onClick={() => setHidePaidEntries(!hidePaidEntries)}
+                    onClick={() => {
+                      const newValue = !hidePaidEntries;
+                      setHidePaidEntries(newValue);
+                      localStorage.setItem("bills_hide_paid_entries", newValue.toString());
+                    }}
                     className={`px-3 py-1.5 rounded-lg text-sm font-medium min-h-[44px] ${
                       hidePaidEntries
                         ? "bg-green-600 text-white"
