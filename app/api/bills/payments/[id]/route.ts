@@ -70,7 +70,7 @@ export async function PUT(
       notes: paymentObj.notes,
       createdAt: paymentObj.createdAt.toISOString(),
       updatedAt: paymentObj.updatedAt.toISOString(),
-    } satisfies BillPaymentResponse;
+    } as BillPaymentResponse;
 
     return NextResponse.json(formattedPayment);
   } catch (error) {

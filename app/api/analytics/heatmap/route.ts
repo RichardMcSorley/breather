@@ -6,6 +6,8 @@ import Transaction from "@/lib/models/Transaction";
 import { handleApiError } from "@/lib/api-error-handler";
 import { subDays } from "date-fns";
 
+export const dynamic = 'force-dynamic';
+
 export async function GET(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions);

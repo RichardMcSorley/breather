@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { toast, ToastManager } from "@/lib/toast";
+import { toast } from "@/lib/toast";
 
 interface Toast {
   id: string;
@@ -42,18 +42,18 @@ export default function ToastContainer() {
 
   return (
     <div className="fixed top-4 right-4 z-50 space-y-2">
-      {toasts.map((toast) => (
+      {toasts.map((toastItem) => (
         <div
-          key={toast.id}
+          key={toastItem.id}
           className={`px-4 py-3 rounded-lg shadow-lg min-w-[300px] max-w-md flex items-center justify-between ${getToastStyles(
-            toast.type
+            toastItem.type
           )}`}
         >
-          <span className="flex-1">{toast.message}</span>
+          <span className="flex-1">{toastItem.message}</span>
           <button
             onClick={() => {
               // Access the remove method from the toast manager instance
-              (toast as ToastManager).remove(toast.id);
+              toast.remove(toastItem.id);
             }}
             className="ml-4 text-white hover:text-gray-200 font-bold"
             aria-label="Close"

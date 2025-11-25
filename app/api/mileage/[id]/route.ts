@@ -43,7 +43,7 @@ export async function GET(
       notes: mileageEntry.notes,
       createdAt: mileageEntry.createdAt.toISOString(),
       updatedAt: mileageEntry.updatedAt.toISOString(),
-    } satisfies MileageResponse;
+    } as MileageResponse;
 
     return NextResponse.json(entryObj);
   } catch (error) {

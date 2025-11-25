@@ -48,7 +48,7 @@ export async function GET(
       dueDate: transaction.dueDate ? formatDateAsUTC(new Date(transaction.dueDate)) : undefined,
       createdAt: transaction.createdAt.toISOString(),
       updatedAt: transaction.updatedAt.toISOString(),
-    } satisfies TransactionResponse;
+    } as TransactionResponse;
 
     return NextResponse.json(transactionObj);
   } catch (error) {

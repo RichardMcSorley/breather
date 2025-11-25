@@ -9,6 +9,10 @@ import Card from "@/components/ui/Card";
 import Tag from "@/components/ui/Tag";
 import { useSettings, useUpdateSettings } from "@/hooks/useQueries";
 
+// Default tags
+const DEFAULT_INCOME_TAGS = ["DoorDash", "Uber", "Instacart", "GrubHub", "Roadie", "Shipt", "ProxyPics"];
+const DEFAULT_EXPENSE_TAGS = ["Gas", "Maintenance", "Insurance", "Tolls", "Parking", "Car Wash", "Oil Change", "Withdraw Fees"];
+
 export default function ConfigurationPage() {
   const { data: session } = useSession();
   const { data: settingsData, isLoading: loading } = useSettings();
@@ -21,10 +25,6 @@ export default function ConfigurationPage() {
   });
   const [newIncomeTag, setNewIncomeTag] = useState("");
   const [newExpenseTag, setNewExpenseTag] = useState("");
-
-  // Default tags
-  const DEFAULT_INCOME_TAGS = ["DoorDash", "Uber", "Instacart", "GrubHub", "Roadie", "Shipt", "ProxyPics"];
-  const DEFAULT_EXPENSE_TAGS = ["Gas", "Maintenance", "Insurance", "Tolls", "Parking", "Car Wash", "Oil Change", "Withdraw Fees"];
 
   // Update form data when settings are loaded
   useEffect(() => {
