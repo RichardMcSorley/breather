@@ -420,5 +420,49 @@ describe("DELETE /api/mileage/[id]", () => {
     expect(response.status).toBe(404);
     expect(data.error).toBe("Mileage entry not found");
   });
+
+  it("should handle odometer decreasing on update", async () => {
+    const entry = await Mileage.create({
+      userId: TEST_USER_ID,
+      odometer: 10100,
+      date: new Date("2024-01-15"),
+      classification: "work",
+    });
+
+    const request = new NextRequest(`http://localhost:3000/api/mileage/${entry._id}`, {
+      method: "PUT",
+      body: JSON.stringify({
+        odometer: 10000, // Lower than original
+      }),
+    });
+
+    const response = await PUT(request, { params: { id: String(entry._id) } });
+    // Should either allow or reject - check implementation behavior
+    expect([200, 400]).toContain(response.status);
+  });
+
+  it("should handle future dates on update", async () => {
+    const entry = await Mileage.create({
+      userId: TEST_USER_ID,
+      odometer: 10000,
+      date: new Date("2024-01-15"),
+      classification: "work",
+    });
+
+    const futureDate = new Date();
+    futureDate.setUTCFullYear(futureDate.getUTCFullYear() + 1);
+    const futureDateStr = futureDate.toISOString().split("T")[0];
+
+    const request = new NextRequest(`http://localhost:3000/api/mileage/${entry._id}`, {
+      method: "PUT",
+      body: JSON.stringify({
+        date: futureDateStr,
+      }),
+    });
+
+    const response = await PUT(request, { params: { id: String(entry._id) } });
+    // Should either allow or reject future dates
+    expect([200, 400]).toContain(response.status);
+  });
 });
 

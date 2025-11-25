@@ -259,6 +259,105 @@ describe("PUT /api/bills/[id]", () => {
     expect(data.isActive).toBe(false);
     expect(data.useInPlan).toBe(false);
   });
+
+  it("should handle updating to same values (idempotency)", async () => {
+    const bill = await Bill.create({
+      userId: TEST_USER_ID,
+      name: "Rent",
+      amount: 1000,
+      dueDate: 1,
+      lastAmount: 1000,
+      company: "Landlord Co",
+    });
+
+    const request = new NextRequest(`http://localhost:3000/api/bills/${bill._id}`, {
+      method: "PUT",
+      body: JSON.stringify({
+        name: "Rent",
+        amount: 1000,
+        dueDate: 1,
+        company: "Landlord Co",
+      }),
+    });
+
+    const response = await PUT(request, { params: { id: String(bill._id) } });
+    const data = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(data.name).toBe("Rent");
+    expect(data.amount).toBe(1000);
+    expect(data.company).toBe("Landlord Co");
+  });
+
+  it("should handle category field update", async () => {
+    const bill = await Bill.create({
+      userId: TEST_USER_ID,
+      name: "Rent",
+      amount: 1000,
+      dueDate: 1,
+      lastAmount: 1000,
+    });
+
+    const request = new NextRequest(`http://localhost:3000/api/bills/${bill._id}`, {
+      method: "PUT",
+      body: JSON.stringify({
+        category: "Housing",
+      }),
+    });
+
+    const response = await PUT(request, { params: { id: String(bill._id) } });
+    const data = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(data.category).toBe("Housing");
+  });
+
+  it("should sanitize category field on update", async () => {
+    const bill = await Bill.create({
+      userId: TEST_USER_ID,
+      name: "Rent",
+      amount: 1000,
+      dueDate: 1,
+      lastAmount: 1000,
+    });
+
+    const request = new NextRequest(`http://localhost:3000/api/bills/${bill._id}`, {
+      method: "PUT",
+      body: JSON.stringify({
+        category: "  Housing  ",
+      }),
+    });
+
+    const response = await PUT(request, { params: { id: String(bill._id) } });
+    const data = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(data.category).toBe("Housing");
+  });
+
+  it("should handle very long field values", async () => {
+    const bill = await Bill.create({
+      userId: TEST_USER_ID,
+      name: "Rent",
+      amount: 1000,
+      dueDate: 1,
+      lastAmount: 1000,
+    });
+
+    const longName = "A".repeat(500);
+    const request = new NextRequest(`http://localhost:3000/api/bills/${bill._id}`, {
+      method: "PUT",
+      body: JSON.stringify({
+        name: longName,
+      }),
+    });
+
+    const response = await PUT(request, { params: { id: String(bill._id) } });
+    const data = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(data.name).toBe(longName);
+  });
 });
 
 describe("DELETE /api/bills/[id]", () => {

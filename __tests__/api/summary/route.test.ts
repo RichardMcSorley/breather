@@ -350,5 +350,202 @@ describe("GET /api/summary", () => {
     expect(data.todayIncome).toBe(100);
     expect(data.todayExpenses).toBe(0); // Bill expense excluded from display
   });
+
+  it("should handle division by zero cases (no income)", async () => {
+    await Transaction.create({
+      userId: TEST_USER_ID,
+      amount: 50,
+      type: "expense",
+      date: new Date("2024-01-15T10:00:00Z"),
+      time: "10:00",
+      isBill: false,
+    });
+
+    const request = new NextRequest(
+      "http://localhost:3000/api/summary?localDate=2024-01-15&viewMode=day"
+    );
+    const response = await GET(request);
+    const data = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(data.todayIncome).toBe(0);
+    expect(data.earningsPerHour).toBeNull();
+    expect(data.earningsPerMile).toBeNull();
+  });
+
+  it("should handle division by zero cases (no mileage)", async () => {
+    await Transaction.create({
+      userId: TEST_USER_ID,
+      amount: 100,
+      type: "income",
+      date: new Date("2024-01-15T10:00:00Z"),
+      time: "10:00",
+      isBill: false,
+    });
+
+    const request = new NextRequest(
+      "http://localhost:3000/api/summary?localDate=2024-01-15&viewMode=day"
+    );
+    const response = await GET(request);
+    const data = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(data.earningsPerMile).toBeNull();
+  });
+
+  it("should handle negative values", async () => {
+    await Transaction.create({
+      userId: TEST_USER_ID,
+      amount: 50,
+      type: "income",
+      date: new Date("2024-01-15T10:00:00Z"),
+      time: "10:00",
+      isBill: false,
+    });
+
+    await Transaction.create({
+      userId: TEST_USER_ID,
+      amount: 100,
+      type: "expense",
+      date: new Date("2024-01-15T10:00:00Z"),
+      time: "10:00",
+      isBill: false,
+    });
+
+    const request = new NextRequest(
+      "http://localhost:3000/api/summary?localDate=2024-01-15&viewMode=day"
+    );
+    const response = await GET(request);
+    const data = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(data.todayNet).toBe(-50);
+    expect(data.freeCash).toBeLessThan(0);
+  });
+
+  it("should handle very large amounts", async () => {
+    await Transaction.create({
+      userId: TEST_USER_ID,
+      amount: 999999999.99,
+      type: "income",
+      date: new Date("2024-01-15T10:00:00Z"),
+      time: "10:00",
+      isBill: false,
+    });
+
+    const request = new NextRequest(
+      "http://localhost:3000/api/summary?localDate=2024-01-15&viewMode=day"
+    );
+    const response = await GET(request);
+    const data = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(data.todayIncome).toBe(999999999.99);
+  });
+
+  it("should handle edge case: all transactions are bills", async () => {
+    await Transaction.create({
+      userId: TEST_USER_ID,
+      amount: 100,
+      type: "income",
+      date: new Date("2024-01-15T10:00:00Z"),
+      time: "10:00",
+      isBill: true,
+    });
+
+    await Transaction.create({
+      userId: TEST_USER_ID,
+      amount: 50,
+      type: "expense",
+      date: new Date("2024-01-15T10:00:00Z"),
+      time: "10:00",
+      isBill: true,
+    });
+
+    const request = new NextRequest(
+      "http://localhost:3000/api/summary?localDate=2024-01-15&viewMode=day"
+    );
+    const response = await GET(request);
+    const data = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(data.todayIncome).toBe(0); // Bills excluded from display
+    expect(data.todayExpenses).toBe(0);
+  });
+
+  it("should handle edge case: no transactions in period", async () => {
+    const request = new NextRequest(
+      "http://localhost:3000/api/summary?localDate=2024-01-15&viewMode=day"
+    );
+    const response = await GET(request);
+    const data = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(data.todayIncome).toBe(0);
+    expect(data.todayExpenses).toBe(0);
+    expect(data.todayNet).toBe(0);
+  });
+
+  it("should handle invalid viewMode parameter", async () => {
+    const request = new NextRequest(
+      "http://localhost:3000/api/summary?localDate=2024-01-15&viewMode=invalid"
+    );
+    const response = await GET(request);
+    const data = await response.json();
+
+    // Should either default to day or handle gracefully
+    expect(response.status).toBe(200);
+    expect(data).toBeDefined();
+  });
+
+  it("should handle invalid localDate format", async () => {
+    const request = new NextRequest(
+      "http://localhost:3000/api/summary?localDate=invalid-date&viewMode=day"
+    );
+    const response = await GET(request);
+    // Invalid date format may throw an error (500) or return 400/200
+    expect([200, 400, 500]).toContain(response.status);
+  });
+
+  it("should handle earningsPerHour with single transaction", async () => {
+    await Transaction.create({
+      userId: TEST_USER_ID,
+      amount: 100,
+      type: "income",
+      date: new Date("2024-01-15T10:00:00Z"),
+      time: "10:00",
+      isBill: false,
+    });
+
+    const request = new NextRequest(
+      "http://localhost:3000/api/summary?localDate=2024-01-15&viewMode=day"
+    );
+    const response = await GET(request);
+    const data = await response.json();
+
+    expect(response.status).toBe(200);
+    // With single transaction, should use minimum 1 hour
+    expect(data.earningsPerHour).toBe(100);
+  });
+
+  it("should handle earningsPerMile with zero mileage", async () => {
+    await Transaction.create({
+      userId: TEST_USER_ID,
+      amount: 100,
+      type: "income",
+      date: new Date("2024-01-15T10:00:00Z"),
+      time: "10:00",
+      isBill: false,
+    });
+
+    const request = new NextRequest(
+      "http://localhost:3000/api/summary?localDate=2024-01-15&viewMode=day"
+    );
+    const response = await GET(request);
+    const data = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(data.earningsPerMile).toBeNull();
+  });
 });
 

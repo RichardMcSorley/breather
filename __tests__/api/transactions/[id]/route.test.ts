@@ -223,6 +223,116 @@ describe("PUT /api/transactions/[id]", () => {
     expect(response.status).toBe(404);
     expect(data.error).toBe("Transaction not found");
   });
+
+  it("should update isBill flag", async () => {
+    const transaction = await Transaction.create({
+      userId: TEST_USER_ID,
+      amount: 100,
+      type: "expense",
+      date: new Date("2024-01-15"),
+      time: "10:00",
+      isBill: false,
+    });
+
+    const request = new NextRequest(
+      `http://localhost:3000/api/transactions/${transaction._id}`,
+      {
+        method: "PUT",
+        body: JSON.stringify({
+          isBill: true,
+        }),
+      }
+    );
+
+    const response = await PUT(request, { params: { id: String(transaction._id) } });
+    const data = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(data.isBill).toBe(true);
+
+    // Verify in database
+    const updated = await Transaction.findById(transaction._id);
+    expect(updated?.isBill).toBe(true);
+  });
+
+  it("should update dueDate", async () => {
+    const transaction = await Transaction.create({
+      userId: TEST_USER_ID,
+      amount: 100,
+      type: "expense",
+      date: new Date("2024-01-15"),
+      time: "10:00",
+    });
+
+    const request = new NextRequest(
+      `http://localhost:3000/api/transactions/${transaction._id}`,
+      {
+        method: "PUT",
+        body: JSON.stringify({
+          dueDate: "2024-02-15",
+        }),
+      }
+    );
+
+    const response = await PUT(request, { params: { id: String(transaction._id) } });
+    const data = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(data.dueDate).toBe("2024-02-15");
+  });
+
+  it("should return 400 for invalid dueDate format", async () => {
+    const transaction = await Transaction.create({
+      userId: TEST_USER_ID,
+      amount: 100,
+      type: "expense",
+      date: new Date("2024-01-15"),
+      time: "10:00",
+    });
+
+    const request = new NextRequest(
+      `http://localhost:3000/api/transactions/${transaction._id}`,
+      {
+        method: "PUT",
+        body: JSON.stringify({
+          dueDate: "invalid-date",
+        }),
+      }
+    );
+
+    const response = await PUT(request, { params: { id: String(transaction._id) } });
+    const data = await response.json();
+
+    expect(response.status).toBe(400);
+    expect(data.error).toBe("Invalid dueDate format");
+  });
+
+  it("should handle very long field values", async () => {
+    const transaction = await Transaction.create({
+      userId: TEST_USER_ID,
+      amount: 100,
+      type: "income",
+      date: new Date("2024-01-15"),
+      time: "10:00",
+    });
+
+    const longNotes = "A".repeat(1000);
+    const request = new NextRequest(
+      `http://localhost:3000/api/transactions/${transaction._id}`,
+      {
+        method: "PUT",
+        body: JSON.stringify({
+          notes: longNotes,
+        }),
+      }
+    );
+
+    const response = await PUT(request, { params: { id: String(transaction._id) } });
+    const data = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(data.notes).toBe(longNotes);
+  });
 });
 
 describe("DELETE /api/transactions/[id]", () => {

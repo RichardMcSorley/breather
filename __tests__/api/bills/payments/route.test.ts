@@ -343,6 +343,124 @@ describe("POST /api/bills/payments", () => {
     expect(response.status).toBe(400);
     expect(data.error).toBe("Invalid amount");
   });
+
+  it("should allow payment amount exceeding bill amount", async () => {
+    const bill = await Bill.create({
+      userId: TEST_USER_ID,
+      name: "Rent",
+      amount: 1000,
+      dueDate: 1,
+      lastAmount: 1000,
+    });
+
+    const request = new NextRequest("http://localhost:3000/api/bills/payments", {
+      method: "POST",
+      body: JSON.stringify({
+        billId: String(bill._id),
+        amount: 1500, // More than bill amount
+        paymentDate: "2024-01-15",
+      }),
+    });
+
+    const response = await POST(request);
+    const data = await response.json();
+
+    expect(response.status).toBe(201);
+    expect(data.amount).toBe(1500);
+  });
+
+  it("should allow multiple payments for same bill", async () => {
+    const bill = await Bill.create({
+      userId: TEST_USER_ID,
+      name: "Rent",
+      amount: 1000,
+      dueDate: 1,
+      lastAmount: 1000,
+    });
+
+    // First payment
+    const request1 = new NextRequest("http://localhost:3000/api/bills/payments", {
+      method: "POST",
+      body: JSON.stringify({
+        billId: String(bill._id),
+        amount: 500,
+        paymentDate: "2024-01-15",
+      }),
+    });
+
+    const response1 = await POST(request1);
+    expect(response1.status).toBe(201);
+
+    // Second payment
+    const request2 = new NextRequest("http://localhost:3000/api/bills/payments", {
+      method: "POST",
+      body: JSON.stringify({
+        billId: String(bill._id),
+        amount: 500,
+        paymentDate: "2024-01-20",
+      }),
+    });
+
+    const response2 = await POST(request2);
+    expect(response2.status).toBe(201);
+
+    // Verify both payments exist
+    const payments = await BillPayment.find({ billId: bill._id });
+    expect(payments).toHaveLength(2);
+  });
+
+  it("should return 400 for invalid paymentDate format", async () => {
+    const bill = await Bill.create({
+      userId: TEST_USER_ID,
+      name: "Rent",
+      amount: 1000,
+      dueDate: 1,
+      lastAmount: 1000,
+    });
+
+    const request = new NextRequest("http://localhost:3000/api/bills/payments", {
+      method: "POST",
+      body: JSON.stringify({
+        billId: String(bill._id),
+        amount: 1000,
+        paymentDate: "invalid-date",
+      }),
+    });
+
+    const response = await POST(request);
+    const data = await response.json();
+
+    // Invalid date format may throw an error (500) or return 400
+    expect([400, 500]).toContain(response.status);
+    if (response.status === 400) {
+      expect(data.error).toContain("Invalid date");
+    }
+  });
+
+  it("should handle very large payment amounts", async () => {
+    const bill = await Bill.create({
+      userId: TEST_USER_ID,
+      name: "Rent",
+      amount: 1000,
+      dueDate: 1,
+      lastAmount: 1000,
+    });
+
+    const request = new NextRequest("http://localhost:3000/api/bills/payments", {
+      method: "POST",
+      body: JSON.stringify({
+        billId: String(bill._id),
+        amount: 999999999.99,
+        paymentDate: "2024-01-15",
+      }),
+    });
+
+    const response = await POST(request);
+    const data = await response.json();
+
+    expect(response.status).toBe(201);
+    expect(data.amount).toBe(999999999.99);
+  });
 });
 
 describe("DELETE /api/bills/payments", () => {

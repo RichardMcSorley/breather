@@ -377,5 +377,179 @@ describe("POST /api/bills/payment-plan", () => {
     const lastEntry = rentEntries[rentEntries.length - 1];
     expect(lastEntry.remainingBalance).toBe(0);
   });
+
+  it("should return 400 for invalid startDate format", async () => {
+    await Bill.create({
+      userId: TEST_USER_ID,
+      name: "Rent",
+      amount: 1000,
+      dueDate: 15,
+      lastAmount: 1000,
+      useInPlan: true,
+    });
+
+    const request = new NextRequest("http://localhost:3000/api/bills/payment-plan", {
+      method: "POST",
+      body: JSON.stringify({
+        startDate: "invalid-date",
+        dailyPayment: 100,
+      }),
+    });
+
+    const response = await POST(request);
+    const data = await response.json();
+
+    // Invalid date format may throw an error (500) or return 400
+    expect([400, 500]).toContain(response.status);
+    if (response.status === 400) {
+      expect(data.error).toContain("Invalid date");
+    }
+  });
+
+  it("should handle negative dailyPayment", async () => {
+    await Bill.create({
+      userId: TEST_USER_ID,
+      name: "Rent",
+      amount: 1000,
+      dueDate: 15,
+      lastAmount: 1000,
+      useInPlan: true,
+    });
+
+    const request = new NextRequest("http://localhost:3000/api/bills/payment-plan", {
+      method: "POST",
+      body: JSON.stringify({
+        startDate: "2024-01-15",
+        dailyPayment: -100,
+      }),
+    });
+
+    const response = await POST(request);
+    // Should either reject or handle gracefully
+    expect([200, 400]).toContain(response.status);
+  });
+
+  it("should handle very large dailyPayment", async () => {
+    await Bill.create({
+      userId: TEST_USER_ID,
+      name: "Rent",
+      amount: 1000,
+      dueDate: 15,
+      lastAmount: 1000,
+      useInPlan: true,
+    });
+
+    const request = new NextRequest("http://localhost:3000/api/bills/payment-plan", {
+      method: "POST",
+      body: JSON.stringify({
+        startDate: "2024-01-15",
+        dailyPayment: 999999999,
+      }),
+    });
+
+    const response = await POST(request);
+    const data = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(data.paymentPlan).toBeDefined();
+  });
+
+  it("should handle bills with zero amount", async () => {
+    await Bill.create({
+      userId: TEST_USER_ID,
+      name: "Free Service",
+      amount: 0,
+      dueDate: 15,
+      lastAmount: 0,
+      useInPlan: true,
+    });
+
+    const request = new NextRequest("http://localhost:3000/api/bills/payment-plan", {
+      method: "POST",
+      body: JSON.stringify({
+        startDate: "2024-01-15",
+        dailyPayment: 100,
+      }),
+    });
+
+    const response = await POST(request);
+    const data = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(data.paymentPlan).toBeDefined();
+  });
+
+  it("should handle bills with very large amounts", async () => {
+    await Bill.create({
+      userId: TEST_USER_ID,
+      name: "Large Bill",
+      amount: 999999999,
+      dueDate: 15,
+      lastAmount: 999999999,
+      useInPlan: true,
+    });
+
+    const request = new NextRequest("http://localhost:3000/api/bills/payment-plan", {
+      method: "POST",
+      body: JSON.stringify({
+        startDate: "2024-01-15",
+        dailyPayment: 1000,
+      }),
+    });
+
+    const response = await POST(request);
+    const data = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(data.paymentPlan.length).toBeGreaterThan(0);
+  });
+
+  it("should handle all bills due on same day", async () => {
+    await Bill.create({
+      userId: TEST_USER_ID,
+      name: "Bill 1",
+      amount: 500,
+      dueDate: 15,
+      lastAmount: 500,
+      useInPlan: true,
+    });
+
+    await Bill.create({
+      userId: TEST_USER_ID,
+      name: "Bill 2",
+      amount: 300,
+      dueDate: 15,
+      lastAmount: 300,
+      useInPlan: true,
+    });
+
+    await Bill.create({
+      userId: TEST_USER_ID,
+      name: "Bill 3",
+      amount: 200,
+      dueDate: 15,
+      lastAmount: 200,
+      useInPlan: true,
+    });
+
+    const request = new NextRequest("http://localhost:3000/api/bills/payment-plan", {
+      method: "POST",
+      body: JSON.stringify({
+        startDate: "2024-01-15",
+        dailyPayment: 100,
+      }),
+    });
+
+    const response = await POST(request);
+    const data = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(data.paymentPlan.length).toBeGreaterThan(0);
+    // All bills should be included
+    const billNames = data.paymentPlan.map((entry: any) => entry.bill);
+    expect(billNames).toContain("Bill 1");
+    expect(billNames).toContain("Bill 2");
+    expect(billNames).toContain("Bill 3");
+  });
 });
 

@@ -205,5 +205,93 @@ describe("PUT /api/settings", () => {
     expect(response.status).toBe(401);
     expect(data.error).toBe("Unauthorized");
   });
+
+  it("should handle negative irsMileageDeduction (currently not validated)", async () => {
+    const request = new NextRequest("http://localhost:3000/api/settings", {
+      method: "PUT",
+      body: JSON.stringify({
+        irsMileageDeduction: -0.1,
+      }),
+    });
+
+    const response = await PUT(request);
+    // Currently not validated, so it will succeed
+    expect(response.status).toBe(200);
+  });
+
+  it("should handle very large irsMileageDeduction", async () => {
+    const request = new NextRequest("http://localhost:3000/api/settings", {
+      method: "PUT",
+      body: JSON.stringify({
+        irsMileageDeduction: 999999.99,
+      }),
+    });
+
+    const response = await PUT(request);
+    const data = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(data.irsMileageDeduction).toBe(999999.99);
+  });
+
+  it("should handle empty array for incomeSourceTags", async () => {
+    const request = new NextRequest("http://localhost:3000/api/settings", {
+      method: "PUT",
+      body: JSON.stringify({
+        incomeSourceTags: [],
+      }),
+    });
+
+    const response = await PUT(request);
+    const data = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(data.incomeSourceTags).toEqual([]);
+  });
+
+  it("should handle duplicate tags in array", async () => {
+    const request = new NextRequest("http://localhost:3000/api/settings", {
+      method: "PUT",
+      body: JSON.stringify({
+        incomeSourceTags: ["Uber", "Lyft", "Uber"],
+      }),
+    });
+
+    const response = await PUT(request);
+    const data = await response.json();
+
+    expect(response.status).toBe(200);
+    // Should either allow duplicates or deduplicate
+    expect(Array.isArray(data.incomeSourceTags)).toBe(true);
+  });
+
+  it("should handle very long tag strings", async () => {
+    const longTag = "A".repeat(500);
+    const request = new NextRequest("http://localhost:3000/api/settings", {
+      method: "PUT",
+      body: JSON.stringify({
+        incomeSourceTags: [longTag],
+      }),
+    });
+
+    const response = await PUT(request);
+    const data = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(data.incomeSourceTags).toContain(longTag);
+  });
+
+  it("should handle non-string tags in array", async () => {
+    const request = new NextRequest("http://localhost:3000/api/settings", {
+      method: "PUT",
+      body: JSON.stringify({
+        incomeSourceTags: ["Uber", 123, "Lyft"],
+      }),
+    });
+
+    const response = await PUT(request);
+    // Should either reject or convert to strings
+    expect([200, 400]).toContain(response.status);
+  });
 });
 

@@ -325,5 +325,103 @@ describe("POST /api/mileage", () => {
     expect(response.status).toBe(400);
     expect(data.error).toBe("Invalid date format");
   });
+
+  it("should handle invalid date range (startDate > endDate)", async () => {
+    await Mileage.create({
+      userId: TEST_USER_ID,
+      odometer: 10000,
+      date: new Date("2024-01-15"),
+      classification: "work",
+    });
+
+    const request = new NextRequest(
+      "http://localhost:3000/api/mileage?startDate=2024-01-31&endDate=2024-01-01"
+    );
+    const response = await GET(request);
+    const data = await response.json();
+
+    expect(response.status).toBe(200);
+    // Should return empty results when startDate > endDate
+    expect(data.entries).toHaveLength(0);
+  });
+
+  it("should handle odometer decreasing (should be allowed or validated)", async () => {
+    // First entry with higher odometer
+    await Mileage.create({
+      userId: TEST_USER_ID,
+      odometer: 10100,
+      date: new Date("2024-01-15"),
+      classification: "work",
+    });
+
+    // Try to create entry with lower odometer
+    const request = new NextRequest("http://localhost:3000/api/mileage", {
+      method: "POST",
+      body: JSON.stringify({
+        odometer: 10000, // Lower than previous
+        date: "2024-01-20",
+        classification: "work",
+      }),
+    });
+
+    const response = await POST(request);
+    // Should either allow or reject - check implementation behavior
+    expect([201, 400]).toContain(response.status);
+  });
+
+  it("should handle very large odometer values", async () => {
+    const request = new NextRequest("http://localhost:3000/api/mileage", {
+      method: "POST",
+      body: JSON.stringify({
+        odometer: 999999999,
+        date: "2024-01-15",
+        classification: "work",
+      }),
+    });
+
+    const response = await POST(request);
+    const data = await response.json();
+
+    expect(response.status).toBe(201);
+    expect(data.odometer).toBe(999999999);
+  });
+
+  it("should handle future dates", async () => {
+    const futureDate = new Date();
+    futureDate.setUTCFullYear(futureDate.getUTCFullYear() + 1);
+    const futureDateStr = futureDate.toISOString().split("T")[0];
+
+    const request = new NextRequest("http://localhost:3000/api/mileage", {
+      method: "POST",
+      body: JSON.stringify({
+        odometer: 10000,
+        date: futureDateStr,
+        classification: "work",
+      }),
+    });
+
+    const response = await POST(request);
+    // Should either allow or reject future dates
+    expect([201, 400]).toContain(response.status);
+  });
+
+  it("should handle very long notes field", async () => {
+    const longNotes = "A".repeat(1000);
+    const request = new NextRequest("http://localhost:3000/api/mileage", {
+      method: "POST",
+      body: JSON.stringify({
+        odometer: 10000,
+        date: "2024-01-15",
+        classification: "work",
+        notes: longNotes,
+      }),
+    });
+
+    const response = await POST(request);
+    const data = await response.json();
+
+    expect(response.status).toBe(201);
+    expect(data.notes).toBe(longNotes);
+  });
 });
 

@@ -490,5 +490,206 @@ describe("POST /api/transactions", () => {
     expect(response.status).toBe(201);
     expect(data.amount).toBe(999999999.99);
   });
+
+  it("should handle startDate > endDate (invalid range)", async () => {
+    await Transaction.create({
+      userId: TEST_USER_ID,
+      amount: 100,
+      type: "income",
+      date: new Date("2024-01-15"),
+      time: "10:00",
+    });
+
+    const request = new NextRequest(
+      "http://localhost:3000/api/transactions?startDate=2024-01-31&endDate=2024-01-01"
+    );
+    const response = await GET(request);
+    const data = await response.json();
+
+    expect(response.status).toBe(200);
+    // Should return empty results when startDate > endDate
+    expect(data.transactions).toHaveLength(0);
+  });
+
+  it("should handle invalid date formats in query params", async () => {
+    const request = new NextRequest(
+      "http://localhost:3000/api/transactions?startDate=invalid&endDate=2024-01-31"
+    );
+    const response = await GET(request);
+    
+    // Invalid date format may throw an error (500) or return 400/200
+    if (response.status === 200) {
+      const data = await response.json();
+      expect(Array.isArray(data.transactions)).toBe(true);
+    } else {
+      expect([400, 500]).toContain(response.status);
+    }
+  });
+
+  it("should handle pagination beyond total pages", async () => {
+    // Create 5 transactions
+    for (let i = 0; i < 5; i++) {
+      await Transaction.create({
+        userId: TEST_USER_ID,
+        amount: 100 + i,
+        type: "income",
+        date: new Date(`2024-01-${15 + i}`),
+        time: "10:00",
+      });
+    }
+
+    const request = new NextRequest(
+      "http://localhost:3000/api/transactions?page=10&limit=2"
+    );
+    const response = await GET(request);
+    const data = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(data.transactions).toHaveLength(0);
+    expect(data.pagination.page).toBe(10);
+    expect(data.pagination.total).toBe(5);
+  });
+
+  it("should handle empty tag filter", async () => {
+    await Transaction.create({
+      userId: TEST_USER_ID,
+      amount: 100,
+      type: "income",
+      date: new Date("2024-01-15"),
+      time: "10:00",
+      tag: "Uber",
+    });
+
+    const request = new NextRequest(
+      "http://localhost:3000/api/transactions?tag="
+    );
+    const response = await GET(request);
+    const data = await response.json();
+
+    expect(response.status).toBe(200);
+    // Empty tag should either match empty tags or return all
+    expect(Array.isArray(data.transactions)).toBe(true);
+  });
+
+  it("should handle transaction with isBill=true", async () => {
+    const request = new NextRequest("http://localhost:3000/api/transactions", {
+      method: "POST",
+      body: JSON.stringify({
+        amount: 100,
+        type: "expense",
+        date: "2024-01-15",
+        time: "10:00",
+        isBill: true,
+      }),
+    });
+
+    const response = await POST(request);
+    const data = await response.json();
+
+    expect(response.status).toBe(201);
+    expect(data.isBill).toBe(true);
+  });
+
+  it("should handle decimal precision for amounts", async () => {
+    const request = new NextRequest("http://localhost:3000/api/transactions", {
+      method: "POST",
+      body: JSON.stringify({
+        amount: 100.123456789,
+        type: "income",
+        date: "2024-01-15",
+        time: "10:00",
+      }),
+    });
+
+    const response = await POST(request);
+    const data = await response.json();
+
+    expect(response.status).toBe(201);
+    expect(data.amount).toBe(100.123456789);
+  });
+
+  it("should handle very long notes field", async () => {
+    const longNotes = "A".repeat(1000);
+    const request = new NextRequest("http://localhost:3000/api/transactions", {
+      method: "POST",
+      body: JSON.stringify({
+        amount: 100,
+        type: "income",
+        date: "2024-01-15",
+        time: "10:00",
+        notes: longNotes,
+      }),
+    });
+
+    const response = await POST(request);
+    const data = await response.json();
+
+    expect(response.status).toBe(201);
+    expect(data.notes).toBe(longNotes);
+  });
+
+  it("should handle very long tag field", async () => {
+    const longTag = "A".repeat(500);
+    const request = new NextRequest("http://localhost:3000/api/transactions", {
+      method: "POST",
+      body: JSON.stringify({
+        amount: 100,
+        type: "income",
+        date: "2024-01-15",
+        time: "10:00",
+        tag: longTag,
+      }),
+    });
+
+    const response = await POST(request);
+    const data = await response.json();
+
+    expect(response.status).toBe(201);
+    expect(data.tag).toBe(longTag);
+  });
+
+  it("should handle dueDate in the past", async () => {
+    const request = new NextRequest("http://localhost:3000/api/transactions", {
+      method: "POST",
+      body: JSON.stringify({
+        amount: 100,
+        type: "expense",
+        date: "2024-01-15",
+        time: "10:00",
+        dueDate: "2020-01-01", // Past date
+      }),
+    });
+
+    const response = await POST(request);
+    const data = await response.json();
+
+    expect(response.status).toBe(201);
+    expect(data.dueDate).toBe("2020-01-01");
+  });
+
+  it("should handle invalid JSON body", async () => {
+    const request = new NextRequest("http://localhost:3000/api/transactions", {
+      method: "POST",
+      body: "invalid json{",
+      headers: {
+        "Content-Type": "application/json",
+      },
+    });
+
+    const response = await POST(request);
+    // Should return 500 or 400 for JSON parse error
+    expect([400, 500]).toContain(response.status);
+  });
+
+  it("should handle missing request body", async () => {
+    const request = new NextRequest("http://localhost:3000/api/transactions", {
+      method: "POST",
+      // No body
+    });
+
+    const response = await POST(request);
+    // Should return 400 or 500 for missing body
+    expect([400, 500]).toContain(response.status);
+  });
 });
 

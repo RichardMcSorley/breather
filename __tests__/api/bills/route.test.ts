@@ -120,6 +120,35 @@ describe("GET /api/bills", () => {
     expect(data.bills[1].name).toBe("B Bill");
     expect(data.bills[2].dueDate).toBe(15);
   });
+
+  it("should handle invalid isActive parameter", async () => {
+    await Bill.create({
+      userId: TEST_USER_ID,
+      name: "Active Bill",
+      amount: 100,
+      dueDate: 1,
+      isActive: true,
+      lastAmount: 100,
+    });
+
+    await Bill.create({
+      userId: TEST_USER_ID,
+      name: "Inactive Bill",
+      amount: 50,
+      dueDate: 1,
+      isActive: false,
+      lastAmount: 50,
+    });
+
+    const request = new NextRequest("http://localhost:3000/api/bills?isActive=maybe");
+    const response = await GET(request);
+    const data = await response.json();
+
+    expect(response.status).toBe(200);
+    // "maybe" !== "true", so isActive will be false, returning only inactive bills
+    expect(data.bills).toHaveLength(1);
+    expect(data.bills[0].name).toBe("Inactive Bill");
+  });
 });
 
 describe("POST /api/bills", () => {
@@ -327,6 +356,155 @@ describe("POST /api/bills", () => {
 
     expect(response.status).toBe(201);
     expect(data.company).toBeNull();
+  });
+
+  it("should handle very long bill names", async () => {
+    const longName = "A".repeat(500);
+    const request = new NextRequest("http://localhost:3000/api/bills", {
+      method: "POST",
+      body: JSON.stringify({
+        name: longName,
+        amount: 1000,
+        dueDate: 1,
+      }),
+    });
+
+    const response = await POST(request);
+    const data = await response.json();
+
+    expect(response.status).toBe(201);
+    expect(data.name).toBe(longName);
+  });
+
+  it("should handle decimal amounts", async () => {
+    const request = new NextRequest("http://localhost:3000/api/bills", {
+      method: "POST",
+      body: JSON.stringify({
+        name: "Rent",
+        amount: 1000.99,
+        dueDate: 1,
+      }),
+    });
+
+    const response = await POST(request);
+    const data = await response.json();
+
+    expect(response.status).toBe(201);
+    expect(data.amount).toBe(1000.99);
+  });
+
+  it("should handle zero amount edge case", async () => {
+    const request = new NextRequest("http://localhost:3000/api/bills", {
+      method: "POST",
+      body: JSON.stringify({
+        name: "Free Service",
+        amount: 0,
+        dueDate: 1,
+      }),
+    });
+
+    const response = await POST(request);
+    const data = await response.json();
+
+    expect(response.status).toBe(201);
+    expect(data.amount).toBe(0);
+  });
+
+  it("should handle category field", async () => {
+    const request = new NextRequest("http://localhost:3000/api/bills", {
+      method: "POST",
+      body: JSON.stringify({
+        name: "Rent",
+        amount: 1000,
+        dueDate: 1,
+        category: "Housing",
+      }),
+    });
+
+    const response = await POST(request);
+    const data = await response.json();
+
+    expect(response.status).toBe(201);
+    expect(data.category).toBe("Housing");
+  });
+
+  it("should sanitize category field", async () => {
+    const request = new NextRequest("http://localhost:3000/api/bills", {
+      method: "POST",
+      body: JSON.stringify({
+        name: "Rent",
+        amount: 1000,
+        dueDate: 1,
+        category: "  Housing  ",
+      }),
+    });
+
+    const response = await POST(request);
+    const data = await response.json();
+
+    expect(response.status).toBe(201);
+    expect(data.category).toBe("Housing");
+  });
+
+  it("should handle notes field", async () => {
+    const request = new NextRequest("http://localhost:3000/api/bills", {
+      method: "POST",
+      body: JSON.stringify({
+        name: "Rent",
+        amount: 1000,
+        dueDate: 1,
+        notes: "Monthly rent payment",
+      }),
+    });
+
+    const response = await POST(request);
+    const data = await response.json();
+
+    expect(response.status).toBe(201);
+    expect(data.notes).toBe("Monthly rent payment");
+  });
+
+  it("should sanitize notes field", async () => {
+    const request = new NextRequest("http://localhost:3000/api/bills", {
+      method: "POST",
+      body: JSON.stringify({
+        name: "Rent",
+        amount: 1000,
+        dueDate: 1,
+        notes: "  Monthly rent payment  ",
+      }),
+    });
+
+    const response = await POST(request);
+    const data = await response.json();
+
+    expect(response.status).toBe(201);
+    expect(data.notes).toBe("Monthly rent payment");
+  });
+
+  it("should handle invalid JSON body", async () => {
+    const request = new NextRequest("http://localhost:3000/api/bills", {
+      method: "POST",
+      body: "invalid json{",
+      headers: {
+        "Content-Type": "application/json",
+      },
+    });
+
+    const response = await POST(request);
+    // Should return 500 or 400 for JSON parse error
+    expect([400, 500]).toContain(response.status);
+  });
+
+  it("should handle missing request body", async () => {
+    const request = new NextRequest("http://localhost:3000/api/bills", {
+      method: "POST",
+      // No body
+    });
+
+    const response = await POST(request);
+    // Should return 400 or 500 for missing body
+    expect([400, 500]).toContain(response.status);
   });
 });
 

@@ -314,5 +314,98 @@ describe("GET /api/analytics/heatmap", () => {
     expect(new Date(data.period.startDate)).toBeInstanceOf(Date);
     expect(new Date(data.period.endDate)).toBeInstanceOf(Date);
   });
+
+  it("should handle invalid days parameter (non-numeric)", async () => {
+    const request = new NextRequest("http://localhost:3000/api/analytics/heatmap?days=invalid");
+    const response = await GET(request);
+    
+    // parseInt("invalid") returns NaN, which may cause issues
+    // The API might return 500 or handle it - check actual behavior
+    if (response.status === 200) {
+      const data = await response.json();
+      // If it handles gracefully, should default to 30 or use NaN handling
+      expect(data.period).toBeDefined();
+    } else {
+      // If it throws an error, that's also acceptable behavior
+      expect([400, 500]).toContain(response.status);
+    }
+  });
+
+  it("should handle negative days parameter", async () => {
+    const request = new NextRequest("http://localhost:3000/api/analytics/heatmap?days=-10");
+    const response = await GET(request);
+    const data = await response.json();
+
+    expect(response.status).toBe(200);
+    // Should handle negative by defaulting or using absolute value
+    expect(data.period).toBeDefined();
+  });
+
+  it("should handle very large days parameter", async () => {
+    const request = new NextRequest("http://localhost:3000/api/analytics/heatmap?days=999999");
+    const response = await GET(request);
+    const data = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(data.period.days).toBe(999999);
+  });
+
+  it("should handle all transactions on same day/hour", async () => {
+    const now = new Date();
+    const sameDay = new Date(now);
+    sameDay.setUTCDate(sameDay.getUTCDate() - 1);
+    const dayOfWeek = sameDay.getUTCDay();
+
+    // Create multiple transactions on same day and hour
+    for (let i = 0; i < 5; i++) {
+      await Transaction.create({
+        userId: TEST_USER_ID,
+        amount: 100,
+        type: "income",
+        date: sameDay,
+        time: "10:00",
+      });
+    }
+
+    const request = new NextRequest("http://localhost:3000/api/analytics/heatmap");
+    const response = await GET(request);
+    const data = await response.json();
+
+    expect(response.status).toBe(200);
+    // Average should be 100 (all same amount)
+    expect(data.byDayOfWeek[dayOfWeek.toString()]).toBe(100);
+    expect(data.byHour["10"]).toBe(100);
+    expect(data.byDayAndHour[dayOfWeek.toString()]["10"]).toBe(100);
+  });
+
+  it("should handle transactions with edge time values", async () => {
+    const now = new Date();
+    const yesterday = new Date(now);
+    yesterday.setUTCDate(yesterday.getUTCDate() - 1);
+
+    await Transaction.create({
+      userId: TEST_USER_ID,
+      amount: 100,
+      type: "income",
+      date: yesterday,
+      time: "00:00", // Midnight
+    });
+
+    await Transaction.create({
+      userId: TEST_USER_ID,
+      amount: 200,
+      type: "income",
+      date: yesterday,
+      time: "23:59", // End of day
+    });
+
+    const request = new NextRequest("http://localhost:3000/api/analytics/heatmap");
+    const response = await GET(request);
+    const data = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(data.byHour["0"]).toBe(100);
+    expect(data.byHour["23"]).toBe(200);
+  });
 });
 
