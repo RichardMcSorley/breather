@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import Modal from "./ui/Modal";
 import Input from "./ui/Input";
 import Button from "./ui/Button";
@@ -57,27 +57,21 @@ export default function AddTransactionModal({
   const [dataLoaded, setDataLoaded] = useState(false);
   const amountInputRef = useRef<HTMLInputElement | null>(null);
 
-  useEffect(() => {
-    if (transactionId) {
-      setDataLoaded(false);
-      fetchTransaction();
-    } else {
-      resetForm();
-      setDataLoaded(true);
-    }
-  }, [transactionId, isOpen, initialAmount, initialNotes, initialIsBill]);
+  const resetForm = useCallback(() => {
+    const now = new Date();
+    setFormData({
+      amount: initialAmount?.toString() || "",
+      date: formatLocalDate(now),
+      time: now.toTimeString().slice(0, 5),
+      notes: initialNotes || "",
+      tag: "",
+      isBill: initialIsBill || false,
+      dueDate: "",
+    });
+    setCustomTag("");
+  }, [initialAmount, initialNotes, initialIsBill]);
 
-  useEffect(() => {
-    if (!isOpen || !dataLoaded) return;
-    // Use setTimeout to ensure the modal is fully rendered and input is visible
-    const timeoutId = setTimeout(() => {
-      amountInputRef.current?.focus();
-      amountInputRef.current?.select();
-    }, 100);
-    return () => clearTimeout(timeoutId);
-  }, [isOpen, dataLoaded]);
-
-  const fetchTransaction = async () => {
+  const fetchTransaction = useCallback(async () => {
     try {
       const res = await fetch(`/api/transactions/${transactionId}`);
       if (res.ok) {
@@ -98,21 +92,27 @@ export default function AddTransactionModal({
       console.error("Error fetching transaction:", error);
       setDataLoaded(true);
     }
-  };
+  }, [transactionId, type]);
 
-  const resetForm = () => {
-    const now = new Date();
-    setFormData({
-      amount: initialAmount?.toString() || "",
-      date: formatLocalDate(now),
-      time: now.toTimeString().slice(0, 5),
-      notes: initialNotes || "",
-      tag: "",
-      isBill: initialIsBill || false,
-      dueDate: "",
-    });
-    setCustomTag("");
-  };
+  useEffect(() => {
+    if (transactionId) {
+      setDataLoaded(false);
+      fetchTransaction();
+    } else {
+      resetForm();
+      setDataLoaded(true);
+    }
+  }, [transactionId, isOpen, initialAmount, initialNotes, initialIsBill, fetchTransaction, resetForm]);
+
+  useEffect(() => {
+    if (!isOpen || !dataLoaded) return;
+    // Use setTimeout to ensure the modal is fully rendered and input is visible
+    const timeoutId = setTimeout(() => {
+      amountInputRef.current?.focus();
+      amountInputRef.current?.select();
+    }, 100);
+    return () => clearTimeout(timeoutId);
+  }, [isOpen, dataLoaded]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
