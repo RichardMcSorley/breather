@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { useSession } from "next-auth/react";
 import Layout from "@/components/Layout";
 import Card from "@/components/ui/Card";
@@ -134,9 +134,18 @@ export default function BillsPage() {
 
   const allPayments = paymentsData?.payments || [];
   const [editingPayment, setEditingPayment] = useState<any | null>(null);
+  
+  // Track if we've already done the initial auto-switch to plan view
+  const hasAutoSwitchedRef = useRef(false);
 
-  // Auto-switch to plan view if we have a saved config and plan data
+  // Auto-switch to plan view once on initial load if we have a saved config and plan data
   useEffect(() => {
+    // Only auto-switch once, and only if we haven't already done it
+    if (hasAutoSwitchedRef.current) return;
+    
+    // Don't run if modal is open - user might be editing the config
+    if (showPaymentPlanModal) return;
+    
     if (bills.length > 0 && !loading && paymentPlan.length > 0 && viewMode === "bills") {
       // If we have a saved config and plan data exists, switch to plan view
       const savedConfig = localStorage.getItem("bills_payment_plan_config");
@@ -146,13 +155,14 @@ export default function BillsPage() {
           if (config.startDate && config.dailyPayment) {
             // Only auto-switch if we actually have plan data
             setViewMode("plan");
+            hasAutoSwitchedRef.current = true;
           }
         } catch {
           // Ignore parse errors
         }
       }
     }
-  }, [bills.length, loading, paymentPlan.length, viewMode]);
+  }, [bills.length, loading, paymentPlan.length, viewMode, showPaymentPlanModal]);
 
   const savePaymentPlanConfig = (config: { startDate: string; dailyPayment: string }) => {
     try {
