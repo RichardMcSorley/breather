@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from "react";
 import { useSession } from "next-auth/react";
-import { useRouter } from "next/navigation";
 import Link from "next/link";
 import Layout from "@/components/Layout";
 import Card from "@/components/ui/Card";
@@ -44,7 +43,6 @@ interface PaymentPlanEntry {
 
 export default function DashboardPage() {
   const { data: session } = useSession();
-  const router = useRouter();
   const [summary, setSummary] = useState<Summary | null>(null);
   const [loading, setLoading] = useState(true);
   const [showAddModal, setShowAddModal] = useState(false);

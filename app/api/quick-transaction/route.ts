@@ -1,3 +1,6 @@
+/**
+ * NOTE: This API route has no references in the codebase but is used externally by the user's mobile app.
+ */
 import { NextRequest, NextResponse } from "next/server";
 import connectDB from "@/lib/mongodb";
 import Transaction from "@/lib/models/Transaction";
