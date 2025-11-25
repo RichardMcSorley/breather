@@ -598,9 +598,16 @@ export default function BillsPage() {
               .sort(([dateA], [dateB]) => dateA.localeCompare(dateB))
               .map(([date, entries]) => (
                 <Card key={date} className="p-4">
-                  <h3 className="font-bold text-lg text-gray-900 dark:text-white mb-3">
-                    {formatDate(date)}
-                  </h3>
+                  <div className="flex items-center justify-between mb-3">
+                    <h3 className="font-bold text-lg text-gray-900 dark:text-white">
+                      {formatDate(date)}
+                    </h3>
+                    {entries.length > 0 && entries[0].dueDate && (
+                      <div className="text-sm text-gray-600 dark:text-gray-400">
+                        Due: {formatDate(entries[0].dueDate)}
+                      </div>
+                    )}
+                  </div>
                   <div className="space-y-3">
                     {entries.map((entry, idx) => {
                       const paymentKey = `${entry.billId}-${entry.date}`;
@@ -628,11 +635,6 @@ export default function BillsPage() {
                                 {entry.bill}
                               </div>
                               <div className="text-sm text-gray-600 dark:text-gray-400">
-                                {entry.dueDate && (
-                                  <>
-                                    Due: {formatDate(entry.dueDate)} • 
-                                  </>
-                                )}
                                 Remaining: {formatCurrency(entry.remainingBalance)}
                               </div>
                             </div>
