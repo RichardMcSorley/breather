@@ -12,6 +12,7 @@ interface PaymentPlanEntry {
   billId: string;
   payment: number;
   remainingBalance: number;
+  dueDate: string;
 }
 
 export async function POST(request: NextRequest) {
@@ -106,6 +107,7 @@ export async function POST(request: NextRequest) {
             billId: bill.billId,
             payment: Math.round(payment * 100) / 100,
             remainingBalance: Math.round(bill.amountDue * 100) / 100,
+            dueDate: bill.dueDate,
           });
         }
       }

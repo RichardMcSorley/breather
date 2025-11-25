@@ -35,6 +35,7 @@ interface PaymentPlanEntry {
   billId: string;
   payment: number;
   remainingBalance: number;
+  dueDate?: string;
 }
 
 export default function DashboardPage() {

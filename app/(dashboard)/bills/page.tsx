@@ -26,6 +26,7 @@ interface PaymentPlanEntry {
   billId: string;
   payment: number;
   remainingBalance: number;
+  dueDate?: string;
 }
 
 export default function BillsPage() {
@@ -627,6 +628,11 @@ export default function BillsPage() {
                                 {entry.bill}
                               </div>
                               <div className="text-sm text-gray-600 dark:text-gray-400">
+                                {entry.dueDate && (
+                                  <>
+                                    Due: {formatDate(entry.dueDate)} • 
+                                  </>
+                                )}
                                 Remaining: {formatCurrency(entry.remainingBalance)}
                               </div>
                             </div>
