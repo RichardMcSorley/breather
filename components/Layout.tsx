@@ -19,7 +19,7 @@ export default function Layout({ children }: LayoutProps) {
 
   const navItems = [
     { href: "/dashboard", label: "Dashboard", icon: "📊" },
-    { href: "/history", label: "Transactions", icon: "🕐" },
+    { href: "/history", label: "Logs", icon: "🕐" },
     { href: "/bills", label: "Bills", icon: "📄" },
     { href: "/mileage", label: "Mileage", icon: "🚗" },
   ];

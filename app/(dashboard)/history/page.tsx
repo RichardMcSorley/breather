@@ -149,7 +149,7 @@ export default function HistoryPage() {
     <Layout>
       <div className="mb-6">
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-2xl font-bold text-gray-900 dark:text-white">History</h2>
+          <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Income/Expense Logs</h2>
         </div>
 
         <div className="flex gap-2 mb-4 overflow-x-auto">
