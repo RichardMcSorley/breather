@@ -44,6 +44,7 @@ export default function BillsPage() {
   const [groupedPaymentPlan, setGroupedPaymentPlan] = useState<Record<string, PaymentPlanEntry[]>>({});
   const [viewMode, setViewMode] = useState<"bills" | "plan">("bills");
   const [planLoaded, setPlanLoaded] = useState(false);
+  const [hidePaidEntries, setHidePaidEntries] = useState(false);
   const [formData, setFormData] = useState({
     name: "",
     amount: "",
@@ -594,22 +595,55 @@ export default function BillsPage() {
               No payment plan generated. Click "Generate Plan" to create one.
             </div>
           ) : (
+            <>
+              {paymentPlan.length > 0 && (
+                <div className="flex items-center justify-end mb-2">
+                  <button
+                    onClick={() => setHidePaidEntries(!hidePaidEntries)}
+                    className={`px-3 py-1.5 rounded-lg text-sm font-medium min-h-[44px] ${
+                      hidePaidEntries
+                        ? "bg-green-600 text-white"
+                        : "bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300"
+                    }`}
+                  >
+                    {hidePaidEntries ? "Show All" : "Hide Paid"}
+                  </button>
+                </div>
+              )}
+            </>
+          )}
+          {Object.keys(groupedPaymentPlan).length > 0 && (
             Object.entries(groupedPaymentPlan)
               .sort(([dateA], [dateB]) => dateA.localeCompare(dateB))
-              .map(([date, entries]) => (
+              .map(([date, entries]) => {
+                // Filter out fully paid entries only if hidePaidEntries filter is active
+                const filteredEntries = hidePaidEntries
+                  ? entries.filter((entry) => {
+                      const paymentKey = `${entry.billId}-${entry.date}`;
+                      const paidAmount = paidPayments[paymentKey] || 0;
+                      return paidAmount < entry.payment;
+                    })
+                  : entries;
+
+                // Don't render the card if all entries are filtered out
+                if (filteredEntries.length === 0) {
+                  return null;
+                }
+
+                return (
                 <Card key={date} className="p-4">
                   <div className="flex items-center justify-between mb-3">
                     <h3 className="font-bold text-lg text-gray-900 dark:text-white">
                       {formatDate(date)}
                     </h3>
-                    {entries.length > 0 && entries[0].dueDate && (
+                    {filteredEntries.length > 0 && filteredEntries[0].dueDate && (
                       <div className="text-sm text-gray-600 dark:text-gray-400">
-                        Due: {formatDate(entries[0].dueDate)}
+                        Due: {formatDate(filteredEntries[0].dueDate)}
                       </div>
                     )}
                   </div>
                   <div className="space-y-3">
-                    {entries.map((entry, idx) => {
+                    {filteredEntries.map((entry, idx) => {
                       const paymentKey = `${entry.billId}-${entry.date}`;
                       const paidAmount = paidPayments[paymentKey] || 0;
                       const remainingToPay = Math.max(0, entry.payment - paidAmount);
@@ -733,7 +767,9 @@ export default function BillsPage() {
                     })}
                   </div>
                 </Card>
-              ))
+                );
+              })
+              .filter(Boolean)
           )}
         </div>
       )}
