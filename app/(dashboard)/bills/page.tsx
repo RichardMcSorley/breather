@@ -987,4 +987,3 @@ export default function BillsPage() {
     </Layout>
   );
 }
-
