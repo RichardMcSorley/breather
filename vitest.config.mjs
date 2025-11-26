@@ -8,7 +8,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 export default defineConfig({
   plugins: [react()],
   esbuild: {
-    target: "node18",
+    target: "node20",
   },
   test: {
     globals: true,

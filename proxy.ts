@@ -1,6 +1,6 @@
 import { withAuth } from "next-auth/middleware";
 
-export default withAuth({
+export const proxy = withAuth({
   pages: {
     signIn: "/login",
   },
@@ -9,5 +9,4 @@ export default withAuth({
 export const config = {
   matcher: ["/dashboard/:path*", "/history/:path*", "/bills/:path*", "/mileage/:path*", "/configuration/:path*"],
 };
-
 

@@ -42,7 +42,7 @@ describe("PUT /api/bills/[id]", () => {
       body: JSON.stringify({ name: "Updated Rent" }),
     });
 
-    const response = await PUT(request, { params: { id: String(bill._id) } });
+    const response = await PUT(request, { params: Promise.resolve({ id: String(bill._id) }) });
     const data = await response.json();
 
     expect(response.status).toBe(401);
@@ -55,7 +55,7 @@ describe("PUT /api/bills/[id]", () => {
       body: JSON.stringify({ name: "Updated Rent" }),
     });
 
-    const response = await PUT(request, { params: { id: "invalid" } });
+    const response = await PUT(request, { params: Promise.resolve({ id: "invalid" }) });
     const data = await response.json();
 
     expect(response.status).toBe(400);
@@ -80,7 +80,7 @@ describe("PUT /api/bills/[id]", () => {
       }),
     });
 
-    const response = await PUT(request, { params: { id: String(bill._id) } });
+    const response = await PUT(request, { params: Promise.resolve({ id: String(bill._id) }) });
     const data = await response.json();
 
     expect(response.status).toBe(200);
@@ -112,7 +112,7 @@ describe("PUT /api/bills/[id]", () => {
       }),
     });
 
-    const response = await PUT(request, { params: { id: String(bill._id) } });
+    const response = await PUT(request, { params: Promise.resolve({ id: String(bill._id) }) });
     const data = await response.json();
 
     expect(response.status).toBe(200);
@@ -137,7 +137,7 @@ describe("PUT /api/bills/[id]", () => {
       }),
     });
 
-    const response = await PUT(request, { params: { id: String(bill._id) } });
+    const response = await PUT(request, { params: Promise.resolve({ id: String(bill._id) }) });
     const data = await response.json();
 
     expect(response.status).toBe(400);
@@ -160,7 +160,7 @@ describe("PUT /api/bills/[id]", () => {
       }),
     });
 
-    const response = await PUT(request, { params: { id: String(bill._id) } });
+    const response = await PUT(request, { params: Promise.resolve({ id: String(bill._id) }) });
     const data = await response.json();
 
     expect(response.status).toBe(400);
@@ -183,7 +183,7 @@ describe("PUT /api/bills/[id]", () => {
       }),
     });
 
-    const response = await PUT(request, { params: { id: String(bill._id) } });
+    const response = await PUT(request, { params: Promise.resolve({ id: String(bill._id) }) });
     const data = await response.json();
 
     expect(response.status).toBe(400);
@@ -206,7 +206,7 @@ describe("PUT /api/bills/[id]", () => {
       }),
     });
 
-    const response = await PUT(request, { params: { id: String(bill._id) } });
+    const response = await PUT(request, { params: Promise.resolve({ id: String(bill._id) }) });
     const data = await response.json();
 
     expect(response.status).toBe(404);
@@ -226,7 +226,7 @@ describe("PUT /api/bills/[id]", () => {
       }),
     });
 
-    const response = await PUT(request, { params: { id: fakeId } });
+    const response = await PUT(request, { params: Promise.resolve({ id: fakeId }) });
     const data = await response.json();
 
     expect(response.status).toBe(404);
@@ -252,7 +252,7 @@ describe("PUT /api/bills/[id]", () => {
       }),
     });
 
-    const response = await PUT(request, { params: { id: String(bill._id) } });
+    const response = await PUT(request, { params: Promise.resolve({ id: String(bill._id) }) });
     const data = await response.json();
 
     expect(response.status).toBe(200);
@@ -280,7 +280,7 @@ describe("PUT /api/bills/[id]", () => {
       }),
     });
 
-    const response = await PUT(request, { params: { id: String(bill._id) } });
+    const response = await PUT(request, { params: Promise.resolve({ id: String(bill._id) }) });
     const data = await response.json();
 
     expect(response.status).toBe(200);
@@ -305,7 +305,7 @@ describe("PUT /api/bills/[id]", () => {
       }),
     });
 
-    const response = await PUT(request, { params: { id: String(bill._id) } });
+    const response = await PUT(request, { params: Promise.resolve({ id: String(bill._id) }) });
     const data = await response.json();
 
     expect(response.status).toBe(200);
@@ -328,7 +328,7 @@ describe("PUT /api/bills/[id]", () => {
       }),
     });
 
-    const response = await PUT(request, { params: { id: String(bill._id) } });
+    const response = await PUT(request, { params: Promise.resolve({ id: String(bill._id) }) });
     const data = await response.json();
 
     expect(response.status).toBe(200);
@@ -352,7 +352,7 @@ describe("PUT /api/bills/[id]", () => {
       }),
     });
 
-    const response = await PUT(request, { params: { id: String(bill._id) } });
+    const response = await PUT(request, { params: Promise.resolve({ id: String(bill._id) }) });
     const data = await response.json();
 
     expect(response.status).toBe(200);
@@ -388,7 +388,7 @@ describe("DELETE /api/bills/[id]", () => {
       method: "DELETE",
     });
 
-    const response = await DELETE(request, { params: { id: String(bill._id) } });
+    const response = await DELETE(request, { params: Promise.resolve({ id: String(bill._id) }) });
     const data = await response.json();
 
     expect(response.status).toBe(401);
@@ -400,7 +400,7 @@ describe("DELETE /api/bills/[id]", () => {
       method: "DELETE",
     });
 
-    const response = await DELETE(request, { params: { id: "invalid" } });
+    const response = await DELETE(request, { params: Promise.resolve({ id: "invalid" }) });
     const data = await response.json();
 
     expect(response.status).toBe(400);
@@ -420,7 +420,7 @@ describe("DELETE /api/bills/[id]", () => {
       method: "DELETE",
     });
 
-    const response = await DELETE(request, { params: { id: String(bill._id) } });
+    const response = await DELETE(request, { params: Promise.resolve({ id: String(bill._id) }) });
     const data = await response.json();
 
     expect(response.status).toBe(200);
@@ -444,7 +444,7 @@ describe("DELETE /api/bills/[id]", () => {
       method: "DELETE",
     });
 
-    const response = await DELETE(request, { params: { id: String(bill._id) } });
+    const response = await DELETE(request, { params: Promise.resolve({ id: String(bill._id) }) });
     const data = await response.json();
 
     expect(response.status).toBe(404);
@@ -461,7 +461,7 @@ describe("DELETE /api/bills/[id]", () => {
       method: "DELETE",
     });
 
-    const response = await DELETE(request, { params: { id: fakeId } });
+    const response = await DELETE(request, { params: Promise.resolve({ id: fakeId }) });
     const data = await response.json();
 
     expect(response.status).toBe(404);

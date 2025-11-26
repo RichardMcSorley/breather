@@ -49,7 +49,7 @@ describe("useOfflineMutation", () => {
 
     const { result } = renderHook(
       () =>
-        useOfflineMutation({
+        useOfflineMutation<{ success: boolean }, Error, { id: string; amount: number }>({
           endpoint: "/api/test",
           method: "POST",
           mutationFn: async (data) => {
@@ -81,7 +81,7 @@ describe("useOfflineMutation", () => {
 
     const { result } = renderHook(
       () =>
-        useOfflineMutation({
+        useOfflineMutation<any, Error, { data: string }>({
           endpoint: "/api/test",
           method: "POST",
           mutationFn: async () => {
@@ -115,7 +115,7 @@ describe("useOfflineMutation", () => {
 
     const { result: putResult } = renderHook(
       () =>
-        useOfflineMutation({
+        useOfflineMutation<any, Error, { id: string }>({
           endpoint: "/api/test/1",
           method: "PUT",
           mutationFn: async () => ({}),
@@ -137,7 +137,7 @@ describe("useOfflineMutation", () => {
 
     const { result: deleteResult } = renderHook(
       () =>
-        useOfflineMutation({
+        useOfflineMutation<any, Error, string>({
           endpoint: "/api/test/1",
           method: "DELETE",
           mutationFn: async () => ({}),
@@ -168,7 +168,7 @@ describe("useOfflineMutation", () => {
 
     const { result } = renderHook(
       () =>
-        useOfflineMutation({
+        useOfflineMutation<any, Error, { id: string }>({
           endpoint: (vars: { id: string }) => `/api/test/${vars.id}`,
           method: "PUT",
           mutationFn: async () => ({}),
@@ -207,7 +207,7 @@ describe("useOfflineMutation", () => {
 
     const { result } = renderHook(
       () =>
-        useOfflineMutation({
+        useOfflineMutation<any, Error, { data: string }>({
           endpoint: "/api/test",
           method: "POST",
           mutationFn: async (data) => {

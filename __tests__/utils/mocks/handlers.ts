@@ -8,14 +8,14 @@ export const handlers = [
   http.get(`${API_BASE}/api/transactions`, () => {
     return HttpResponse.json({
       transactions: [
-        createMockTransaction({ _id: "1", amount: 100 }),
-        createMockTransaction({ _id: "2", amount: 50, type: "expense" }),
+        createMockTransaction({ _id: "1" as any, amount: 100 }),
+        createMockTransaction({ _id: "2" as any, amount: 50, type: "expense" }),
       ],
     });
   }),
 
   http.get(`${API_BASE}/api/transactions/:id`, ({ params }) => {
-    return HttpResponse.json(createMockTransaction({ _id: params.id as string }));
+    return HttpResponse.json(createMockTransaction({ _id: params.id as any }));
   }),
 
   http.post(`${API_BASE}/api/transactions`, async ({ request }) => {
@@ -39,14 +39,14 @@ export const handlers = [
   http.get(`${API_BASE}/api/bills`, () => {
     return HttpResponse.json({
       bills: [
-        createMockBill({ _id: "1", name: "Rent" }),
-        createMockBill({ _id: "2", name: "Electric" }),
+        createMockBill({ _id: "1" as any, name: "Rent" }),
+        createMockBill({ _id: "2" as any, name: "Electric" }),
       ],
     });
   }),
 
   http.get(`${API_BASE}/api/bills/:id`, ({ params }) => {
-    return HttpResponse.json(createMockBill({ _id: params.id as string }));
+    return HttpResponse.json(createMockBill({ _id: params.id as any }));
   }),
 
   http.post(`${API_BASE}/api/bills`, async ({ request }) => {
@@ -70,8 +70,8 @@ export const handlers = [
   http.get(`${API_BASE}/api/bills/payments`, () => {
     return HttpResponse.json({
       payments: [
-        createMockBillPayment({ _id: "1" }),
-        createMockBillPayment({ _id: "2" }),
+        createMockBillPayment({ _id: "1" as any }),
+        createMockBillPayment({ _id: "2" as any }),
       ],
     });
   }),
@@ -117,8 +117,8 @@ export const handlers = [
   http.get(`${API_BASE}/api/mileage`, () => {
     return HttpResponse.json({
       mileage: [
-        createMockMileage({ _id: "1" }),
-        createMockMileage({ _id: "2" }),
+        createMockMileage({ _id: "1" as any }),
+        createMockMileage({ _id: "2" as any }),
       ],
     });
   }),

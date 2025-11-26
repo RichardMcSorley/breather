@@ -8,9 +8,10 @@ import { isValidObjectId, parseFloatSafe, parseIntSafe, sanitizeString } from "@
 
 export async function PUT(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
     const session = await getServerSession(authOptions);
     if (!session?.user?.id) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -18,7 +19,7 @@ export async function PUT(
 
     await connectDB();
 
-    if (!isValidObjectId(params.id)) {
+    if (!isValidObjectId(id)) {
       return NextResponse.json({ error: "Invalid bill ID" }, { status: 400 });
     }
 
@@ -72,7 +73,7 @@ export async function PUT(
     if (useInPlan !== undefined) updateData.useInPlan = useInPlan;
 
     const bill = await Bill.findOneAndUpdate(
-      { _id: params.id, userId: session.user.id },
+      { _id: id, userId: session.user.id },
       updateData,
       { new: true }
     );
@@ -89,9 +90,10 @@ export async function PUT(
 
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
     const session = await getServerSession(authOptions);
     if (!session?.user?.id) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -99,12 +101,12 @@ export async function DELETE(
 
     await connectDB();
 
-    if (!isValidObjectId(params.id)) {
+    if (!isValidObjectId(id)) {
       return NextResponse.json({ error: "Invalid bill ID" }, { status: 400 });
     }
 
     const bill = await Bill.findOneAndDelete({
-      _id: params.id,
+      _id: id,
       userId: session.user.id,
     });
 

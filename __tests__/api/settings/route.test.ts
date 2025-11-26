@@ -28,8 +28,7 @@ describe("GET /api/settings", () => {
   it("should return 401 if not authenticated", async () => {
     (getServerSession as any).mockResolvedValue(null);
 
-    const request = new NextRequest("http://localhost:3000/api/settings");
-    const response = await GET(request);
+    const response = await GET();
     const data = await response.json();
 
     expect(response.status).toBe(401);
@@ -37,8 +36,7 @@ describe("GET /api/settings", () => {
   });
 
   it("should return default settings if none exist", async () => {
-    const request = new NextRequest("http://localhost:3000/api/settings");
-    const response = await GET(request);
+    const response = await GET();
     const data = await response.json();
 
     expect(response.status).toBe(200);
@@ -53,8 +51,7 @@ describe("GET /api/settings", () => {
       incomeSourceTags: ["Uber", "Lyft"],
     });
 
-    const request = new NextRequest("http://localhost:3000/api/settings");
-    const response = await GET(request);
+    const response = await GET();
     const data = await response.json();
 
     expect(response.status).toBe(200);

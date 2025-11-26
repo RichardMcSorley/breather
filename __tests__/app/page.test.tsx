@@ -28,7 +28,7 @@ describe("Home Page", () => {
     // Since it's an async component that redirects, we can't easily test the render
     // But we can test that redirect is called
     try {
-      await HomePage({});
+      await HomePage();
     } catch (e) {
       // Redirect throws, which is expected
     }
@@ -43,7 +43,7 @@ describe("Home Page", () => {
     const HomePage = (await import("@/app/page")).default;
     
     try {
-      await HomePage({});
+      await HomePage();
     } catch (e) {
       // Redirect throws, which is expected
     }

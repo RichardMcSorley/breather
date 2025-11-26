@@ -68,7 +68,7 @@ describe("Integration: Transaction Workflow", () => {
       }
     );
 
-    const editResponse = await PUT(editRequest, { params: { id: transactionId } });
+    const editResponse = await PUT(editRequest, { params: Promise.resolve({ id: transactionId }) });
     expect(editResponse.status).toBe(200);
     const editedData = await editResponse.json();
     expect(editedData.amount).toBe(150);
@@ -83,7 +83,7 @@ describe("Integration: Transaction Workflow", () => {
       }
     );
 
-    const deleteResponse = await DELETE(deleteRequest, { params: { id: transactionId } });
+    const deleteResponse = await DELETE(deleteRequest, { params: Promise.resolve({ id: transactionId }) });
     expect(deleteResponse.status).toBe(200);
 
     // Verify deleted
@@ -193,7 +193,7 @@ describe("Integration: Transaction Workflow", () => {
         }
       );
 
-      const editResponse = await PUT(editRequest, { params: { id: transactionId } });
+      const editResponse = await PUT(editRequest, { params: Promise.resolve({ id: transactionId }) });
       expect(editResponse.status).toBe(200);
     }
   });
@@ -324,7 +324,7 @@ describe("Integration: Bill Payment Workflow", () => {
       }
     );
 
-    const deleteResponse = await DELETE(deleteRequest, { params: { id: billId } });
+    const deleteResponse = await DELETE(deleteRequest, { params: Promise.resolve({ id: billId }) });
     expect(deleteResponse.status).toBe(200);
 
     // Step 4: Verify cleanup

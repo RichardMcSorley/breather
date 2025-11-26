@@ -22,14 +22,14 @@ describe("authOptions", () => {
 
   it("should have session callback", () => {
     expect(authOptions.callbacks).toBeDefined();
-    expect(authOptions.callbacks.session).toBeDefined();
-    expect(typeof authOptions.callbacks.session).toBe("function");
+    expect(authOptions.callbacks?.session).toBeDefined();
+    expect(typeof authOptions.callbacks?.session).toBe("function");
   });
 
   it("should have jwt callback", () => {
     expect(authOptions.callbacks).toBeDefined();
-    expect(authOptions.callbacks.jwt).toBeDefined();
-    expect(typeof authOptions.callbacks.jwt).toBe("function");
+    expect(authOptions.callbacks?.jwt).toBeDefined();
+    expect(typeof authOptions.callbacks?.jwt).toBe("function");
   });
 
   it("should set user id in session callback", async () => {
@@ -48,7 +48,7 @@ describe("authOptions", () => {
       token: token as any,
     } as any);
 
-    expect(result.user.id).toBe("user-id-123");
+    expect((result.user as any)?.id).toBe("user-id-123");
   });
 
   it("should handle session without user", async () => {
@@ -94,7 +94,7 @@ describe("authOptions", () => {
 
   it("should have custom sign in page", () => {
     expect(authOptions.pages).toBeDefined();
-    expect(authOptions.pages.signIn).toBe("/login");
+    expect(authOptions.pages?.signIn).toBe("/login");
   });
 });
 

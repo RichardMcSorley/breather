@@ -157,8 +157,9 @@ describe("offline", () => {
       const result = await offline.syncQueue();
 
       expect(result.success).toBe(true);
-      expect(result.results).toHaveLength(1);
-      expect(result.results[0].success).toBe(true);
+      expect(result.results).toBeDefined();
+      expect(result.results!).toHaveLength(1);
+      expect(result.results![0].success).toBe(true);
       expect(idbKeyval.set).toHaveBeenCalled(); // Queue should be updated
     });
 
@@ -184,8 +185,9 @@ describe("offline", () => {
       const result = await offline.syncQueue();
 
       expect(result.success).toBe(true);
-      expect(result.results).toHaveLength(1);
-      expect(result.results[0].success).toBe(false);
+      expect(result.results).toBeDefined();
+      expect(result.results!).toHaveLength(1);
+      expect(result.results![0].success).toBe(false);
     });
 
     it("should handle network errors", async () => {
@@ -206,8 +208,9 @@ describe("offline", () => {
       const result = await offline.syncQueue();
 
       expect(result.success).toBe(true);
-      expect(result.results).toHaveLength(1);
-      expect(result.results[0].success).toBe(false);
+      expect(result.results).toBeDefined();
+      expect(result.results!).toHaveLength(1);
+      expect(result.results![0].success).toBe(false);
     });
   });
 

@@ -14,7 +14,7 @@ A Progressive Web App (PWA) for gig workers to track income and expenses with of
 
 ## Tech Stack
 
-- **Framework**: Next.js 14+ (App Router) with TypeScript
+- **Framework**: Next.js 16 (App Router) with TypeScript
 - **Authentication**: NextAuth.js with Google OAuth
 - **Database**: MongoDB with Mongoose
 - **PWA**: next-pwa for service worker and offline support

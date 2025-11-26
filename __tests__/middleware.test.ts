@@ -12,14 +12,14 @@ vi.mock("next-auth/middleware", () => ({
   withAuth: mockWithAuth,
 }));
 
-describe("middleware", () => {
+describe("proxy", () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
 
-  it("should export middleware with correct configuration", async () => {
+  it("should export proxy with correct configuration", async () => {
     // Dynamically import to trigger the module
-    const middlewareModule = await import("@/middleware");
+    const proxyModule = await import("@/proxy");
     
     // Verify withAuth was called with correct config
     expect(mockWithAuth).toHaveBeenCalledWith({
@@ -30,10 +30,10 @@ describe("middleware", () => {
   });
 
   it("should export config with correct matcher patterns", async () => {
-    const middlewareModule = await import("@/middleware");
+    const proxyModule = await import("@/proxy");
     
-    expect(middlewareModule.config).toBeDefined();
-    expect(middlewareModule.config.matcher).toEqual([
+    expect(proxyModule.config).toBeDefined();
+    expect(proxyModule.config.matcher).toEqual([
       "/dashboard/:path*",
       "/history/:path*",
       "/bills/:path*",
@@ -43,16 +43,16 @@ describe("middleware", () => {
   });
 
   it("should match dashboard routes", async () => {
-    const middlewareModule = await import("@/middleware");
-    const matcher = middlewareModule.config.matcher;
+    const proxyModule = await import("@/proxy");
+    const matcher = proxyModule.config.matcher;
     
     // Test that matcher includes dashboard routes
     expect(matcher).toContain("/dashboard/:path*");
   });
 
   it("should match all protected routes", async () => {
-    const middlewareModule = await import("@/middleware");
-    const matcher = middlewareModule.config.matcher;
+    const proxyModule = await import("@/proxy");
+    const matcher = proxyModule.config.matcher;
     
     const protectedRoutes = [
       "/dashboard/:path*",
