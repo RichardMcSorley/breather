@@ -199,7 +199,10 @@ describe("Layout", () => {
       </Layout>
     );
 
-    expect(screen.queryByText("Sign Out")).not.toBeInTheDocument();
+    const signOutButton = screen.queryByText("Sign Out");
+    expect(signOutButton).toBeInTheDocument();
+    expect(signOutButton).toHaveClass("invisible");
+    expect(signOutButton).toHaveClass("pointer-events-none");
   });
 
   it("should call signOut when sign out button is clicked", () => {

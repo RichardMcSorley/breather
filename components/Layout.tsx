@@ -47,14 +47,15 @@ export default function Layout({ children }: LayoutProps) {
             >
               ⚙️
             </button>
-            {session?.user && (
-              <button
-                onClick={() => signOut({ callbackUrl: "/login" })}
-                className="text-sm text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white px-3 py-2 min-h-[44px]"
-              >
-                Sign Out
-              </button>
-            )}
+            <button
+              onClick={() => signOut({ callbackUrl: "/login" })}
+              className={`text-sm text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white px-3 py-2 min-h-[44px] ${
+                session?.user ? "" : "invisible pointer-events-none"
+              }`}
+              aria-label="Sign Out"
+            >
+              Sign Out
+            </button>
           </div>
         </div>
       </header>

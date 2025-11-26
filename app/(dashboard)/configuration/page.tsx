@@ -121,6 +121,7 @@ export default function ConfigurationPage() {
                     }
                   }
                 }}
+                aria-label="Add income source tag"
               />
               <Button
                 type="button"

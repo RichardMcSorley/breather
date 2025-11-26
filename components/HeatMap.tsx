@@ -36,13 +36,13 @@ export default function HeatMap({ days = 30 }: HeatMapProps) {
   };
 
   const getColorIntensity = (value: number, maxValue: number) => {
-    if (value === 0) return "bg-gray-100 dark:bg-gray-800";
+    if (value === 0) return { bg: "bg-gray-100 dark:bg-gray-800", text: "text-gray-900 dark:text-white" };
     const intensity = value / maxValue;
-    if (intensity >= 0.8) return "bg-green-600 dark:bg-green-700";
-    if (intensity >= 0.6) return "bg-green-500 dark:bg-green-600";
-    if (intensity >= 0.4) return "bg-green-400 dark:bg-green-500";
-    if (intensity >= 0.2) return "bg-green-300 dark:bg-green-400";
-    return "bg-green-200 dark:bg-green-300";
+    if (intensity >= 0.8) return { bg: "bg-green-600 dark:bg-green-700", text: "text-white dark:text-white" };
+    if (intensity >= 0.6) return { bg: "bg-green-500 dark:bg-green-600", text: "text-white dark:text-white" };
+    if (intensity >= 0.4) return { bg: "bg-green-400 dark:bg-green-500", text: "text-black dark:text-white" };
+    if (intensity >= 0.2) return { bg: "bg-green-300 dark:bg-green-400", text: "text-black dark:text-black" };
+    return { bg: "bg-green-200 dark:bg-green-300", text: "text-black dark:text-black" };
   };
 
   const formatCurrency = (amount: number) => {
@@ -96,13 +96,14 @@ export default function HeatMap({ days = 30 }: HeatMapProps) {
           {DAY_NAMES.map((dayName, index) => {
             const dayKey = index.toString();
             const value = data.byDayOfWeek[dayKey] || 0;
+            const colors = getColorIntensity(value, maxValue);
             return (
               <div key={dayKey} className="text-center">
                 <div
-                  className={`${getColorIntensity(value, maxValue)} rounded p-2 mb-1 min-h-[60px] flex items-center justify-center`}
+                  className={`${colors.bg} rounded p-2 mb-1 min-h-[60px] flex items-center justify-center`}
                   title={`${dayName}: ${formatCurrency(value)}`}
                 >
-                  <span className="text-xs font-medium text-gray-900 dark:text-white">
+                  <span className={`text-xs font-medium ${colors.text}`}>
                     {formatCurrency(value)}
                   </span>
                 </div>
@@ -122,13 +123,14 @@ export default function HeatMap({ days = 30 }: HeatMapProps) {
           {Array.from({ length: 24 }, (_, hour) => {
             const hourKey = hour.toString();
             const value = data.byHour[hourKey] || 0;
+            const colors = getColorIntensity(value, maxValue);
             return (
               <div key={hourKey} className="text-center">
                 <div
-                  className={`${getColorIntensity(value, maxValue)} rounded p-1 mb-1 min-h-[40px] flex items-center justify-center`}
+                  className={`${colors.bg} rounded p-1 mb-1 min-h-[40px] flex items-center justify-center`}
                   title={`${hour}:00 - ${formatCurrency(value)}`}
                 >
-                  <span className="text-[10px] font-medium text-gray-900 dark:text-white">
+                  <span className={`text-[10px] font-medium ${colors.text}`}>
                     {formatCurrency(value)}
                   </span>
                 </div>

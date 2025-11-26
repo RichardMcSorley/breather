@@ -312,6 +312,7 @@ export default function AddTransactionModal({
                   setFormData({ ...formData, tag: "" });
                 }
               }}
+              aria-label="Or enter custom income source"
             />
           </div>
         )}
@@ -349,6 +350,7 @@ export default function AddTransactionModal({
                   setFormData({ ...formData, tag: "" });
                 }
               }}
+              aria-label="Or enter custom expense source"
             />
           </div>
         )}

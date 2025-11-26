@@ -418,7 +418,7 @@ export default function DashboardPage() {
                       {formatCurrency(summary.todayIncome ?? 0)}
                     </span>
                   </div>
-                  <div className="text-xs text-gray-500 dark:text-gray-500">Income before expenses and mileage</div>
+                  <div className="text-xs text-gray-600 dark:text-gray-400">Income before expenses and mileage</div>
                 </div>
 
                 {/* Breakdown */}
@@ -455,7 +455,7 @@ export default function DashboardPage() {
                       )}
                     </span>
                   </div>
-                  <div className="text-xs text-gray-500 dark:text-gray-500">After expenses and mileage</div>
+                  <div className="text-xs text-gray-600 dark:text-gray-400">After expenses and mileage</div>
                 </div>
 
                 {/* Efficiency Metrics */}
