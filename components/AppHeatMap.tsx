@@ -25,7 +25,7 @@ export default function AppHeatMap({ localDate, viewMode }: AppHeatMapProps) {
   const getMaxValue = () => {
     if (!data) return 1;
     let max = 0;
-    data.apps.forEach((app) => {
+    data.apps.forEach((app: string) => {
       for (let day = 0; day < 7; day++) {
         const value = data.data[app]?.[day.toString()] || 0;
         if (value > max) max = value;
@@ -109,7 +109,7 @@ export default function AppHeatMap({ localDate, viewMode }: AppHeatMapProps) {
               </tr>
             </thead>
             <tbody>
-              {data.apps.map((app) => (
+              {data.apps.map((app: string) => (
                 <tr key={app}>
                   <td className="text-sm font-medium text-gray-700 dark:text-gray-300 pr-4 py-1">
                     {app}
