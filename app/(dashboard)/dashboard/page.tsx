@@ -349,6 +349,7 @@ export default function DashboardPage() {
                     onChange={handleDateChange}
                     className="w-full h-10 text-center"
                     style={{ textAlign: "center" }}
+                    aria-label="Select date"
                   />
                 ) : viewMode === "month" ? (
                   <Input
@@ -359,6 +360,7 @@ export default function DashboardPage() {
                       setSelectedDate(`${year}-${month}-01`);
                     }}
                     className="w-full h-10 text-center"
+                    aria-label="Select month"
                   />
                 ) : (
                   <Input
@@ -372,6 +374,7 @@ export default function DashboardPage() {
                     max={new Date().getFullYear() + 10}
                     className="w-full h-10 text-center"
                     placeholder="Year"
+                    aria-label="Select year"
                   />
                 )}
               </div>

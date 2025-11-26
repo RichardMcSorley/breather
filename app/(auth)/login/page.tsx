@@ -20,17 +20,17 @@ export default function LoginPage() {
 
   if (status === "loading") {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900">
+      <main className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900">
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-gray-900 dark:border-white mx-auto"></div>
           <p className="mt-4 text-gray-600 dark:text-gray-400">Loading...</p>
         </div>
-      </div>
+      </main>
     );
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900 px-4">
+    <main className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900 px-4">
       <div className="max-w-md w-full space-y-8">
         <div className="text-center">
           <h1 className="text-4xl font-bold text-gray-900 dark:text-white mb-2">BREATHER</h1>
@@ -63,7 +63,7 @@ export default function LoginPage() {
           </button>
         </div>
       </div>
-    </div>
+    </main>
   );
 }
 
