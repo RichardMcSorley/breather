@@ -80,9 +80,22 @@ describe("AddTransactionModal", () => {
       />
     );
 
+    // Wait for modal to be fully loaded
+    await waitFor(() => {
+      expect(screen.getByPlaceholderText("0.00")).toBeInTheDocument();
+    });
+
     // Input component doesn't use htmlFor/id, so use placeholder
-    const amountInput = screen.getByPlaceholderText("0.00");
-    await user.type(amountInput, "100");
+    const amountInput = screen.getByPlaceholderText("0.00") as HTMLInputElement;
+    
+    // Clear and type the value
+    await user.clear(amountInput);
+    await user.type(amountInput, "100", { delay: 10 });
+
+    // Wait for the value to be set
+    await waitFor(() => {
+      expect(parseFloat(amountInput.value)).toBe(100);
+    });
 
     const submitButton = screen.getByRole("button", { name: /Add/i });
     await user.click(submitButton);
@@ -146,12 +159,30 @@ describe("AddTransactionModal", () => {
       />
     );
 
-    const customTagInput = screen.getByPlaceholderText(/Or enter custom source/i);
-    await user.type(customTagInput, "CustomTag");
+    // Wait for modal to be fully loaded
+    await waitFor(() => {
+      expect(screen.getByPlaceholderText(/Or enter custom source/i)).toBeInTheDocument();
+    });
+
+    const customTagInput = screen.getByPlaceholderText(/Or enter custom source/i) as HTMLInputElement;
+    
+    // Use fireEvent to directly set the value, which will trigger the onChange handler
+    // This avoids issues with user.type being interrupted or not completing
+    fireEvent.change(customTagInput, { target: { value: "CustomTag" } });
+
+    // Wait for the value to be set
+    await waitFor(() => {
+      expect(customTagInput.value).toBe("CustomTag");
+    });
 
     // Input component doesn't use htmlFor/id, so use placeholder
-    const amountInput = screen.getByPlaceholderText("0.00");
-    await user.type(amountInput, "100");
+    const amountInput = screen.getByPlaceholderText("0.00") as HTMLInputElement;
+    fireEvent.change(amountInput, { target: { value: "100" } });
+
+    // Wait for amount to be set
+    await waitFor(() => {
+      expect(parseFloat(amountInput.value)).toBe(100);
+    });
 
     const submitButton = screen.getByRole("button", { name: /Add/i });
     await user.click(submitButton);
@@ -160,6 +191,7 @@ describe("AddTransactionModal", () => {
       expect(mockCreateTransaction.mutate).toHaveBeenCalledWith(
         expect.objectContaining({
           tag: "CustomTag",
+          amount: 100,
         }),
         expect.any(Object)
       );

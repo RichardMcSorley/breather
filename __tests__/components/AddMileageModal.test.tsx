@@ -65,9 +65,38 @@ describe("AddMileageModal", () => {
       />
     );
 
+    // Wait for modal to be fully loaded and dataLoaded to be true
+    await waitFor(() => {
+      const input = screen.getByPlaceholderText("Enter odometer reading") as HTMLInputElement;
+      expect(input).toBeInTheDocument();
+      // Wait for initial state to be set (empty string) and focus/select to complete
+      expect(input.value).toBe("");
+    }, { timeout: 1000 });
+
     // Input component doesn't use htmlFor/id, so use placeholder
-    const odometerInput = screen.getByPlaceholderText("Enter odometer reading");
-    await user.type(odometerInput, "10000");
+    const odometerInput = screen.getByPlaceholderText("Enter odometer reading") as HTMLInputElement;
+    
+    // Wait a bit for the focus/select effect to complete
+    await new Promise(resolve => setTimeout(resolve, 200));
+    
+    // Clear any selection and ensure input is empty
+    odometerInput.setSelectionRange(0, 0);
+    fireEvent.change(odometerInput, { target: { value: "" } });
+    
+    // Wait for the clear to take effect
+    await waitFor(() => {
+      expect(odometerInput.value).toBe("");
+    });
+    
+    // Use fireEvent to directly set the value, which will trigger the onChange handler
+    // This avoids issues with user.type being interrupted by the select() call
+    fireEvent.change(odometerInput, { target: { value: "10000" } });
+
+    // Wait for formatting to complete - the value should be "10,000" (formatted)
+    await waitFor(() => {
+      const cleanedValue = odometerInput.value.replace(/,/g, "");
+      expect(cleanedValue).toBe("10000");
+    }, { timeout: 1000 });
 
     const submitButton = screen.getByRole("button", { name: /Add/i });
     await user.click(submitButton);
@@ -230,16 +259,28 @@ describe("AddMileageModal", () => {
       />
     );
 
+    // Wait for data to load and input to be populated
     await waitFor(() => {
-      // Input component doesn't use htmlFor/id, so use placeholder
-    const odometerInput = screen.getByPlaceholderText("Enter odometer reading");
+      const odometerInput = screen.getByPlaceholderText("Enter odometer reading") as HTMLInputElement;
       expect(odometerInput).toBeInTheDocument();
+      // Wait for the formatted value to appear (10,000)
+      expect(odometerInput.value.replace(/,/g, "")).toBe("10000");
     });
 
+    // Wait a bit for the focus/select effect to complete
+    await new Promise(resolve => setTimeout(resolve, 200));
+
     // Input component doesn't use htmlFor/id, so use placeholder
-    const odometerInput = screen.getByPlaceholderText("Enter odometer reading");
-    await user.clear(odometerInput);
-    await user.type(odometerInput, "20000");
+    const odometerInput = screen.getByPlaceholderText("Enter odometer reading") as HTMLInputElement;
+    
+    // Use fireEvent to directly set the value, which will trigger the onChange handler
+    // This avoids issues with user.type being interrupted by the select() call
+    fireEvent.change(odometerInput, { target: { value: "20000" } });
+
+    // Wait for formatting to complete
+    await waitFor(() => {
+      expect(odometerInput.value.replace(/,/g, "")).toBe("20000");
+    }, { timeout: 1000 });
 
     const submitButton = screen.getByRole("button", { name: /Update/i });
     await user.click(submitButton);
@@ -353,9 +394,26 @@ describe("AddMileageModal", () => {
       />
     );
 
+    // Wait for modal to be fully loaded
+    await waitFor(() => {
+      expect(screen.getByPlaceholderText("Enter odometer reading")).toBeInTheDocument();
+    });
+
     // Input component doesn't use htmlFor/id, so use placeholder
-    const odometerInput = screen.getByPlaceholderText("Enter odometer reading");
-    await user.type(odometerInput, "10,000");
+    const odometerInput = screen.getByPlaceholderText("Enter odometer reading") as HTMLInputElement;
+    
+    // Wait a bit for the focus/select effect to complete
+    await new Promise(resolve => setTimeout(resolve, 200));
+    
+    // Use fireEvent to set the value with commas directly
+    // This tests that the parsing function correctly handles commas
+    fireEvent.change(odometerInput, { target: { value: "10,000" } });
+
+    // Wait for formatting to complete (should remain "10,000" or be reformatted)
+    await waitFor(() => {
+      const cleanedValue = odometerInput.value.replace(/,/g, "");
+      expect(cleanedValue).toBe("10000");
+    }, { timeout: 1000 });
 
     const submitButton = screen.getByRole("button", { name: /Add/i });
     await user.click(submitButton);

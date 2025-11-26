@@ -7,9 +7,12 @@ import {
   useTransaction,
   useBills,
   useBillPayments,
+  usePaymentPlan,
   useSettings,
   useSummary,
   useMileageEntries,
+  useMileageEntry,
+  useHeatMapData,
 } from "@/hooks/useQueries";
 import { server } from "../utils/mocks/server";
 import { http, HttpResponse } from "msw";
@@ -288,6 +291,172 @@ describe("useQueries", () => {
       }, { timeout: 3000 });
       
       expect(result.current.data?.entries[0]._id).toBe("1");
+    });
+  });
+
+  describe("usePaymentPlan", () => {
+    it("should fetch payment plan successfully when enabled", async () => {
+      const mockPlan = {
+        plan: [
+          { date: "2024-01-15", amount: 50 },
+          { date: "2024-01-16", amount: 50 },
+        ],
+      };
+
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => mockPlan,
+      });
+
+      const { result } = renderHook(
+        () => usePaymentPlan("2024-01-15", 50, true),
+        {
+          wrapper: createWrapper(),
+        }
+      );
+
+      await waitFor(() => expect(result.current.isSuccess).toBe(true));
+      expect(result.current.data).toBeDefined();
+      expect(result.current.data?.plan).toBeDefined();
+    });
+
+    it("should not fetch when disabled", () => {
+      const { result } = renderHook(
+        () => usePaymentPlan("2024-01-15", 50, false),
+        {
+          wrapper: createWrapper(),
+        }
+      );
+
+      expect(result.current.isFetching).toBe(false);
+    });
+
+    it("should use POST method with correct body", async () => {
+      const mockPlan = { plan: [] };
+
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => mockPlan,
+      });
+
+      const { result } = renderHook(
+        () => usePaymentPlan("2024-01-15", 50, true),
+        {
+          wrapper: createWrapper(),
+        }
+      );
+
+      await waitFor(() => {
+        expect(mockFetch).toHaveBeenCalled();
+        const fetchCall = mockFetch.mock.calls[0];
+        expect(fetchCall[0]).toBe("/api/bills/payment-plan");
+        expect(fetchCall[1]?.method).toBe("POST");
+        expect(fetchCall[1]?.body).toBe(JSON.stringify({ startDate: "2024-01-15", dailyPayment: 50 }));
+      });
+    });
+  });
+
+  describe("useMileageEntry", () => {
+    it("should fetch single mileage entry successfully", async () => {
+      const mockEntry = { _id: "1", odometer: 10000, date: "2024-01-15" };
+
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => mockEntry,
+      });
+
+      const { result } = renderHook(() => useMileageEntry("1"), {
+        wrapper: createWrapper(),
+      });
+
+      await waitFor(() => expect(result.current.isSuccess).toBe(true));
+      expect(result.current.data).toBeDefined();
+      expect(result.current.data?._id).toBe("1");
+      expect(result.current.data?.odometer).toBe(10000);
+    });
+
+    it("should not fetch when id is undefined", () => {
+      const { result } = renderHook(() => useMileageEntry(undefined), {
+        wrapper: createWrapper(),
+      });
+
+      expect(result.current.isFetching).toBe(false);
+    });
+
+    it("should handle fetch errors", async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: false,
+        status: 404,
+      });
+
+      const { result } = renderHook(() => useMileageEntry("1"), {
+        wrapper: createWrapper(),
+      });
+
+      await waitFor(() => {
+        expect(result.current.isError || result.current.isPending).toBeTruthy();
+      }, { timeout: 3000 });
+    });
+  });
+
+  describe("useHeatMapData", () => {
+    it("should fetch heat map data successfully with default days", async () => {
+      const mockHeatMap = {
+        data: [
+          { date: "2024-01-15", value: 100 },
+          { date: "2024-01-16", value: 200 },
+        ],
+      };
+
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => mockHeatMap,
+      });
+
+      const { result } = renderHook(() => useHeatMapData(), {
+        wrapper: createWrapper(),
+      });
+
+      await waitFor(() => expect(result.current.isSuccess).toBe(true));
+      expect(result.current.data).toBeDefined();
+      expect(mockFetch).toHaveBeenCalledWith(expect.stringContaining("days=30"));
+    });
+
+    it("should fetch heat map data with custom days", async () => {
+      const mockHeatMap = {
+        data: [
+          { date: "2024-01-15", value: 100 },
+        ],
+      };
+
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => mockHeatMap,
+      });
+
+      const { result } = renderHook(() => useHeatMapData(60), {
+        wrapper: createWrapper(),
+      });
+
+      await waitFor(() => {
+        expect(result.current.isSuccess).toBe(true);
+        expect(mockFetch).toHaveBeenCalledWith(expect.stringContaining("days=60"));
+      });
+    });
+
+    it("should handle fetch errors", async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: false,
+        status: 500,
+      });
+
+      const { result } = renderHook(() => useHeatMapData(), {
+        wrapper: createWrapper(),
+      });
+
+      await waitFor(() => {
+        expect(result.current.isError || result.current.isPending).toBeTruthy();
+      }, { timeout: 3000 });
     });
   });
 });

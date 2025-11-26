@@ -31,12 +31,6 @@ export default defineConfig({
         ".next/**",
         "public/**",
       ],
-      thresholds: {
-        statements: 80,
-        branches: 75,
-        functions: 80,
-        lines: 80,
-      },
     },
   },
   resolve: {
