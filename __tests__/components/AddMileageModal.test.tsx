@@ -126,8 +126,13 @@ describe("AddMileageModal", () => {
     const odometerInput = screen.getByPlaceholderText("Enter odometer reading") as HTMLInputElement;
     await user.type(odometerInput, "100000");
 
-    // Should format with commas
-    expect(odometerInput.value).toContain(",");
+    // Wait for the formatting to complete
+    await waitFor(() => {
+      expect(odometerInput.value).toContain(",");
+    });
+    
+    // Should format with commas - verify the exact formatted value
+    expect(odometerInput.value).toBe("100,000");
   });
 
   it("should show error for invalid odometer reading", async () => {

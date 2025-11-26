@@ -39,13 +39,14 @@ describe("RootLayout", () => {
     expect(layoutModule.viewport).toBeDefined();
     expect(layoutModule.viewport.width).toBe("device-width");
     expect(layoutModule.viewport.initialScale).toBe(1);
-    expect(layoutModule.viewport.maximumScale).toBe(1);
-    expect(layoutModule.viewport.userScalable).toBe(false);
     expect(layoutModule.viewport.viewportFit).toBe("cover");
     expect(layoutModule.viewport.themeColor).toEqual([
       { media: "(prefers-color-scheme: light)", color: "#ffffff" },
       { media: "(prefers-color-scheme: dark)", color: "#111827" },
     ]);
+    // Ensure zooming is not disabled
+    expect(layoutModule.viewport.maximumScale).toBeUndefined();
+    expect(layoutModule.viewport.userScalable).toBeUndefined();
   });
 
   it("should render html and body elements", () => {
