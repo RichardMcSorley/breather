@@ -16,6 +16,7 @@ vi.mock("next-auth/react", async (importOriginal) => {
 
 vi.mock("@/hooks/useQueries", () => ({
   useMileageEntries: vi.fn(),
+  useMileageEntriesForCalculation: vi.fn(),
   useSettings: vi.fn(),
   useDeleteMileageEntry: vi.fn(),
 }));
@@ -35,6 +36,10 @@ describe("MileagePage", () => {
       data: { user: { id: "test-user-id" } },
     });
     (useQueries.useMileageEntries as any).mockReturnValue({
+      data: { entries: [], pagination: { page: 1, limit: 50, total: 0, totalPages: 1 } },
+      isLoading: false,
+    });
+    (useQueries.useMileageEntriesForCalculation as any).mockReturnValue({
       data: { entries: [] },
       isLoading: false,
     });

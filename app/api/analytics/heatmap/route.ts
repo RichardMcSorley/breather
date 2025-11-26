@@ -4,7 +4,8 @@ import { authOptions } from "../../auth/[...nextauth]/config";
 import connectDB from "@/lib/mongodb";
 import Transaction from "@/lib/models/Transaction";
 import { handleApiError } from "@/lib/api-error-handler";
-import { subDays } from "date-fns";
+import { subDays, startOfMonth, endOfMonth, startOfYear, endOfYear } from "date-fns";
+import { parseDateOnlyAsUTC } from "@/lib/date-utils";
 
 export const dynamic = 'force-dynamic';
 
@@ -18,13 +19,52 @@ export async function GET(request: NextRequest) {
     await connectDB();
 
     const { searchParams } = new URL(request.url);
+    const localDateStr = searchParams.get("localDate");
+    const viewMode = searchParams.get("viewMode") || "day";
     const days = parseInt(searchParams.get("days") || "30");
     
-    // Calculate date range
-    const endDate = new Date();
-    endDate.setUTCHours(23, 59, 59, 999);
-    const startDate = subDays(endDate, days);
-    startDate.setUTCHours(0, 0, 0, 0);
+    // Calculate date range based on viewMode and localDate
+    let startDate: Date;
+    let endDate: Date;
+    
+    if (localDateStr && viewMode !== "day") {
+      // Parse user's local date
+      const selectedDate = parseDateOnlyAsUTC(localDateStr);
+      
+      if (viewMode === "year") {
+        // For year view, use the entire year
+        const year = selectedDate.getUTCFullYear();
+        startDate = new Date(Date.UTC(year, 0, 1, 0, 0, 0, 0));
+        endDate = new Date(Date.UTC(year, 11, 31, 23, 59, 59, 999));
+      } else if (viewMode === "month") {
+        // For month view, use the entire month
+        const year = selectedDate.getUTCFullYear();
+        const month = selectedDate.getUTCMonth();
+        startDate = new Date(Date.UTC(year, month, 1, 0, 0, 0, 0));
+        const lastDay = new Date(Date.UTC(year, month + 1, 0)).getUTCDate();
+        endDate = new Date(Date.UTC(year, month, lastDay, 23, 59, 59, 999));
+      } else {
+        // Fallback to days
+        endDate = new Date();
+        endDate.setUTCHours(23, 59, 59, 999);
+        startDate = subDays(endDate, days);
+        startDate.setUTCHours(0, 0, 0, 0);
+      }
+    } else if (localDateStr && viewMode === "day") {
+      // For day view, use that month's data
+      const selectedDate = parseDateOnlyAsUTC(localDateStr);
+      const year = selectedDate.getUTCFullYear();
+      const month = selectedDate.getUTCMonth();
+      startDate = new Date(Date.UTC(year, month, 1, 0, 0, 0, 0));
+      const lastDay = new Date(Date.UTC(year, month + 1, 0)).getUTCDate();
+      endDate = new Date(Date.UTC(year, month, lastDay, 23, 59, 59, 999));
+    } else {
+      // Default: last N days
+      endDate = new Date();
+      endDate.setUTCHours(23, 59, 59, 999);
+      startDate = subDays(endDate, days);
+      startDate.setUTCHours(0, 0, 0, 0);
+    }
 
     // Get all income transactions in the date range
     const transactions = await Transaction.find({
@@ -105,6 +145,18 @@ export async function GET(request: NextRequest) {
       });
     });
 
+    // Calculate actual days in period
+    // If no localDate/viewMode was provided, use the requested days parameter
+    // Otherwise calculate actual days from the date range
+    let periodDays: number;
+    if (!localDateStr) {
+      // Default case: use the requested days parameter
+      periodDays = days;
+    } else {
+      // Calculate actual days from date range
+      periodDays = Math.ceil((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24)) + 1;
+    }
+    
     return NextResponse.json({
       byDayOfWeek: byDayOfWeekAvg,
       byHour: byHourAvg,
@@ -112,7 +164,7 @@ export async function GET(request: NextRequest) {
       period: {
         startDate: startDate.toISOString(),
         endDate: endDate.toISOString(),
-        days,
+        days: periodDays,
       },
     });
   } catch (error) {

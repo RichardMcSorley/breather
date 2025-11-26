@@ -20,7 +20,7 @@ describe("HeatMap", () => {
       isLoading: true,
     });
 
-    const { container } = render(<HeatMap />);
+    const { container } = render(<HeatMap localDate="2024-01-15" viewMode="day" />);
 
     // Loading spinner is a div with animate-spin class, not a status role
     const spinner = container.querySelector(".animate-spin");
@@ -33,7 +33,7 @@ describe("HeatMap", () => {
       isLoading: false,
     });
 
-    render(<HeatMap />);
+    render(<HeatMap localDate="2024-01-15" viewMode="day" />);
 
     expect(screen.getByText(/No data available for heat map/i)).toBeInTheDocument();
   });
@@ -78,7 +78,7 @@ describe("HeatMap", () => {
       isLoading: false,
     });
 
-    render(<HeatMap />);
+    render(<HeatMap localDate="2024-01-15" viewMode="day" />);
 
     expect(screen.getByText(/Earnings Heat Map/i)).toBeInTheDocument();
     expect(screen.getAllByText(/Average Earnings by Day of Week/i)[0]).toBeInTheDocument();
@@ -110,7 +110,7 @@ describe("HeatMap", () => {
       isLoading: false,
     });
 
-    render(<HeatMap />);
+    render(<HeatMap localDate="2024-01-15" viewMode="day" />);
 
     expect(screen.getByText("Sun")).toBeInTheDocument();
     expect(screen.getByText("Mon")).toBeInTheDocument();
@@ -143,7 +143,7 @@ describe("HeatMap", () => {
       isLoading: false,
     });
 
-    render(<HeatMap />);
+    render(<HeatMap localDate="2024-01-15" viewMode="day" />);
 
     // Check for some hour labels
     expect(screen.getByText("0")).toBeInTheDocument();
@@ -170,7 +170,7 @@ describe("HeatMap", () => {
       isLoading: false,
     });
 
-    render(<HeatMap />);
+    render(<HeatMap localDate="2024-01-15" viewMode="day" />);
 
     // Currency should be formatted (may show as $1,235 or similar)
     const currencyElements = screen.getAllByText(/\$/);
@@ -202,7 +202,7 @@ describe("HeatMap", () => {
       isLoading: false,
     });
 
-    render(<HeatMap />);
+    render(<HeatMap localDate="2024-01-15" viewMode="day" />);
 
     expect(screen.getByText(/Earnings Heat Map/i)).toBeInTheDocument();
   });
@@ -232,7 +232,7 @@ describe("HeatMap", () => {
       isLoading: false,
     });
 
-    render(<HeatMap />);
+    render(<HeatMap localDate="2024-01-15" viewMode="day" />);
 
     expect(screen.getByText(/Earnings Heat Map/i)).toBeInTheDocument();
   });
@@ -254,9 +254,9 @@ describe("HeatMap", () => {
       isLoading: false,
     });
 
-    render(<HeatMap days={365} />);
+    render(<HeatMap localDate="2024-01-15" viewMode="year" />);
 
-    expect(screen.getByText(/last 365 days/i)).toBeInTheDocument();
+    expect(screen.getByText(/this year/i)).toBeInTheDocument();
   });
 
   it("should calculate color intensity correctly", () => {
@@ -282,7 +282,7 @@ describe("HeatMap", () => {
       isLoading: false,
     });
 
-    render(<HeatMap />);
+    render(<HeatMap localDate="2024-01-15" viewMode="day" />);
 
     // Component should render with different color intensities
     expect(screen.getByText(/Earnings Heat Map/i)).toBeInTheDocument();
@@ -305,7 +305,7 @@ describe("HeatMap", () => {
       isLoading: false,
     });
 
-    render(<HeatMap />);
+    render(<HeatMap localDate="2024-01-15" viewMode="day" />);
 
     expect(screen.getByText(/Lower earnings/i)).toBeInTheDocument();
     expect(screen.getByText(/Higher earnings/i)).toBeInTheDocument();
@@ -336,7 +336,7 @@ describe("HeatMap", () => {
       isLoading: false,
     });
 
-    render(<HeatMap />);
+    render(<HeatMap localDate="2024-01-15" viewMode="day" />);
 
     expect(screen.getByText(/Earnings Heat Map/i)).toBeInTheDocument();
   });

@@ -49,21 +49,22 @@ export async function GET(request: NextRequest) {
     let todayEnd: Date;
     
     if (viewMode === "year") {
-      rangeStart = startOfYear(now);
-      rangeEnd = endOfYear(now);
-      // For year view, use the full year range
-      todayStart = new Date(rangeStart);
-      todayStart.setUTCHours(0, 0, 0, 0);
-      todayEnd = new Date(rangeEnd);
-      todayEnd.setUTCHours(23, 59, 59, 999);
+      // For year view, manually calculate year start/end in UTC to avoid timezone issues
+      const year = now.getUTCFullYear();
+      todayStart = new Date(Date.UTC(year, 0, 1, 0, 0, 0, 0)); // January 1st at 00:00:00 UTC
+      todayEnd = new Date(Date.UTC(year, 11, 31, 23, 59, 59, 999)); // December 31st at 23:59:59 UTC
+      rangeStart = todayStart;
+      rangeEnd = todayEnd;
     } else if (viewMode === "month") {
-      rangeStart = startOfMonth(now);
-      rangeEnd = endOfMonth(now);
-      // For month view, use the full month range
-      todayStart = new Date(rangeStart);
-      todayStart.setUTCHours(0, 0, 0, 0);
-      todayEnd = new Date(rangeEnd);
-      todayEnd.setUTCHours(23, 59, 59, 999);
+      // For month view, manually calculate month start/end in UTC to avoid timezone issues
+      const year = now.getUTCFullYear();
+      const month = now.getUTCMonth();
+      todayStart = new Date(Date.UTC(year, month, 1, 0, 0, 0, 0)); // First day of month at 00:00:00 UTC
+      // Get last day of month by going to first day of next month and subtracting 1 day
+      const lastDay = new Date(Date.UTC(year, month + 1, 0)).getUTCDate();
+      todayEnd = new Date(Date.UTC(year, month, lastDay, 23, 59, 59, 999)); // Last day of month at 23:59:59 UTC
+      rangeStart = todayStart;
+      rangeEnd = todayEnd;
     } else {
       // Day view - use the selected day
       rangeStart = startOfMonth(now);
@@ -367,31 +368,90 @@ export async function GET(request: NextRequest) {
       earningsPerMile = todayIncome / todayMileageMiles;
     }
 
-    // Calculate earnings per hour based on time span from first to last income transaction
+    // Calculate earnings per hour
     let earningsPerHour: number | null = null;
     const incomeTransactions = periodTransactions.filter((t) => t.type === "income");
+    
     if (incomeTransactions.length > 0 && todayIncome > 0) {
-      // Parse times and find earliest and latest
-      const times = incomeTransactions
-        .map((t) => {
-          const [hours, minutes] = (t.time || "00:00").split(":").map(Number);
-          return hours * 60 + minutes; // Convert to minutes for easier comparison
-        })
-        .filter((minutes) => !isNaN(minutes));
+      if (viewMode === "day") {
+        // For day view, calculate based on time span from first to last transaction
+        const times = incomeTransactions
+          .map((t) => {
+            const [hours, minutes] = (t.time || "00:00").split(":").map(Number);
+            return hours * 60 + minutes; // Convert to minutes for easier comparison
+          })
+          .filter((minutes) => !isNaN(minutes));
 
-      if (times.length > 0) {
-        const earliestMinutes = Math.min(...times);
-        const latestMinutes = Math.max(...times);
-        const timeSpanMinutes = latestMinutes - earliestMinutes;
+        if (times.length > 0) {
+          const earliestMinutes = Math.min(...times);
+          const latestMinutes = Math.max(...times);
+          const timeSpanMinutes = latestMinutes - earliestMinutes;
+          
+          // If there's only one transaction or they're at the same time, use a minimum of 1 hour
+          const hoursWorked = Math.max(timeSpanMinutes / 60, 1.0);
+          
+          if (hoursWorked > 0) {
+            earningsPerHour = todayIncome / hoursWorked;
+          }
+        }
+      } else {
+        // For month and year views, calculate based on average daily hours
+        // Group transactions by date and calculate hours per day
+        const transactionsByDate: Record<string, typeof incomeTransactions> = {};
         
-        // If there's only one transaction or they're at the same time, use a minimum of 1 hour
-        const hoursWorked = Math.max(timeSpanMinutes / 60, 1.0);
+        incomeTransactions.forEach((t) => {
+          // Get date as YYYY-MM-DD string
+          const dateStr = new Date(t.date).toISOString().split('T')[0];
+          if (!transactionsByDate[dateStr]) {
+            transactionsByDate[dateStr] = [];
+          }
+          transactionsByDate[dateStr].push(t);
+        });
         
-        if (hoursWorked > 0) {
-          earningsPerHour = todayIncome / hoursWorked;
+        // Calculate hours worked per day
+        const dailyHours: number[] = [];
+        Object.values(transactionsByDate).forEach((dayTransactions) => {
+          const times = dayTransactions
+            .map((t) => {
+              const [hours, minutes] = (t.time || "00:00").split(":").map(Number);
+              return hours * 60 + minutes;
+            })
+            .filter((minutes) => !isNaN(minutes));
+          
+          if (times.length > 0) {
+            const earliestMinutes = Math.min(...times);
+            const latestMinutes = Math.max(...times);
+            const timeSpanMinutes = latestMinutes - earliestMinutes;
+            // Use minimum of 1 hour per day if only one transaction or same time
+            const hoursWorked = Math.max(timeSpanMinutes / 60, 1.0);
+            dailyHours.push(hoursWorked);
+          }
+        });
+        
+        // Calculate average hours per day
+        if (dailyHours.length > 0) {
+          const averageHoursPerDay = dailyHours.reduce((sum, hours) => sum + hours, 0) / dailyHours.length;
+          const totalHours = averageHoursPerDay * actualDays;
+          
+          if (totalHours > 0) {
+            earningsPerHour = todayIncome / totalHours;
+          }
         }
       }
     }
+
+    // Calculate income breakdown by source (tag)
+    const incomeBySource: Record<string, number> = {};
+    incomeTransactions.forEach((t) => {
+      if (t.tag) {
+        incomeBySource[t.tag] = (incomeBySource[t.tag] || 0) + t.amount;
+      }
+    });
+
+    // Convert to array and sort by amount descending
+    const incomeBreakdown = Object.entries(incomeBySource)
+      .map(([source, amount]) => ({ source, amount }))
+      .sort((a, b) => b.amount - a.amount);
 
     return NextResponse.json({
       grossTotal,
@@ -414,6 +474,7 @@ export async function GET(request: NextRequest) {
       todayMileageSavings,
       earningsPerMile,
       earningsPerHour,
+      incomeBreakdown,
     });
   } catch (error) {
     return handleApiError(error);

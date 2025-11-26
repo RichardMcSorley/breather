@@ -70,7 +70,10 @@ describe("useQueries", () => {
 
       mockFetch.mockResolvedValueOnce({
         ok: true,
-        json: async () => ({ transactions: mockTransactions }),
+        json: async () => ({ 
+          transactions: mockTransactions,
+          pagination: { page: 1, limit: 50, total: 2, totalPages: 1 }
+        }),
       });
 
       const { result } = renderHook(() => useTransactions(), {
@@ -82,6 +85,8 @@ describe("useQueries", () => {
       // The hook filters out isBill and isBalanceAdjustment transactions
       expect(result.current.data?.transactions).toHaveLength(2);
       expect(result.current.data?.transactions[0]._id).toBe("1");
+      expect(result.current.data?.pagination).toBeDefined();
+      expect(result.current.data?.pagination?.page).toBe(1);
     });
 
     it("should filter by type", async () => {
@@ -92,7 +97,10 @@ describe("useQueries", () => {
 
       mockFetch.mockResolvedValueOnce({
         ok: true,
-        json: async () => ({ transactions: mockTransactions }),
+        json: async () => ({ 
+          transactions: mockTransactions,
+          pagination: { page: 1, limit: 50, total: 2, totalPages: 1 }
+        }),
       });
 
       const { result } = renderHook(() => useTransactions("income"), {
@@ -107,6 +115,68 @@ describe("useQueries", () => {
       // Verify fetch was called and check the URL contains the type parameter
       const fetchCalls = mockFetch.mock.calls;
       const urlCall = fetchCalls.find(call => call[0]?.includes("type=income"));
+      expect(urlCall).toBeDefined();
+    });
+
+    it("should use pagination parameters", async () => {
+      const mockTransactions = Array.from({ length: 50 }, (_, i) => ({
+        _id: `${i + 1}`,
+        amount: 100 + i,
+        type: "income" as const,
+        isBill: false,
+        isBalanceAdjustment: false,
+      }));
+
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ 
+          transactions: mockTransactions,
+          pagination: { page: 2, limit: 50, total: 150, totalPages: 3 }
+        }),
+      });
+
+      const { result } = renderHook(() => useTransactions("all", "all", 2, 50), {
+        wrapper: createWrapper(),
+      });
+
+      await waitFor(() => {
+        expect(result.current.isSuccess).toBe(true);
+        expect(mockFetch).toHaveBeenCalled();
+      }, { timeout: 3000 });
+      
+      // Verify fetch was called with pagination parameters
+      const fetchCalls = mockFetch.mock.calls;
+      const urlCall = fetchCalls.find(call => call[0]?.includes("page=2") && call[0]?.includes("limit=50"));
+      expect(urlCall).toBeDefined();
+      expect(result.current.data?.pagination?.page).toBe(2);
+      expect(result.current.data?.pagination?.totalPages).toBe(3);
+    });
+
+    it("should use default pagination when not provided", async () => {
+      const mockTransactions = [
+        { _id: "1", amount: 100, type: "income", isBill: false, isBalanceAdjustment: false },
+      ];
+
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ 
+          transactions: mockTransactions,
+          pagination: { page: 1, limit: 50, total: 1, totalPages: 1 }
+        }),
+      });
+
+      const { result } = renderHook(() => useTransactions(), {
+        wrapper: createWrapper(),
+      });
+
+      await waitFor(() => {
+        expect(result.current.isSuccess).toBe(true);
+        expect(mockFetch).toHaveBeenCalled();
+      }, { timeout: 3000 });
+      
+      // Verify fetch was called with default pagination (page=1, limit=50)
+      const fetchCalls = mockFetch.mock.calls;
+      const urlCall = fetchCalls.find(call => call[0]?.includes("page=1") && call[0]?.includes("limit=50"));
       expect(urlCall).toBeDefined();
     });
 
@@ -413,13 +483,14 @@ describe("useQueries", () => {
         json: async () => mockHeatMap,
       });
 
-      const { result } = renderHook(() => useHeatMapData(), {
+      const { result } = renderHook(() => useHeatMapData("2024-01-15", "day"), {
         wrapper: createWrapper(),
       });
 
       await waitFor(() => expect(result.current.isSuccess).toBe(true));
       expect(result.current.data).toBeDefined();
-      expect(mockFetch).toHaveBeenCalledWith(expect.stringContaining("days=30"));
+      expect(mockFetch).toHaveBeenCalledWith(expect.stringContaining("localDate=2024-01-15"));
+      expect(mockFetch).toHaveBeenCalledWith(expect.stringContaining("viewMode=day"));
     });
 
     it("should fetch heat map data with custom days", async () => {
@@ -434,7 +505,7 @@ describe("useQueries", () => {
         json: async () => mockHeatMap,
       });
 
-      const { result } = renderHook(() => useHeatMapData(60), {
+      const { result } = renderHook(() => useHeatMapData("2024-01-15", "day", 60), {
         wrapper: createWrapper(),
       });
 

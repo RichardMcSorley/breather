@@ -1,38 +1,35 @@
 "use client";
 
 import Card from "./ui/Card";
-import { useHeatMapData } from "@/hooks/useQueries";
+import { useAppHeatMapData } from "@/hooks/useQueries";
 
-interface HeatMapData {
-  byDayOfWeek: Record<string, number>;
-  byHour: Record<string, number>;
-  byDayAndHour: Record<string, Record<string, number>>;
+interface AppHeatMapData {
+  apps: string[];
+  data: Record<string, Record<string, number>>;
   period: {
     startDate: string;
     endDate: string;
-    days: number;
   };
 }
 
-interface HeatMapProps {
+interface AppHeatMapProps {
   localDate: string;
   viewMode: "day" | "month" | "year";
-  days?: number;
 }
 
 const DAY_NAMES = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
-export default function HeatMap({ localDate, viewMode, days = 30 }: HeatMapProps) {
-  const { data, isLoading: loading } = useHeatMapData(localDate, viewMode, days);
+export default function AppHeatMap({ localDate, viewMode }: AppHeatMapProps) {
+  const { data, isLoading: loading } = useAppHeatMapData(localDate, viewMode);
 
   const getMaxValue = () => {
     if (!data) return 1;
     let max = 0;
-    Object.values(data.byDayAndHour).forEach((dayData) => {
-      const typedDayData = dayData as Record<string, number>;
-      Object.values(typedDayData).forEach((value: number) => {
+    data.apps.forEach((app) => {
+      for (let day = 0; day < 7; day++) {
+        const value = data.data[app]?.[day.toString()] || 0;
         if (value > max) max = value;
-      });
+      }
     });
     return max || 1;
   };
@@ -66,11 +63,11 @@ export default function HeatMap({ localDate, viewMode, days = 30 }: HeatMapProps
     );
   }
 
-  if (!data) {
+  if (!data || !data.apps || data.apps.length === 0) {
     return (
       <Card className="p-6">
         <div className="text-center text-gray-500 dark:text-gray-400 py-8">
-          No data available for heat map
+          No app data available for heat map
         </div>
       </Card>
     );
@@ -82,67 +79,62 @@ export default function HeatMap({ localDate, viewMode, days = 30 }: HeatMapProps
     <Card className="p-6">
       <div className="mb-4">
         <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-2">
-          Earnings Heat Map
+          App Performance by Day
         </h2>
         <p className="text-sm text-gray-600 dark:text-gray-400">
-          Average earnings by day of week and hour
+          Earnings by app and day of week
           {viewMode === "year" && " (this year)"}
           {viewMode === "month" && " (this month)"}
           {viewMode === "day" && " (this month)"}
         </p>
       </div>
 
-      {/* Day of Week Summary */}
-      <div className="mb-6">
-        <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">
-          Average Earnings by Day of Week
-        </h3>
-        <div className="grid grid-cols-7 gap-2">
-          {DAY_NAMES.map((dayName, index) => {
-            const dayKey = index.toString();
-            const value = data.byDayOfWeek[dayKey] || 0;
-            const colors = getColorIntensity(value, maxValue);
-            return (
-              <div key={dayKey} className="text-center">
-                <div
-                  className={`${colors.bg} rounded p-2 mb-1 min-h-[60px] flex items-center justify-center`}
-                  title={`${dayName}: ${formatCurrency(value)}`}
-                >
-                  <span className={`text-xs font-medium ${colors.text}`}>
-                    {formatCurrency(value)}
-                  </span>
-                </div>
-                <div className="text-xs text-gray-600 dark:text-gray-400">{dayName}</div>
-              </div>
-            );
-          })}
-        </div>
-      </div>
-
-      {/* Hour of Day Summary */}
-      <div className="mb-6">
-        <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">
-          Average Earnings by Hour of Day
-        </h3>
-        <div className="grid grid-cols-12 gap-1">
-          {Array.from({ length: 24 }, (_, hour) => {
-            const hourKey = hour.toString();
-            const value = data.byHour[hourKey] || 0;
-            const colors = getColorIntensity(value, maxValue);
-            return (
-              <div key={hourKey} className="text-center">
-                <div
-                  className={`${colors.bg} rounded p-1 mb-1 min-h-[40px] flex items-center justify-center`}
-                  title={`${hour}:00 - ${formatCurrency(value)}`}
-                >
-                  <span className={`text-[10px] font-medium ${colors.text}`}>
-                    {formatCurrency(value)}
-                  </span>
-                </div>
-                <div className="text-[10px] text-gray-600 dark:text-gray-400">{hour}</div>
-              </div>
-            );
-          })}
+      {/* Heat Map Grid */}
+      <div className="overflow-x-auto">
+        <div className="inline-block min-w-full">
+          <table className="w-full">
+            <thead>
+              <tr>
+                <th className="text-left text-xs font-semibold text-gray-600 dark:text-gray-400 pb-2 pr-4">
+                  App
+                </th>
+                {DAY_NAMES.map((dayName, index) => (
+                  <th
+                    key={index}
+                    className="text-center text-xs font-semibold text-gray-600 dark:text-gray-400 pb-2 px-1"
+                  >
+                    {dayName}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {data.apps.map((app) => (
+                <tr key={app}>
+                  <td className="text-sm font-medium text-gray-700 dark:text-gray-300 pr-4 py-1">
+                    {app}
+                  </td>
+                  {DAY_NAMES.map((_, dayIndex) => {
+                    const dayKey = dayIndex.toString();
+                    const value = data.data[app]?.[dayKey] || 0;
+                    const colors = getColorIntensity(value, maxValue);
+                    return (
+                      <td key={dayIndex} className="px-1 py-1">
+                        <div
+                          className={`${colors.bg} rounded p-2 min-h-[40px] flex items-center justify-center`}
+                          title={`${app} on ${DAY_NAMES[dayIndex]}: ${formatCurrency(value)}`}
+                        >
+                          <span className={`text-xs font-medium ${colors.text}`}>
+                            {value > 0 ? formatCurrency(value) : "-"}
+                          </span>
+                        </div>
+                      </td>
+                    );
+                  })}
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       </div>
 

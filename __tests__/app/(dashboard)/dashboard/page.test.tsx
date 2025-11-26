@@ -18,6 +18,8 @@ vi.mock("@/hooks/useQueries", () => ({
   useSummary: vi.fn(),
   usePaymentPlan: vi.fn(),
   useBillPayments: vi.fn(),
+  useHeatMapData: vi.fn(),
+  useAppHeatMapData: vi.fn(),
 }));
 
 vi.mock("@/components/Layout", () => ({
@@ -47,6 +49,14 @@ describe("DashboardPage", () => {
     });
     (useQueries.useBillPayments as any).mockReturnValue({
       data: { payments: [] },
+    });
+    (useQueries.useHeatMapData as any).mockReturnValue({
+      data: null,
+      isLoading: false,
+    });
+    (useQueries.useAppHeatMapData as any).mockReturnValue({
+      data: null,
+      isLoading: false,
     });
   });
 

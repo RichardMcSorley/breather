@@ -9,6 +9,7 @@ import Button from "@/components/ui/Button";
 import Input from "@/components/ui/Input";
 import AddTransactionModal from "@/components/AddTransactionModal";
 import HeatMap from "@/components/HeatMap";
+import AppHeatMap from "@/components/AppHeatMap";
 import { useSummary, usePaymentPlan, useBillPayments } from "@/hooks/useQueries";
 
 interface Summary {
@@ -31,6 +32,7 @@ interface Summary {
   todayMileageSavings?: number;
   earningsPerMile?: number | null;
   earningsPerHour?: number | null;
+  incomeBreakdown?: Array<{ source: string; amount: number }>;
 }
 
 interface PaymentPlanEntry {
@@ -272,6 +274,22 @@ export default function DashboardPage() {
 
   return (
     <Layout>
+      {/* Income and Expense Buttons */}
+      <div className="flex gap-2 mb-4 justify-end">
+        <button
+          onClick={() => handleAddTransaction("income")}
+          className="px-4 py-2 rounded-lg text-sm font-medium bg-green-600 text-white hover:bg-green-700 min-h-[44px]"
+        >
+          + Income
+        </button>
+        <button
+          onClick={() => handleAddTransaction("expense")}
+          className="px-4 py-2 rounded-lg text-sm font-medium bg-red-600 text-white hover:bg-red-700 min-h-[44px]"
+        >
+          + Expense
+        </button>
+      </div>
+
       {/* Date Navigation */}
       <Card className="p-4 mb-4">
         <div className="space-y-3">
@@ -480,6 +498,53 @@ export default function DashboardPage() {
               </div>
             </Card>
 
+            {/* Income Breakdown by Source */}
+            {summary.incomeBreakdown && summary.incomeBreakdown.length > 0 && (
+              <Card className="p-6">
+                <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-6">
+                  Income by Source
+                </h2>
+
+                <div className="space-y-3">
+                  {summary.incomeBreakdown.map((item: { source: string; amount: number }) => {
+                    const total = summary.incomeBreakdown.reduce((sum: number, i: { source: string; amount: number }) => sum + i.amount, 0);
+                    const percentage = (item.amount / total) * 100;
+                    return (
+                      <div key={item.source} className="space-y-1.5">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <div className="w-2 h-2 rounded-full bg-green-500 dark:bg-green-400"></div>
+                            <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                              {item.source}
+                            </span>
+                          </div>
+                          <span className="text-sm font-semibold text-green-600 dark:text-green-400 tabular-nums">
+                            {formatCurrency(item.amount)}
+                          </span>
+                        </div>
+                        <div className="h-1.5 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
+                          <div 
+                            className="h-full bg-green-500 dark:bg-green-400 transition-all duration-300"
+                            style={{ width: `${percentage}%` }}
+                          ></div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                <div className="flex items-center justify-between pt-4 mt-4 border-t-2 border-gray-300 dark:border-gray-600">
+                  <span className="text-base font-bold text-gray-900 dark:text-white">
+                    Total
+                  </span>
+                  <span className="text-base font-bold text-green-600 dark:text-green-400 tabular-nums">
+                    {formatCurrency(
+                      summary.incomeBreakdown.reduce((sum: number, item: { source: string; amount: number }) => sum + item.amount, 0)
+                    )}
+                  </span>
+                </div>
+              </Card>
+            )}
 
             {upcomingPayments.length > 0 && (() => {
               // Filter to only show unpaid bills
@@ -592,26 +657,10 @@ export default function DashboardPage() {
         )}
       </div>
 
-      {/* Heat Map */}
-      <div className="mb-6">
-        <HeatMap days={30} />
-      </div>
-
-      <div className="grid grid-cols-2 gap-4">
-        <Button
-          variant="primary"
-          className="w-full h-20 flex items-center justify-center text-3xl"
-          onClick={() => handleAddTransaction("income")}
-        >
-          +
-        </Button>
-        <Button
-          variant="danger"
-          className="w-full h-20 flex items-center justify-center text-3xl"
-          onClick={() => handleAddTransaction("expense")}
-        >
-          −
-        </Button>
+      {/* Heat Maps */}
+      <div className="mb-6 space-y-6">
+        <HeatMap localDate={selectedDate} viewMode={viewMode} />
+        <AppHeatMap localDate={selectedDate} viewMode={viewMode} />
       </div>
 
       {showAddModal && (

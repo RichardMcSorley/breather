@@ -1,12 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useSession } from "next-auth/react";
 import Layout from "@/components/Layout";
 import Card from "@/components/ui/Card";
 import Button from "@/components/ui/Button";
 import AddMileageModal from "@/components/AddMileageModal";
-import { useMileageEntries, useSettings, useDeleteMileageEntry } from "@/hooks/useQueries";
+import { useMileageEntries, useMileageEntriesForCalculation, useSettings, useDeleteMileageEntry } from "@/hooks/useQueries";
 
 interface MileageEntry {
   _id: string;
@@ -21,12 +21,19 @@ export default function MileagePage() {
   const { data: session } = useSession();
   const [editingEntryId, setEditingEntryId] = useState<string | null>(null);
   const [showAddModal, setShowAddModal] = useState(false);
+  const [page, setPage] = useState(1);
+  const limit = 50;
   
-  const { data: mileageData, isLoading: loading } = useMileageEntries();
+  // Use paginated query for display
+  const { data: mileageData, isLoading: loading } = useMileageEntries(page, limit);
+  // Use separate query for year calculation (needs all entries)
+  const { data: allMileageData } = useMileageEntriesForCalculation();
   const { data: settingsData } = useSettings();
   const deleteMileageEntry = useDeleteMileageEntry();
   
   const irsMileageDeduction = settingsData?.irsMileageDeduction || 0.67;
+  
+  const pagination = mileageData?.pagination;
 
   const sortEntriesByDate = (entriesToSort: MileageEntry[]) => {
     return entriesToSort
@@ -54,7 +61,11 @@ export default function MileagePage() {
       });
   };
 
+  // Use paginated entries for display
   const entries = mileageData ? sortEntriesByDate(mileageData.entries || []) : [];
+  
+  // Use all entries for year calculation
+  const allEntries = allMileageData ? sortEntriesByDate(allMileageData.entries || []) : [];
 
   const formatDate = (dateString: string | Date) => {
     // Handle both Date objects and ISO strings
@@ -115,35 +126,60 @@ export default function MileagePage() {
     );
   }
 
-  const latestEntry = entries[0];
-  const previousEntry = entries[1];
+  // Get latest entry from all entries (for display purposes)
+  const latestEntry = allEntries[0];
+  const previousEntry = allEntries[1];
   const milesDriven = latestEntry && previousEntry 
     ? latestEntry.odometer - previousEntry.odometer 
     : null;
 
-  // Calculate current year's work mileage for tax deductions
+  // Calculate current year's work mileage for tax deductions using ALL entries
   const currentYear = new Date().getFullYear();
   let currentYearMiles = 0;
   
-  // Find work entries from current year
-  const currentYearWorkEntries = entries.filter(entry => {
-    const entryDate = new Date(entry.date);
-    return entryDate.getFullYear() === currentYear && entry.classification === "work";
+  // Helper function to parse date string as UTC and get year
+  const getYearFromDateString = (dateString: string): number => {
+    if (typeof dateString === 'string' && dateString.match(/^\d{4}-\d{2}-\d{2}$/)) {
+      const [year] = dateString.split('-').map(Number);
+      return year;
+    }
+    // Fallback to Date parsing
+    const date = new Date(dateString);
+    return date.getUTCFullYear();
+  };
+  
+  // Find work entries from current year using all entries
+  const currentYearWorkEntries = allEntries.filter(entry => {
+    const entryYear = getYearFromDateString(entry.date);
+    return entryYear === currentYear && entry.classification === "work";
   });
   
   if (currentYearWorkEntries.length > 0) {
     // Sum up miles between consecutive work entries in current year
+    // Entries are sorted descending (newest first)
     for (let i = 0; i < currentYearWorkEntries.length; i++) {
       const entry = currentYearWorkEntries[i];
-      const previousWorkEntry = i < currentYearWorkEntries.length - 1 
-        ? currentYearWorkEntries[i + 1] 
-        : entries.find(e => {
-            const eDate = new Date(e.date);
-            return eDate.getFullYear() < currentYear && e.classification === "work";
-          });
+      
+      // Find the previous work entry
+      let previousWorkEntry: MileageEntry | undefined;
+      
+      if (i < currentYearWorkEntries.length - 1) {
+        // There's a next entry in the current year, use that
+        previousWorkEntry = currentYearWorkEntries[i + 1];
+      } else {
+        // This is the oldest entry in current year, find the most recent work entry from before current year
+        // Since entries are sorted descending, find the first one with year < currentYear
+        previousWorkEntry = allEntries.find(e => {
+          const eYear = getYearFromDateString(e.date);
+          return eYear < currentYear && e.classification === "work";
+        });
+      }
       
       if (previousWorkEntry) {
-        currentYearMiles += entry.odometer - previousWorkEntry.odometer;
+        const miles = entry.odometer - previousWorkEntry.odometer;
+        if (miles > 0) {
+          currentYearMiles += miles;
+        }
       }
     }
   }
@@ -174,27 +210,25 @@ export default function MileagePage() {
         </div>
       </div>
 
-      {latestEntry && (
-        <Card className="p-6 mb-6">
-          <div className="space-y-6">
-            <div className="text-center py-4">
-              <div className="text-4xl font-bold text-gray-900 dark:text-white mb-2">
-                {formatOdometer(currentYearMiles)}
-              </div>
-              <div className="text-gray-600 dark:text-gray-400 text-sm">{currentYear} mileage</div>
+      <Card className="p-6 mb-6">
+        <div className="space-y-6">
+          <div className="text-center py-4">
+            <div className="text-4xl font-bold text-gray-900 dark:text-white mb-2">
+              {formatOdometer(currentYearMiles)}
             </div>
-            
-            <div className="border-t border-gray-200 dark:border-gray-700 pt-6">
-              <div className="text-center py-4">
-                <div className="text-4xl font-bold text-green-600 dark:text-green-400 mb-2">
-                  {formatCurrency(taxDeduction)}
-                </div>
-                <div className="text-gray-600 dark:text-gray-400 text-sm">Tax deduction ({irsMileageDeduction}/mile)</div>
+            <div className="text-gray-600 dark:text-gray-400 text-sm">{currentYear} mileage</div>
+          </div>
+          
+          <div className="border-t border-gray-200 dark:border-gray-700 pt-6">
+            <div className="text-center py-4">
+              <div className="text-4xl font-bold text-green-600 dark:text-green-400 mb-2">
+                {formatCurrency(taxDeduction)}
               </div>
+              <div className="text-gray-600 dark:text-gray-400 text-sm">Tax deduction ({irsMileageDeduction}/mile)</div>
             </div>
           </div>
-        </Card>
-      )}
+        </div>
+      </Card>
 
       {entries.length > 0 && (
         <Card className="p-6">
@@ -272,12 +306,75 @@ export default function MileagePage() {
         </Card>
       )}
 
-      {entries.length === 0 && (
+      {entries.length === 0 && !loading && (
         <Card className="p-6">
           <div className="text-center text-gray-500 dark:text-gray-400 py-8">
             No mileage entries yet. Add your first odometer reading above.
           </div>
         </Card>
+      )}
+
+      {/* Pagination Controls */}
+      {pagination && pagination.totalPages > 1 && (
+        <div className="flex items-center justify-between mt-6 pt-6 border-t border-gray-200 dark:border-gray-700">
+          <div className="text-sm text-gray-600 dark:text-gray-400">
+            Showing {((page - 1) * limit) + 1} to {Math.min(page * limit, pagination.total)} of {pagination.total} entries
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setPage(page - 1)}
+              disabled={page === 1}
+              className={`px-4 py-2 rounded-lg text-sm font-medium min-h-[44px] ${
+                page === 1
+                  ? "bg-gray-100 dark:bg-gray-700 text-gray-400 dark:text-gray-500 cursor-not-allowed"
+                  : "bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600"
+              }`}
+            >
+              Previous
+            </button>
+            
+            <div className="flex items-center gap-1">
+              {Array.from({ length: Math.min(5, pagination.totalPages) }, (_, i) => {
+                let pageNum: number;
+                if (pagination.totalPages <= 5) {
+                  pageNum = i + 1;
+                } else if (page <= 3) {
+                  pageNum = i + 1;
+                } else if (page >= pagination.totalPages - 2) {
+                  pageNum = pagination.totalPages - 4 + i;
+                } else {
+                  pageNum = page - 2 + i;
+                }
+                
+                return (
+                  <button
+                    key={pageNum}
+                    onClick={() => setPage(pageNum)}
+                    className={`min-w-[44px] min-h-[44px] px-3 py-2 rounded-lg text-sm font-medium ${
+                      page === pageNum
+                        ? "bg-blue-600 text-white"
+                        : "bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600"
+                    }`}
+                  >
+                    {pageNum}
+                  </button>
+                );
+              })}
+            </div>
+            
+            <button
+              onClick={() => setPage(page + 1)}
+              disabled={page === pagination.totalPages}
+              className={`px-4 py-2 rounded-lg text-sm font-medium min-h-[44px] ${
+                page === pagination.totalPages
+                  ? "bg-gray-100 dark:bg-gray-700 text-gray-400 dark:text-gray-500 cursor-not-allowed"
+                  : "bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600"
+              }`}
+            >
+              Next
+            </button>
+          </div>
+        </div>
       )}
 
       {(showAddModal || editingEntryId) && (

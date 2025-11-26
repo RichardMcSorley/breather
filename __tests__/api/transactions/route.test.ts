@@ -158,6 +158,124 @@ describe("GET /api/transactions", () => {
     expect(data.pagination.totalPages).toBe(3);
   });
 
+  it("should return page 2 of paginated results", async () => {
+    // Create 10 transactions with distinct amounts
+    const amounts = [];
+    for (let i = 0; i < 10; i++) {
+      const amount = 100 + i;
+      amounts.push(amount);
+      await Transaction.create({
+        userId: TEST_USER_ID,
+        amount: amount,
+        type: "income",
+        date: new Date(`2024-01-${15 + i}`),
+        time: "10:00",
+      });
+    }
+
+    const request = new NextRequest(
+      "http://localhost:3000/api/transactions?page=2&limit=5"
+    );
+    const response = await GET(request);
+    const data = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(data.transactions).toHaveLength(5);
+    expect(data.pagination.page).toBe(2);
+    expect(data.pagination.limit).toBe(5);
+    expect(data.pagination.total).toBe(10);
+    expect(data.pagination.totalPages).toBe(2);
+    // Should skip first 5 transactions (sorted by date descending, so latest dates first)
+    // Since dates are 2024-01-15 to 2024-01-24, page 2 should have dates 2024-01-15 to 2024-01-19
+    // Verify we got 5 transactions and they're different from page 1
+    const page1Request = new NextRequest(
+      "http://localhost:3000/api/transactions?page=1&limit=5"
+    );
+    const page1Response = await GET(page1Request);
+    const page1Data = await page1Response.json();
+    const page1Amounts = page1Data.transactions.map((t: any) => t.amount);
+    const page2Amounts = data.transactions.map((t: any) => t.amount);
+    
+    // Page 2 amounts should be different from page 1
+    expect(page1Amounts).not.toEqual(page2Amounts);
+    // Both should have 5 transactions
+    expect(page1Amounts.length).toBe(5);
+    expect(page2Amounts.length).toBe(5);
+  });
+
+  it("should use default pagination when not provided", async () => {
+    // Create 3 transactions
+    for (let i = 0; i < 3; i++) {
+      await Transaction.create({
+        userId: TEST_USER_ID,
+        amount: 100 + i,
+        type: "income",
+        date: new Date(`2024-01-${15 + i}`),
+        time: "10:00",
+      });
+    }
+
+    const request = new NextRequest(
+      "http://localhost:3000/api/transactions"
+    );
+    const response = await GET(request);
+    const data = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(data.pagination.page).toBe(1);
+    expect(data.pagination.limit).toBe(50); // Default limit
+    expect(data.pagination.total).toBe(3);
+  });
+
+  it("should handle pagination with filters", async () => {
+    // Create mixed transactions
+    for (let i = 0; i < 5; i++) {
+      await Transaction.create({
+        userId: TEST_USER_ID,
+        amount: 100 + i,
+        type: i % 2 === 0 ? "income" : "expense",
+        date: new Date(`2024-01-${15 + i}`),
+        time: "10:00",
+        tag: i < 3 ? "Uber" : "Doordash",
+      });
+    }
+
+    const request = new NextRequest(
+      "http://localhost:3000/api/transactions?page=1&limit=2&type=income&tag=Uber"
+    );
+    const response = await GET(request);
+    const data = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(data.transactions.length).toBeLessThanOrEqual(2);
+    expect(data.transactions.every((t: any) => t.type === "income" && t.tag === "Uber")).toBe(true);
+    expect(data.pagination.page).toBe(1);
+  });
+
+  it("should return empty results for page beyond total pages", async () => {
+    // Create 5 transactions
+    for (let i = 0; i < 5; i++) {
+      await Transaction.create({
+        userId: TEST_USER_ID,
+        amount: 100 + i,
+        type: "income",
+        date: new Date(`2024-01-${15 + i}`),
+        time: "10:00",
+      });
+    }
+
+    const request = new NextRequest(
+      "http://localhost:3000/api/transactions?page=10&limit=2"
+    );
+    const response = await GET(request);
+    const data = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(data.transactions).toHaveLength(0);
+    expect(data.pagination.page).toBe(10);
+    expect(data.pagination.totalPages).toBe(3);
+  });
+
   it("should return 400 for invalid transaction type", async () => {
     const request = new NextRequest(
       "http://localhost:3000/api/transactions?type=invalid"

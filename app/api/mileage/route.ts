@@ -21,9 +21,14 @@ export async function GET(request: NextRequest) {
     const startDate = searchParams.get("startDate");
     const endDate = searchParams.get("endDate");
     
+    // Allow higher limit for calculation queries (up to 10000)
+    const requestedLimit = searchParams.get("limit");
+    const maxLimit = requestedLimit && parseInt(requestedLimit) > 100 ? 10000 : 100;
+    
     const pagination = validatePagination(
       searchParams.get("page"),
-      searchParams.get("limit")
+      searchParams.get("limit"),
+      maxLimit
     );
     if (!pagination) {
       return NextResponse.json({ error: "Invalid pagination parameters" }, { status: 400 });

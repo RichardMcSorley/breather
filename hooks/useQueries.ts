@@ -4,29 +4,36 @@ import { useToast } from "@/lib/toast";
 
 // Query Keys
 export const queryKeys = {
-  transactions: (filterType?: string, filterTag?: string) =>
-    ["transactions", filterType, filterTag] as const,
+  transactions: (filterType?: string, filterTag?: string, page?: number, limit?: number) =>
+    ["transactions", filterType, filterTag, page, limit] as const,
   transaction: (id: string) => ["transaction", id] as const,
   bills: () => ["bills"] as const,
   bill: (id: string) => ["bill", id] as const,
   billPayments: () => ["billPayments"] as const,
   paymentPlan: (startDate: string, dailyPayment: number) =>
     ["paymentPlan", startDate, dailyPayment] as const,
-  mileage: () => ["mileage"] as const,
+  mileage: (page?: number, limit?: number) => ["mileage", page, limit] as const,
+  mileageAll: () => ["mileage", "all"] as const,
   mileageEntry: (id: string) => ["mileageEntry", id] as const,
   settings: () => ["settings"] as const,
   summary: (localDate: string, viewMode: string) =>
     ["summary", localDate, viewMode] as const,
-  heatmap: (days: number) => ["heatmap", days] as const,
+  heatmap: (localDate: string, viewMode: string, days?: number) => ["heatmap", localDate, viewMode, days] as const,
+  appHeatmap: (localDate: string, viewMode: string) => ["appHeatmap", localDate, viewMode] as const,
 };
 
 // Query Hooks
 
-export function useTransactions(filterType: string = "all", filterTag: string = "all") {
+export function useTransactions(
+  filterType: string = "all",
+  filterTag: string = "all",
+  page: number = 1,
+  limit: number = 50
+) {
   return useQuery({
-    queryKey: queryKeys.transactions(filterType, filterTag),
+    queryKey: queryKeys.transactions(filterType, filterTag, page, limit),
     queryFn: async () => {
-      let url = "/api/transactions?limit=100";
+      let url = `/api/transactions?page=${page}&limit=${limit}`;
       if (filterType !== "all") {
         url += `&type=${filterType}`;
       }
@@ -42,6 +49,7 @@ export function useTransactions(filterType: string = "all", filterTag: string = 
         transactions: data.transactions.filter(
           (t: any) => !t.isBill && !t.isBalanceAdjustment
         ),
+        pagination: data.pagination,
       };
     },
   });
@@ -109,11 +117,29 @@ export function usePaymentPlan(startDate: string, dailyPayment: number, enabled:
   });
 }
 
-export function useMileageEntries() {
+export function useMileageEntries(page: number = 1, limit: number = 50) {
   return useQuery({
-    queryKey: queryKeys.mileage(),
+    queryKey: queryKeys.mileage(page, limit),
     queryFn: async () => {
-      const res = await fetch("/api/mileage");
+      const res = await fetch(`/api/mileage?page=${page}&limit=${limit}`);
+      if (!res.ok) {
+        throw new Error("Failed to fetch mileage entries");
+      }
+      const data = await res.json();
+      return {
+        entries: data.entries || [],
+        pagination: data.pagination,
+      };
+    },
+  });
+}
+
+export function useMileageEntriesForCalculation() {
+  return useQuery({
+    queryKey: queryKeys.mileageAll(),
+    queryFn: async () => {
+      // Fetch all entries for year calculation (no pagination)
+      const res = await fetch("/api/mileage?limit=10000");
       if (!res.ok) {
         throw new Error("Failed to fetch mileage entries");
       }
@@ -168,13 +194,35 @@ export function useSummary(localDate: string, viewMode: string) {
   });
 }
 
-export function useHeatMapData(days: number = 30) {
+export function useHeatMapData(localDate: string, viewMode: string, days: number = 30) {
   return useQuery({
-    queryKey: queryKeys.heatmap(days),
+    queryKey: queryKeys.heatmap(localDate, viewMode, days),
     queryFn: async () => {
-      const res = await fetch(`/api/analytics/heatmap?days=${days}`);
+      const params = new URLSearchParams({
+        localDate,
+        viewMode,
+        days: days.toString(),
+      });
+      const res = await fetch(`/api/analytics/heatmap?${params.toString()}`);
       if (!res.ok) {
         throw new Error("Failed to fetch heat map data");
+      }
+      return res.json();
+    },
+  });
+}
+
+export function useAppHeatMapData(localDate: string, viewMode: string) {
+  return useQuery({
+    queryKey: queryKeys.appHeatmap(localDate, viewMode),
+    queryFn: async () => {
+      const params = new URLSearchParams({
+        localDate,
+        viewMode,
+      });
+      const res = await fetch(`/api/analytics/app-heatmap?${params.toString()}`);
+      if (!res.ok) {
+        throw new Error("Failed to fetch app heat map data");
       }
       return res.json();
     },
