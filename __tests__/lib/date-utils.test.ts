@@ -200,5 +200,154 @@ describe("date-utils", () => {
       expect(result.timeString).toBe("23:00");
     });
   });
+
+  describe("parseDateAsUTC edge cases", () => {
+    it("should handle invalid month 13", () => {
+      // JavaScript Date handles month 13 by rolling over to next year
+      const date = parseDateAsUTC("2024-13-01");
+      expect(date.getUTCFullYear()).toBe(2025);
+      expect(date.getUTCMonth()).toBe(0); // January
+    });
+
+    it("should handle invalid month 0", () => {
+      // Month 0 is December of previous year
+      const date = parseDateAsUTC("2024-00-01");
+      expect(date.getUTCFullYear()).toBe(2023);
+      expect(date.getUTCMonth()).toBe(11); // December
+    });
+
+    it("should handle invalid day 0", () => {
+      // Day 0 is last day of previous month
+      const date = parseDateAsUTC("2024-01-00");
+      expect(date.getUTCFullYear()).toBe(2023);
+      expect(date.getUTCMonth()).toBe(11); // December
+    });
+
+    it("should handle February 29 in leap year", () => {
+      const date = parseDateAsUTC("2024-02-29");
+      expect(date.getUTCFullYear()).toBe(2024);
+      expect(date.getUTCMonth()).toBe(1); // February
+      expect(date.getUTCDate()).toBe(29);
+    });
+
+    it("should handle February 29 in non-leap year (rolls to March 1)", () => {
+      const date = parseDateAsUTC("2023-02-29");
+      // JavaScript Date rolls over to March 1
+      expect(date.getUTCMonth()).toBe(2); // March
+      expect(date.getUTCDate()).toBe(1);
+    });
+
+    it("should handle century leap year 2000", () => {
+      const date = parseDateAsUTC("2000-02-29");
+      expect(date.getUTCFullYear()).toBe(2000);
+      expect(date.getUTCMonth()).toBe(1); // February
+      expect(date.getUTCDate()).toBe(29);
+    });
+
+    it("should handle non-century leap year 1900", () => {
+      const date = parseDateAsUTC("1900-02-29");
+      // 1900 is not a leap year, rolls to March 1
+      expect(date.getUTCMonth()).toBe(2); // March
+      expect(date.getUTCDate()).toBe(1);
+    });
+
+    it("should handle very old dates", () => {
+      const date = parseDateAsUTC("1900-01-01");
+      expect(date.getUTCFullYear()).toBe(1900);
+      expect(date.getUTCMonth()).toBe(0);
+      expect(date.getUTCDate()).toBe(1);
+    });
+
+    it("should handle very future dates", () => {
+      const date = parseDateAsUTC("2100-12-31");
+      expect(date.getUTCFullYear()).toBe(2100);
+      expect(date.getUTCMonth()).toBe(11); // December
+      expect(date.getUTCDate()).toBe(31);
+    });
+
+    it("should handle midnight time boundary", () => {
+      const date = parseDateAsUTC("2024-01-15", "00:00");
+      expect(date.getUTCHours()).toBe(0);
+      expect(date.getUTCMinutes()).toBe(0);
+    });
+
+    it("should handle 23:59 time boundary", () => {
+      const date = parseDateAsUTC("2024-01-15", "23:59");
+      expect(date.getUTCHours()).toBe(23);
+      expect(date.getUTCMinutes()).toBe(59);
+    });
+  });
+
+  describe("parseDateOnlyAsUTC edge cases", () => {
+    it("should handle invalid month 13", () => {
+      const date = parseDateOnlyAsUTC("2024-13-01");
+      expect(date.getUTCFullYear()).toBe(2025);
+      expect(date.getUTCMonth()).toBe(0);
+    });
+
+    it("should handle February 29 in leap year", () => {
+      const date = parseDateOnlyAsUTC("2024-02-29");
+      expect(date.getUTCFullYear()).toBe(2024);
+      expect(date.getUTCMonth()).toBe(1);
+      expect(date.getUTCDate()).toBe(29);
+    });
+
+    it("should handle very old dates", () => {
+      const date = parseDateOnlyAsUTC("1900-01-01");
+      expect(date.getUTCFullYear()).toBe(1900);
+    });
+
+    it("should handle very future dates", () => {
+      const date = parseDateOnlyAsUTC("2100-12-31");
+      expect(date.getUTCFullYear()).toBe(2100);
+    });
+  });
+
+  describe("parseESTAsUTC edge cases", () => {
+    it("should handle midnight EST to UTC conversion", () => {
+      const date = parseESTAsUTC("2024-01-15", "00:00");
+      // 00:00 EST = 05:00 UTC
+      expect(date.getUTCHours()).toBe(5);
+      expect(date.getUTCDate()).toBe(15);
+    });
+
+    it("should handle 23:59 EST to UTC conversion", () => {
+      const date = parseESTAsUTC("2024-01-15", "23:59");
+      // 23:59 EST = 04:59 UTC next day
+      expect(date.getUTCDate()).toBe(16);
+      expect(date.getUTCHours()).toBe(4);
+      expect(date.getUTCMinutes()).toBe(59);
+    });
+
+    it("should handle February 29 in leap year with EST", () => {
+      const date = parseESTAsUTC("2024-02-29", "10:00");
+      expect(date.getUTCFullYear()).toBe(2024);
+      expect(date.getUTCMonth()).toBe(1);
+      expect(date.getUTCDate()).toBe(29);
+      expect(date.getUTCHours()).toBe(15); // 10:00 EST = 15:00 UTC
+    });
+  });
+
+  describe("formatDateAsUTC edge cases", () => {
+    it("should format February 29 in leap year", () => {
+      const date = new Date(Date.UTC(2024, 1, 29, 0, 0));
+      expect(formatDateAsUTC(date)).toBe("2024-02-29");
+    });
+
+    it("should format year boundary dates", () => {
+      const date = new Date(Date.UTC(2023, 11, 31, 23, 59));
+      expect(formatDateAsUTC(date)).toBe("2023-12-31");
+    });
+
+    it("should format very old dates", () => {
+      const date = new Date(Date.UTC(1900, 0, 1, 0, 0));
+      expect(formatDateAsUTC(date)).toBe("1900-01-01");
+    });
+
+    it("should format very future dates", () => {
+      const date = new Date(Date.UTC(2100, 11, 31, 23, 59));
+      expect(formatDateAsUTC(date)).toBe("2100-12-31");
+    });
+  });
 });
 

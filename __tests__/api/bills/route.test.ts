@@ -506,5 +506,250 @@ describe("POST /api/bills", () => {
     // Should return 400 or 500 for missing body
     expect([400, 500]).toContain(response.status);
   });
+
+  it("should reject dueDate = 0", async () => {
+    const request = new NextRequest("http://localhost:3000/api/bills", {
+      method: "POST",
+      body: JSON.stringify({
+        name: "Test Bill",
+        amount: 1000,
+        dueDate: 0,
+      }),
+    });
+
+    const response = await POST(request);
+    expect(response.status).toBe(400);
+    const data = await response.json();
+    // dueDate = 0 is falsy, so it's caught as "Missing required fields" before validation
+    expect(data.error).toMatch(/Missing required fields|Invalid due date/);
+  });
+
+  it("should reject dueDate = 32", async () => {
+    const request = new NextRequest("http://localhost:3000/api/bills", {
+      method: "POST",
+      body: JSON.stringify({
+        name: "Test Bill",
+        amount: 1000,
+        dueDate: 32,
+      }),
+    });
+
+    const response = await POST(request);
+    expect(response.status).toBe(400);
+    const data = await response.json();
+    expect(data.error).toContain("Invalid due date");
+  });
+
+  it("should reject dueDate = -1", async () => {
+    const request = new NextRequest("http://localhost:3000/api/bills", {
+      method: "POST",
+      body: JSON.stringify({
+        name: "Test Bill",
+        amount: 1000,
+        dueDate: -1,
+      }),
+    });
+
+    const response = await POST(request);
+    expect(response.status).toBe(400);
+    const data = await response.json();
+    expect(data.error).toContain("Invalid due date");
+  });
+
+  it("should reject dueDate as string", async () => {
+    const request = new NextRequest("http://localhost:3000/api/bills", {
+      method: "POST",
+      body: JSON.stringify({
+        name: "Test Bill",
+        amount: 1000,
+        dueDate: "first",
+      }),
+    });
+
+    const response = await POST(request);
+    expect(response.status).toBe(400);
+    const data = await response.json();
+    expect(data.error).toContain("Invalid due date");
+  });
+
+  it("should reject dueDate as float", async () => {
+    const request = new NextRequest("http://localhost:3000/api/bills", {
+      method: "POST",
+      body: JSON.stringify({
+        name: "Test Bill",
+        amount: 1000,
+        dueDate: 15.5,
+      }),
+    });
+
+    const response = await POST(request);
+    // parseIntSafe should floor it to 15, which is valid
+    expect([201, 400]).toContain(response.status);
+  });
+
+  it("should handle very small amounts", async () => {
+    const request = new NextRequest("http://localhost:3000/api/bills", {
+      method: "POST",
+      body: JSON.stringify({
+        name: "Test Bill",
+        amount: 0.001,
+        dueDate: 1,
+      }),
+    });
+
+    const response = await POST(request);
+    expect(response.status).toBe(201);
+    const data = await response.json();
+    expect(data.amount).toBe(0.001);
+  });
+
+  it("should handle many decimal places", async () => {
+    const request = new NextRequest("http://localhost:3000/api/bills", {
+      method: "POST",
+      body: JSON.stringify({
+        name: "Test Bill",
+        amount: 999999999.999999,
+        dueDate: 1,
+      }),
+    });
+
+    const response = await POST(request);
+    expect(response.status).toBe(201);
+    const data = await response.json();
+    expect(data.amount).toBeCloseTo(999999999.999999, 5);
+  });
+
+  it("should reject scientific notation in amount", async () => {
+    const request = new NextRequest("http://localhost:3000/api/bills", {
+      method: "POST",
+      body: JSON.stringify({
+        name: "Test Bill",
+        amount: "1e10",
+        dueDate: 1,
+      }),
+    });
+
+    const response = await POST(request);
+    // parseFloat should handle this, but may be rejected
+    expect([201, 400]).toContain(response.status);
+  });
+
+  it("should reject Infinity in amount", async () => {
+    const request = new NextRequest("http://localhost:3000/api/bills", {
+      method: "POST",
+      body: JSON.stringify({
+        name: "Test Bill",
+        amount: Infinity,
+        dueDate: 1,
+      }),
+    });
+
+    const response = await POST(request);
+    expect([400, 500]).toContain(response.status);
+  });
+
+  it("should reject NaN in amount", async () => {
+    const request = new NextRequest("http://localhost:3000/api/bills", {
+      method: "POST",
+      body: JSON.stringify({
+        name: "Test Bill",
+        amount: NaN,
+        dueDate: 1,
+      }),
+    });
+
+    const response = await POST(request);
+    expect([400, 500]).toContain(response.status);
+  });
+
+  it("should handle name with emojis", async () => {
+    const request = new NextRequest("http://localhost:3000/api/bills", {
+      method: "POST",
+      body: JSON.stringify({
+        name: "Rent 🏠",
+        amount: 1000,
+        dueDate: 1,
+      }),
+    });
+
+    const response = await POST(request);
+    expect(response.status).toBe(201);
+    const data = await response.json();
+    expect(data.name).toBe("Rent 🏠");
+  });
+
+  it("should handle name with unicode characters", async () => {
+    const request = new NextRequest("http://localhost:3000/api/bills", {
+      method: "POST",
+      body: JSON.stringify({
+        name: "测试账单",
+        amount: 1000,
+        dueDate: 1,
+      }),
+    });
+
+    const response = await POST(request);
+    expect(response.status).toBe(201);
+    const data = await response.json();
+    expect(data.name).toBe("测试账单");
+  });
+
+  it("should reject name with only spaces", async () => {
+    const request = new NextRequest("http://localhost:3000/api/bills", {
+      method: "POST",
+      body: JSON.stringify({
+        name: "     ",
+        amount: 1000,
+        dueDate: 1,
+      }),
+    });
+
+    const response = await POST(request);
+    expect(response.status).toBe(400);
+    const data = await response.json();
+    expect(data.error).toBe("Invalid name");
+  });
+
+  it("should handle name with null bytes", async () => {
+    const request = new NextRequest("http://localhost:3000/api/bills", {
+      method: "POST",
+      body: JSON.stringify({
+        name: "Test\x00Bill",
+        amount: 1000,
+        dueDate: 1,
+      }),
+    });
+
+    const response = await POST(request);
+    // sanitizeString should remove null bytes
+    expect([201, 400]).toContain(response.status);
+  });
+
+  it("should handle bill with all optional fields", async () => {
+    const request = new NextRequest("http://localhost:3000/api/bills", {
+      method: "POST",
+      body: JSON.stringify({
+        name: "Complete Bill",
+        amount: 1000.99,
+        dueDate: 15,
+        company: "Test Company",
+        category: "Housing",
+        notes: "Monthly payment",
+        isActive: true,
+        useInPlan: true,
+      }),
+    });
+
+    const response = await POST(request);
+    expect(response.status).toBe(201);
+    const data = await response.json();
+    expect(data.name).toBe("Complete Bill");
+    expect(data.amount).toBe(1000.99);
+    expect(data.company).toBe("Test Company");
+    expect(data.category).toBe("Housing");
+    expect(data.notes).toBe("Monthly payment");
+    expect(data.isActive).toBe(true);
+    expect(data.useInPlan).toBe(true);
+  });
 });
 

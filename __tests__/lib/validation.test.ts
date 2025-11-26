@@ -246,5 +246,211 @@ describe("validation", () => {
       expect(isValidEnum({} as any, TRANSACTION_TYPES)).toBe(false);
     });
   });
+
+  describe("parseFloatSafe extreme values", () => {
+    it("should handle Number.MAX_VALUE", () => {
+      const result = parseFloatSafe(Number.MAX_VALUE);
+      expect(result).toBe(Number.MAX_VALUE);
+    });
+
+    it("should handle Number.MIN_VALUE", () => {
+      const result = parseFloatSafe(Number.MIN_VALUE);
+      expect(result).toBe(Number.MIN_VALUE);
+    });
+
+    it("should handle Number.MAX_SAFE_INTEGER", () => {
+      const result = parseFloatSafe(Number.MAX_SAFE_INTEGER);
+      expect(result).toBe(Number.MAX_SAFE_INTEGER);
+    });
+
+    it("should handle Number.MIN_SAFE_INTEGER", () => {
+      const result = parseFloatSafe(Number.MIN_SAFE_INTEGER);
+      expect(result).toBe(Number.MIN_SAFE_INTEGER);
+    });
+
+    it("should handle very large string numbers", () => {
+      const result = parseFloatSafe("999999999999999999999");
+      expect(result).toBeGreaterThan(0);
+    });
+  });
+
+  describe("parseFloatSafe type coercion", () => {
+    it("should handle boolean true", () => {
+      const result = parseFloatSafe(true as any);
+      // parseFloat(String(true)) = parseFloat("true") = NaN, so returns null
+      expect(result).toBeNull();
+    });
+
+    it("should handle boolean false", () => {
+      const result = parseFloatSafe(false as any);
+      // parseFloat(String(false)) = parseFloat("false") = NaN, so returns null
+      expect(result).toBeNull();
+    });
+
+    it("should handle empty object", () => {
+      const result = parseFloatSafe({} as any);
+      // parseFloat(String({})) = parseFloat("[object Object]") = NaN
+      expect(result).toBeNull();
+    });
+
+    it("should handle empty array", () => {
+      const result = parseFloatSafe([] as any);
+      // parseFloat(String([])) = parseFloat("") = NaN
+      expect(result).toBeNull();
+    });
+
+    it("should handle array with one number", () => {
+      const result = parseFloatSafe([123] as any);
+      // parseFloat(String([123])) = parseFloat("123") = 123
+      expect(result).toBe(123);
+    });
+
+    it("should handle function", () => {
+      const result = parseFloatSafe(() => 123 as any);
+      // parseFloat(String(function)) = NaN
+      expect(result).toBeNull();
+    });
+  });
+
+  describe("parseIntSafe extreme values", () => {
+    it("should handle very large integers", () => {
+      const result = parseIntSafe("999999999999999");
+      expect(result).toBe(999999999999999);
+    });
+
+    it("should handle Number.MAX_SAFE_INTEGER", () => {
+      const result = parseIntSafe(Number.MAX_SAFE_INTEGER);
+      expect(result).toBe(Number.MAX_SAFE_INTEGER);
+    });
+
+    it("should handle Number.MIN_SAFE_INTEGER", () => {
+      const result = parseIntSafe(Number.MIN_SAFE_INTEGER);
+      expect(result).toBe(Number.MIN_SAFE_INTEGER);
+    });
+  });
+
+  describe("sanitizeString extreme values", () => {
+    it("should handle 1MB string", () => {
+      const largeString = "A".repeat(1024 * 1024);
+      const result = sanitizeString(largeString);
+      expect(result).toBe(largeString);
+    });
+
+    it("should enforce max length on large string", () => {
+      const largeString = "A".repeat(1000);
+      const result = sanitizeString(largeString, 100);
+      expect(result).toBeNull();
+    });
+
+    it("should handle string at max length", () => {
+      const string = "A".repeat(100);
+      const result = sanitizeString(string, 100);
+      expect(result).toBe(string);
+    });
+  });
+
+  describe("sanitizeString special characters", () => {
+    it("should handle unicode emojis", () => {
+      const emojiString = "Test 🚀 🏠 💰";
+      const result = sanitizeString(emojiString);
+      expect(result).toBe(emojiString);
+    });
+
+    it("should remove null bytes", () => {
+      const stringWithNull = "Test\x00String";
+      const result = sanitizeString(stringWithNull);
+      expect(result).toBe("TestString");
+    });
+
+    it("should remove control characters", () => {
+      const stringWithControl = "Test\x01\x02\x03String";
+      const result = sanitizeString(stringWithControl);
+      expect(result).toBe("TestString");
+    });
+
+    it("should preserve newlines and tabs", () => {
+      const stringWithNewlines = "Test\n\tString";
+      const result = sanitizeString(stringWithNewlines);
+      expect(result).toBe("Test\n\tString");
+    });
+
+    it("should handle unicode characters", () => {
+      const unicodeString = "测试 テスト тест";
+      const result = sanitizeString(unicodeString);
+      expect(result).toBe(unicodeString);
+    });
+  });
+
+  describe("sanitizeString type coercion", () => {
+    it("should handle number", () => {
+      const result = sanitizeString(123 as any);
+      expect(result).toBeNull();
+    });
+
+    it("should handle boolean", () => {
+      const result = sanitizeString(true as any);
+      expect(result).toBeNull();
+    });
+
+    it("should handle object", () => {
+      const result = sanitizeString({ key: "value" } as any);
+      expect(result).toBeNull();
+    });
+
+    it("should handle array", () => {
+      const result = sanitizeString(["test"] as any);
+      expect(result).toBeNull();
+    });
+  });
+
+  describe("validatePagination edge cases", () => {
+    it("should handle very large page number", () => {
+      const result = validatePagination("999999", "10");
+      expect(result).not.toBeNull();
+      expect(result?.page).toBe(999999);
+    });
+
+    it("should handle page as 0", () => {
+      const result = validatePagination("0", "10");
+      expect(result).toBeNull();
+    });
+
+    it("should handle negative page", () => {
+      const result = validatePagination("-1", "10");
+      expect(result).toBeNull();
+    });
+
+    it("should handle limit at max", () => {
+      const result = validatePagination("1", "100", 100);
+      expect(result).toEqual({ page: 1, limit: 100 });
+    });
+
+    it("should reject limit above max", () => {
+      const result = validatePagination("1", "101", 100);
+      expect(result).toBeNull();
+    });
+  });
+
+  describe("validateBodySize edge cases", () => {
+    it("should handle exactly 1MB", () => {
+      const body = "A".repeat(1024 * 1024);
+      expect(validateBodySize(body)).toBe(true);
+    });
+
+    it("should reject body slightly over 1MB", () => {
+      const body = "A".repeat(1024 * 1024 + 1);
+      expect(validateBodySize(body)).toBe(false);
+    });
+
+    it("should handle custom max size", () => {
+      const body = "A".repeat(5000);
+      expect(validateBodySize(body, 10000)).toBe(true);
+    });
+
+    it("should reject body over custom max size", () => {
+      const body = "A".repeat(10001);
+      expect(validateBodySize(body, 10000)).toBe(false);
+    });
+  });
 });
 
