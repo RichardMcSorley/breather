@@ -273,7 +273,7 @@ describe("AddTransactionModal", () => {
 
   it("should handle notes field with long text", async () => {
     const user = userEvent.setup();
-    // user.type has character limits (~25 chars), so test with a shorter but still meaningful length
+    // user.type has character limits (~25 chars), so use paste for longer text
     const longNotes = "A".repeat(50);
     
     render(
@@ -288,11 +288,16 @@ describe("AddTransactionModal", () => {
     // Input component doesn't use htmlFor/id, so use placeholder
     const notesInput = screen.getByPlaceholderText(/Add any notes/i) as HTMLInputElement;
     await user.clear(notesInput);
-    await user.type(notesInput, longNotes);
+    // Use paste for longer text as it's more reliable than type
+    await user.click(notesInput);
+    await user.paste(longNotes);
 
-    // user.type may have limits, so just verify it accepts input
-    expect(notesInput.value.length).toBeGreaterThan(0);
-    // Verify the field can handle input (even if not all characters typed)
+    // Wait for the input value to be updated
+    await waitFor(() => {
+      expect(notesInput.value.length).toBeGreaterThan(0);
+    });
+    
+    // Verify the field can handle input
     expect(typeof notesInput.value).toBe("string");
   });
 
