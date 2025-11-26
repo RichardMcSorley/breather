@@ -10,9 +10,10 @@ import { MileageResponse } from "@/lib/types";
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
     const session = await getServerSession(authOptions);
     if (!session?.user?.id) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -20,12 +21,12 @@ export async function GET(
 
     await connectDB();
 
-    if (!isValidObjectId(params.id)) {
+    if (!isValidObjectId(id)) {
       return NextResponse.json({ error: "Invalid mileage entry ID" }, { status: 400 });
     }
 
     const mileageEntry = await Mileage.findOne({
-      _id: params.id,
+      _id: id,
       userId: session.user.id,
     }).lean();
 
@@ -53,9 +54,10 @@ export async function GET(
 
 export async function PUT(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
     const session = await getServerSession(authOptions);
     if (!session?.user?.id) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -63,7 +65,7 @@ export async function PUT(
 
     await connectDB();
 
-    if (!isValidObjectId(params.id)) {
+    if (!isValidObjectId(id)) {
       return NextResponse.json({ error: "Invalid mileage entry ID" }, { status: 400 });
     }
 
@@ -71,7 +73,7 @@ export async function PUT(
     const { odometer, date, notes, classification } = body;
 
     const existingEntry = await Mileage.findOne({
-      _id: params.id,
+      _id: id,
       userId: session.user.id,
     }).lean();
 
@@ -124,7 +126,7 @@ export async function PUT(
     // Note: If classification is not provided, we don't update it (keeps existing value)
 
     const mileageEntry = await Mileage.findOneAndUpdate(
-      { _id: params.id, userId: session.user.id },
+      { _id: id, userId: session.user.id },
       updateData,
       { new: true }
     );
@@ -152,9 +154,10 @@ export async function PUT(
 
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
     const session = await getServerSession(authOptions);
     if (!session?.user?.id) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -162,12 +165,12 @@ export async function DELETE(
 
     await connectDB();
 
-    if (!isValidObjectId(params.id)) {
+    if (!isValidObjectId(id)) {
       return NextResponse.json({ error: "Invalid mileage entry ID" }, { status: 400 });
     }
 
     const mileageEntry = await Mileage.findOneAndDelete({
-      _id: params.id,
+      _id: id,
       userId: session.user.id,
     });
 

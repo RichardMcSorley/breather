@@ -37,7 +37,7 @@ describe("GET /api/mileage/[id]", () => {
     });
 
     const request = new NextRequest(`http://localhost:3000/api/mileage/${entry._id}`);
-    const response = await GET(request, { params: { id: String(entry._id) } });
+    const response = await GET(request, { params: Promise.resolve({ id: String(entry._id) }) });
     const data = await response.json();
 
     expect(response.status).toBe(401);
@@ -46,7 +46,7 @@ describe("GET /api/mileage/[id]", () => {
 
   it("should return 400 for invalid ObjectId", async () => {
     const request = new NextRequest("http://localhost:3000/api/mileage/invalid");
-    const response = await GET(request, { params: { id: "invalid" } });
+    const response = await GET(request, { params: Promise.resolve({ id: "invalid" }) });
     const data = await response.json();
 
     expect(response.status).toBe(400);
@@ -56,7 +56,7 @@ describe("GET /api/mileage/[id]", () => {
   it("should return 404 if entry not found", async () => {
     const fakeId = "507f1f77bcf86cd799439011";
     const request = new NextRequest(`http://localhost:3000/api/mileage/${fakeId}`);
-    const response = await GET(request, { params: { id: fakeId } });
+    const response = await GET(request, { params: Promise.resolve({ id: fakeId }) });
     const data = await response.json();
 
     expect(response.status).toBe(404);
@@ -73,7 +73,7 @@ describe("GET /api/mileage/[id]", () => {
     });
 
     const request = new NextRequest(`http://localhost:3000/api/mileage/${entry._id}`);
-    const response = await GET(request, { params: { id: String(entry._id) } });
+    const response = await GET(request, { params: Promise.resolve({ id: String(entry._id) }) });
     const data = await response.json();
 
     expect(response.status).toBe(200);
@@ -93,7 +93,7 @@ describe("GET /api/mileage/[id]", () => {
     });
 
     const request = new NextRequest(`http://localhost:3000/api/mileage/${entry._id}`);
-    const response = await GET(request, { params: { id: String(entry._id) } });
+    const response = await GET(request, { params: Promise.resolve({ id: String(entry._id) }) });
     const data = await response.json();
 
     expect(response.status).toBe(404);
@@ -129,7 +129,7 @@ describe("PUT /api/mileage/[id]", () => {
       body: JSON.stringify({ odometer: 10100 }),
     });
 
-    const response = await PUT(request, { params: { id: String(entry._id) } });
+    const response = await PUT(request, { params: Promise.resolve({ id: String(entry._id) }) });
     const data = await response.json();
 
     expect(response.status).toBe(401);
@@ -142,7 +142,7 @@ describe("PUT /api/mileage/[id]", () => {
       body: JSON.stringify({ odometer: 10100 }),
     });
 
-    const response = await PUT(request, { params: { id: "invalid" } });
+    const response = await PUT(request, { params: Promise.resolve({ id: "invalid" }) });
     const data = await response.json();
 
     expect(response.status).toBe(400);
@@ -168,7 +168,7 @@ describe("PUT /api/mileage/[id]", () => {
       }),
     });
 
-    const response = await PUT(request, { params: { id: String(entry._id) } });
+    const response = await PUT(request, { params: Promise.resolve({ id: String(entry._id) }) });
     const data = await response.json();
 
     expect(response.status).toBe(200);
@@ -199,7 +199,7 @@ describe("PUT /api/mileage/[id]", () => {
       }),
     });
 
-    const response = await PUT(request, { params: { id: String(entry._id) } });
+    const response = await PUT(request, { params: Promise.resolve({ id: String(entry._id) }) });
     const data = await response.json();
 
     expect(response.status).toBe(200);
@@ -224,7 +224,7 @@ describe("PUT /api/mileage/[id]", () => {
       }),
     });
 
-    const response = await PUT(request, { params: { id: String(entry._id) } });
+    const response = await PUT(request, { params: Promise.resolve({ id: String(entry._id) }) });
     const data = await response.json();
 
     expect(response.status).toBe(400);
@@ -246,7 +246,7 @@ describe("PUT /api/mileage/[id]", () => {
       }),
     });
 
-    const response = await PUT(request, { params: { id: String(entry._id) } });
+    const response = await PUT(request, { params: Promise.resolve({ id: String(entry._id) }) });
     const data = await response.json();
 
     expect(response.status).toBe(400);
@@ -268,7 +268,7 @@ describe("PUT /api/mileage/[id]", () => {
       }),
     });
 
-    const response = await PUT(request, { params: { id: String(entry._id) } });
+    const response = await PUT(request, { params: Promise.resolve({ id: String(entry._id) }) });
     const data = await response.json();
 
     expect(response.status).toBe(400);
@@ -290,7 +290,7 @@ describe("PUT /api/mileage/[id]", () => {
       }),
     });
 
-    const response = await PUT(request, { params: { id: String(entry._id) } });
+    const response = await PUT(request, { params: Promise.resolve({ id: String(entry._id) }) });
     const data = await response.json();
 
     expect(response.status).toBe(404);
@@ -308,7 +308,7 @@ describe("PUT /api/mileage/[id]", () => {
       body: JSON.stringify({ odometer: 10100 }),
     });
 
-    const response = await PUT(request, { params: { id: fakeId } });
+    const response = await PUT(request, { params: Promise.resolve({ id: fakeId }) });
     const data = await response.json();
 
     expect(response.status).toBe(404);
@@ -343,7 +343,7 @@ describe("DELETE /api/mileage/[id]", () => {
       method: "DELETE",
     });
 
-    const response = await DELETE(request, { params: { id: String(entry._id) } });
+    const response = await DELETE(request, { params: Promise.resolve({ id: String(entry._id) }) });
     const data = await response.json();
 
     expect(response.status).toBe(401);
@@ -355,7 +355,7 @@ describe("DELETE /api/mileage/[id]", () => {
       method: "DELETE",
     });
 
-    const response = await DELETE(request, { params: { id: "invalid" } });
+    const response = await DELETE(request, { params: Promise.resolve({ id: "invalid" }) });
     const data = await response.json();
 
     expect(response.status).toBe(400);
@@ -374,7 +374,7 @@ describe("DELETE /api/mileage/[id]", () => {
       method: "DELETE",
     });
 
-    const response = await DELETE(request, { params: { id: String(entry._id) } });
+    const response = await DELETE(request, { params: Promise.resolve({ id: String(entry._id) }) });
     const data = await response.json();
 
     expect(response.status).toBe(200);
@@ -397,7 +397,7 @@ describe("DELETE /api/mileage/[id]", () => {
       method: "DELETE",
     });
 
-    const response = await DELETE(request, { params: { id: String(entry._id) } });
+    const response = await DELETE(request, { params: Promise.resolve({ id: String(entry._id) }) });
     const data = await response.json();
 
     expect(response.status).toBe(404);
@@ -414,7 +414,7 @@ describe("DELETE /api/mileage/[id]", () => {
       method: "DELETE",
     });
 
-    const response = await DELETE(request, { params: { id: fakeId } });
+    const response = await DELETE(request, { params: Promise.resolve({ id: fakeId }) });
     const data = await response.json();
 
     expect(response.status).toBe(404);
@@ -436,7 +436,7 @@ describe("DELETE /api/mileage/[id]", () => {
       }),
     });
 
-    const response = await PUT(request, { params: { id: String(entry._id) } });
+    const response = await PUT(request, { params: Promise.resolve({ id: String(entry._id) }) });
     // Should either allow or reject - check implementation behavior
     expect([200, 400]).toContain(response.status);
   });
@@ -460,7 +460,7 @@ describe("DELETE /api/mileage/[id]", () => {
       }),
     });
 
-    const response = await PUT(request, { params: { id: String(entry._id) } });
+    const response = await PUT(request, { params: Promise.resolve({ id: String(entry._id) }) });
     // Should either allow or reject future dates
     expect([200, 400]).toContain(response.status);
   });

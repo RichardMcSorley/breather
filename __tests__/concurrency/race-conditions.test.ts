@@ -45,7 +45,7 @@ describe("Concurrency: Race Conditions", () => {
         method: "PUT",
         body: JSON.stringify({ amount: 200 }),
       }),
-      { params: { id: transactionId } }
+      { params: Promise.resolve({ id: transactionId }) }
     );
 
     const update2 = PUT(
@@ -53,7 +53,7 @@ describe("Concurrency: Race Conditions", () => {
         method: "PUT",
         body: JSON.stringify({ amount: 300 }),
       }),
-      { params: { id: transactionId } }
+      { params: Promise.resolve({ id: transactionId }) }
     );
 
     const [response1, response2] = await Promise.all([update1, update2]);
@@ -87,14 +87,14 @@ describe("Concurrency: Race Conditions", () => {
         method: "PUT",
         body: JSON.stringify({ amount: 200 }),
       }),
-      { params: { id: transactionId } }
+      { params: Promise.resolve({ id: transactionId }) }
     );
 
     const deletePromise = DELETE(
       new NextRequest(`http://localhost:3000/api/transactions/${transactionId}`, {
         method: "DELETE",
       }),
-      { params: { id: transactionId } }
+      { params: Promise.resolve({ id: transactionId }) }
     );
 
     const [updateResponse, deleteResponse] = await Promise.all([
@@ -213,7 +213,7 @@ describe("Concurrency: Race Conditions", () => {
           method: "PUT",
           body: JSON.stringify({ amount: 200 + i }),
         }),
-        { params: { id: String(t._id) } }
+        { params: Promise.resolve({ id: String(t._id) }) }
       )
     );
 
@@ -251,7 +251,7 @@ describe("Concurrency: Race Conditions", () => {
         new NextRequest(`http://localhost:3000/api/transactions/${t._id}`, {
           method: "DELETE",
         }),
-        { params: { id: String(t._id) } }
+        { params: Promise.resolve({ id: String(t._id) }) }
       )
     );
 
@@ -288,21 +288,21 @@ describe("Concurrency: Race Conditions", () => {
           method: "PUT",
           body: JSON.stringify({ amount: 200 }),
         }),
-        { params: { id: transactionId } }
+        { params: Promise.resolve({ id: transactionId }) }
       ),
       PUT(
         new NextRequest(`http://localhost:3000/api/transactions/${transactionId}`, {
           method: "PUT",
           body: JSON.stringify({ notes: "Updated" }),
         }),
-        { params: { id: transactionId } }
+        { params: Promise.resolve({ id: transactionId }) }
       ),
       PUT(
         new NextRequest(`http://localhost:3000/api/transactions/${transactionId}`, {
           method: "PUT",
           body: JSON.stringify({ tag: "Uber" }),
         }),
-        { params: { id: transactionId } }
+        { params: Promise.resolve({ id: transactionId }) }
       ),
     ];
 
@@ -375,7 +375,7 @@ describe("Concurrency: Race Conditions", () => {
         method: "PUT",
         body: JSON.stringify({ amount: -100 }), // Invalid amount
       }),
-      { params: { id: transactionId } }
+      { params: Promise.resolve({ id: transactionId }) }
     );
 
     // Simultaneously attempt valid update
@@ -384,7 +384,7 @@ describe("Concurrency: Race Conditions", () => {
         method: "PUT",
         body: JSON.stringify({ amount: 200 }), // Valid amount
       }),
-      { params: { id: transactionId } }
+      { params: Promise.resolve({ id: transactionId }) }
     );
 
     const [invalidResponse, validResponse] = await Promise.all([

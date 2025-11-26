@@ -11,9 +11,10 @@ import { BillPaymentResponse } from "@/lib/types";
 
 export async function PUT(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
     const session = await getServerSession(authOptions);
     if (!session?.user?.id) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -21,7 +22,7 @@ export async function PUT(
 
     await connectDB();
 
-    if (!isValidObjectId(params.id)) {
+    if (!isValidObjectId(id)) {
       return NextResponse.json({ error: "Invalid payment ID" }, { status: 400 });
     }
 
@@ -30,7 +31,7 @@ export async function PUT(
 
     // Find the payment and verify it belongs to the user
     const payment = await BillPayment.findOne({
-      _id: params.id,
+      _id: id,
       userId: session.user.id,
     });
 
@@ -80,9 +81,10 @@ export async function PUT(
 
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
     const session = await getServerSession(authOptions);
     if (!session?.user?.id) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -90,12 +92,12 @@ export async function DELETE(
 
     await connectDB();
 
-    if (!isValidObjectId(params.id)) {
+    if (!isValidObjectId(id)) {
       return NextResponse.json({ error: "Invalid payment ID" }, { status: 400 });
     }
 
     const payment = await BillPayment.findOneAndDelete({
-      _id: params.id,
+      _id: id,
       userId: session.user.id,
     });
 

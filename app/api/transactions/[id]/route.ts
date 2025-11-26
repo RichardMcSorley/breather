@@ -10,9 +10,10 @@ import { TransactionResponse } from "@/lib/types";
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
     const session = await getServerSession(authOptions);
     if (!session?.user?.id) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -20,12 +21,12 @@ export async function GET(
 
     await connectDB();
 
-    if (!isValidObjectId(params.id)) {
+    if (!isValidObjectId(id)) {
       return NextResponse.json({ error: "Invalid transaction ID" }, { status: 400 });
     }
 
     const transaction = await Transaction.findOne({
-      _id: params.id,
+      _id: id,
       userId: session.user.id,
     }).lean();
 
@@ -58,9 +59,10 @@ export async function GET(
 
 export async function PUT(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
     const session = await getServerSession(authOptions);
     if (!session?.user?.id) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -68,7 +70,7 @@ export async function PUT(
 
     await connectDB();
 
-    if (!isValidObjectId(params.id)) {
+    if (!isValidObjectId(id)) {
       return NextResponse.json({ error: "Invalid transaction ID" }, { status: 400 });
     }
 
@@ -76,7 +78,7 @@ export async function PUT(
     const { amount, type, date, time, isBill, notes, tag, dueDate } = body;
 
     const existingTransaction = await Transaction.findOne({
-      _id: params.id,
+      _id: id,
       userId: session.user.id,
     }).lean();
 
@@ -160,7 +162,7 @@ export async function PUT(
     }
 
     const transaction = await Transaction.findOneAndUpdate(
-      { _id: params.id, userId: session.user.id },
+      { _id: id, userId: session.user.id },
       updateData,
       { new: true }
     );
@@ -196,9 +198,10 @@ export async function PUT(
 
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
     const session = await getServerSession(authOptions);
     if (!session?.user?.id) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -206,12 +209,12 @@ export async function DELETE(
 
     await connectDB();
 
-    if (!isValidObjectId(params.id)) {
+    if (!isValidObjectId(id)) {
       return NextResponse.json({ error: "Invalid transaction ID" }, { status: 400 });
     }
 
     const transaction = await Transaction.findOneAndDelete({
-      _id: params.id,
+      _id: id,
       userId: session.user.id,
     });
 

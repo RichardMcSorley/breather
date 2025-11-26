@@ -88,10 +88,9 @@ describe("AddTransactionModal", () => {
     // Input component doesn't use htmlFor/id, so use placeholder
     const amountInput = screen.getByPlaceholderText("0.00") as HTMLInputElement;
     
-    // Clear and type the value
-    await user.clear(amountInput);
-    await user.type(amountInput, "100", { delay: 10 });
-
+    // Use fireEvent for more reliable controlled input updates
+    fireEvent.change(amountInput, { target: { value: "100" } });
+    
     // Wait for the value to be set
     await waitFor(() => {
       expect(parseFloat(amountInput.value)).toBe(100);

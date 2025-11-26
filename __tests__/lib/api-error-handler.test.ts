@@ -1,15 +1,13 @@
-import { describe, it, expect, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { handleApiError } from "@/lib/api-error-handler";
 
 describe("api-error-handler", () => {
-  const originalEnv = process.env.NODE_ENV;
-
   beforeEach(() => {
-    process.env.NODE_ENV = "test";
+    vi.stubEnv("NODE_ENV", "test");
   });
 
   afterEach(() => {
-    process.env.NODE_ENV = originalEnv;
+    vi.unstubAllEnvs();
   });
 
   describe("handleApiError", () => {
@@ -37,7 +35,7 @@ describe("api-error-handler", () => {
     });
 
     it("should include details in development mode", async () => {
-      process.env.NODE_ENV = "development";
+      vi.stubEnv("NODE_ENV", "development");
       const error = {
         message: "ECONNREFUSED",
         name: "MongooseServerSelectionError",
@@ -50,15 +48,15 @@ describe("api-error-handler", () => {
       expect(json.hint).toBeDefined();
     });
 
-    it("should not include details in production mode", () => {
-      process.env.NODE_ENV = "production";
+    it("should not include details in production mode", async () => {
+      vi.stubEnv("NODE_ENV", "production");
       const error = {
         message: "ECONNREFUSED",
         name: "MongooseServerSelectionError",
       };
 
       const response = handleApiError(error);
-      const json = response.json() as any;
+      const json = await response.json();
 
       expect(json.details).toBeUndefined();
       expect(json.hint).toBeUndefined();
@@ -91,7 +89,7 @@ describe("api-error-handler", () => {
     });
 
     it("should include error details in development for generic errors", async () => {
-      process.env.NODE_ENV = "development";
+      vi.stubEnv("NODE_ENV", "development");
       const error = {
         message: "Something went wrong",
       };
@@ -103,7 +101,7 @@ describe("api-error-handler", () => {
     });
 
     it("should not include error details in production for generic errors", async () => {
-      process.env.NODE_ENV = "production";
+      vi.stubEnv("NODE_ENV", "production");
       const error = {
         message: "Something went wrong",
       };

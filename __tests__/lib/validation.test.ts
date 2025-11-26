@@ -306,7 +306,7 @@ describe("validation", () => {
     });
 
     it("should handle function", () => {
-      const result = parseFloatSafe(() => 123 as any);
+      const result = parseFloatSafe((() => 123) as any);
       // parseFloat(String(function)) = NaN
       expect(result).toBeNull();
     });
