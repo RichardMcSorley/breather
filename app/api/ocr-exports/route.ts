@@ -76,3 +76,26 @@ export async function PATCH(request: NextRequest) {
   }
 }
 
+export async function DELETE(request: NextRequest) {
+  try {
+    await connectDB();
+
+    const { searchParams } = new URL(request.url);
+    const id = searchParams.get("id");
+
+    if (!id) {
+      return NextResponse.json({ error: "Missing id" }, { status: 400 });
+    }
+
+    const result = await OcrExport.findByIdAndDelete(id);
+
+    if (!result) {
+      return NextResponse.json({ error: "Entry not found" }, { status: 404 });
+    }
+
+    return NextResponse.json({ success: true, message: "Entry deleted successfully" });
+  } catch (error) {
+    return handleApiError(error);
+  }
+}
+

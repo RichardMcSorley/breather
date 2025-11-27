@@ -28,6 +28,7 @@ export default function OcrDataPage() {
     rawResponse: "",
   });
   const [saving, setSaving] = useState(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   useEffect(() => {
     fetchOcrData();
@@ -102,6 +103,32 @@ export default function OcrDataPage() {
     }
   };
 
+  const handleDelete = async (id: string) => {
+    if (!confirm("Are you sure you want to delete this entry?")) {
+      return;
+    }
+
+    try {
+      setDeletingId(id);
+      const response = await fetch(`/api/ocr-exports?id=${id}`, {
+        method: "DELETE",
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || "Failed to delete entry");
+      }
+
+      // Remove the entry from the list
+      setEntries((current) => current.filter((entry) => entry._id !== id));
+      setError(null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to delete entry");
+    } finally {
+      setDeletingId(null);
+    }
+  };
+
   const formatDate = (dateString: string) => {
     try {
       return format(new Date(dateString), "MMM d, yyyy h:mm a");
@@ -165,6 +192,9 @@ export default function OcrDataPage() {
                   </th>
                   <th className="px-2 sm:px-4 py-2 sm:py-3 text-left text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider">
                     Raw Response
+                  </th>
+                  <th className="px-2 sm:px-4 py-2 sm:py-3 text-right text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider">
+                    Actions
                   </th>
                 </tr>
               </thead>
@@ -266,12 +296,21 @@ export default function OcrDataPage() {
                           </button>
                         </div>
                       ) : (
-                        <button
-                          onClick={() => startEditing(entry)}
-                          className="px-3 py-1 text-sm rounded border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
-                        >
-                          Edit
-                        </button>
+                        <div className="flex gap-2 justify-end">
+                          <button
+                            onClick={() => startEditing(entry)}
+                            className="px-3 py-1 text-sm rounded border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
+                          >
+                            Edit
+                          </button>
+                          <button
+                            onClick={() => handleDelete(entry._id)}
+                            disabled={deletingId === entry._id}
+                            className="px-3 py-1 text-sm rounded bg-red-600 text-white hover:bg-red-700 disabled:opacity-50"
+                          >
+                            {deletingId === entry._id ? "Deleting..." : "Delete"}
+                          </button>
+                        </div>
                       )}
                     </td>
                   </tr>
