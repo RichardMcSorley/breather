@@ -39,45 +39,65 @@ export async function PATCH(request: NextRequest) {
     await connectDB();
 
     const body = await request.json();
-    const { id, customerName, customerAddress, rawResponse } = body;
+    const { id, appName, customerName, customerAddress, rawResponse } = body;
 
     if (!id) {
       return NextResponse.json({ error: "Missing id" }, { status: 400 });
     }
 
-    const update: Record<string, any> = {};
+    const updateSet: Record<string, any> = {};
+    let needsGeocoding = false;
+
+    if (typeof appName === "string") {
+      updateSet.appName = appName;
+    }
     if (typeof customerName === "string") {
-      update.customerName = customerName;
+      updateSet.customerName = customerName;
     }
     if (typeof customerAddress === "string") {
-      update.customerAddress = customerAddress;
-      // If address is updated, geocode it
-      const geocodeData = await geocodeAddress(customerAddress);
-      if (geocodeData) {
-        update.lat = geocodeData.lat;
-        update.lon = geocodeData.lon;
-        update.geocodeDisplayName = geocodeData.displayName;
-      } else {
-        // Clear geocoding data if geocoding fails
-        update.lat = null;
-        update.lon = null;
-        update.geocodeDisplayName = null;
-      }
+      updateSet.customerAddress = customerAddress;
+      needsGeocoding = true;
     }
     if (typeof rawResponse === "string") {
-      update.rawResponse = rawResponse;
+      updateSet.rawResponse = rawResponse;
     }
 
-    if (Object.keys(update).length === 0) {
+    if (Object.keys(updateSet).length === 0) {
       return NextResponse.json({ error: "No fields to update" }, { status: 400 });
     }
 
-    update.updatedAt = new Date().toISOString();
+    // If address is updated, geocode it
+    if (needsGeocoding) {
+      try {
+        const geocodeData = await geocodeAddress(updateSet.customerAddress);
+        if (geocodeData && geocodeData.lat != null && geocodeData.lon != null) {
+          updateSet.lat = geocodeData.lat;
+          updateSet.lon = geocodeData.lon;
+          updateSet.geocodeDisplayName = geocodeData.displayName || null;
+        } else {
+          // Clear geocoding data if geocoding fails - explicitly set to null
+          updateSet.lat = null;
+          updateSet.lon = null;
+          updateSet.geocodeDisplayName = null;
+        }
+      } catch (geocodeError) {
+        console.error(`Error during geocoding:`, geocodeError);
+        // Clear geocoding data on error - explicitly set to null
+        updateSet.lat = null;
+        updateSet.lon = null;
+        updateSet.geocodeDisplayName = null;
+      }
+    }
 
-    const result = await OcrExport.findByIdAndUpdate(id, update, {
-      new: true,
-      runValidators: true,
-    }).lean();
+    // Use $set to explicitly update fields
+    const result = await OcrExport.findByIdAndUpdate(
+      id,
+      { $set: updateSet },
+      {
+        new: true,
+        runValidators: true,
+      }
+    ).lean();
 
     if (!result) {
       return NextResponse.json({ error: "Entry not found" }, { status: 404 });

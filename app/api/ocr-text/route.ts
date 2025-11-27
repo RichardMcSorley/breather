@@ -14,7 +14,7 @@ export async function POST(request: NextRequest) {
     await connectDB();
 
     const body = await request.json();
-    const { userId, screenshot } = body;
+    const { userId, screenshot, appName } = body;
 
     // Validate required fields
     if (!userId) {
@@ -42,6 +42,7 @@ export async function POST(request: NextRequest) {
       const exportEntry = await OcrExport.create({
         entryId,
         userId,
+        appName: appName || undefined,
         customerName: processed.customerName,
         customerAddress: processed.customerAddress,
         rawResponse: processed.rawResponse,

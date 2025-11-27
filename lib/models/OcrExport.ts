@@ -3,6 +3,7 @@ import mongoose, { Schema, Document, Model } from "mongoose";
 export interface IOcrExport extends Document {
   entryId: string;
   userId: string;
+  appName?: string;
   customerName: string;
   customerAddress: string;
   rawResponse?: string;
@@ -25,6 +26,9 @@ const OcrExportSchema: Schema = new Schema(
       type: String,
       required: true,
       index: true,
+    },
+    appName: {
+      type: String,
     },
     customerName: {
       type: String,

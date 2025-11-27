@@ -10,9 +10,13 @@ interface OcrExportEntry {
   _id: string;
   entryId: string;
   userId: string;
+  appName?: string;
   customerName: string;
   customerAddress: string;
   rawResponse?: string;
+  lat?: number;
+  lon?: number;
+  geocodeDisplayName?: string;
   processedAt: string;
   createdAt: string;
   updatedAt: string;
@@ -24,6 +28,7 @@ export default function OcrDataPage() {
   const [error, setError] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [formValues, setFormValues] = useState({
+    appName: "",
     customerName: "",
     customerAddress: "",
     rawResponse: "",
@@ -55,6 +60,7 @@ export default function OcrDataPage() {
   const startEditing = (entry: OcrExportEntry) => {
     setEditingId(entry._id);
     setFormValues({
+      appName: entry.appName || "",
       customerName: entry.customerName || "",
       customerAddress: entry.customerAddress || "",
       rawResponse: entry.rawResponse || "",
@@ -64,6 +70,7 @@ export default function OcrDataPage() {
   const cancelEditing = () => {
     setEditingId(null);
     setFormValues({
+      appName: "",
       customerName: "",
       customerAddress: "",
       rawResponse: "",
@@ -92,9 +99,14 @@ export default function OcrDataPage() {
       const data = await response.json();
       const updated = data.entry as OcrExportEntry;
 
+      // Update the entry in state
       setEntries((current) =>
         current.map((entry) => (entry._id === id ? updated : entry))
       );
+      
+      // Refetch data to ensure we have the latest from database
+      await fetchOcrData();
+      
       cancelEditing();
       setError(null);
     } catch (err) {
@@ -186,6 +198,9 @@ export default function OcrDataPage() {
               <thead className="bg-gray-50 dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700">
                 <tr>
                   <th className="px-2 sm:px-4 py-2 sm:py-3 text-left text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider">
+                    App Name
+                  </th>
+                  <th className="px-2 sm:px-4 py-2 sm:py-3 text-left text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider">
                     Customer Name
                   </th>
                   <th className="px-2 sm:px-4 py-2 sm:py-3 text-left text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider">
@@ -205,6 +220,25 @@ export default function OcrDataPage() {
                     key={entry._id}
                     className="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
                   >
+                    <td className="px-2 sm:px-4 py-2 sm:py-3">
+                      <div className="text-sm text-gray-700 dark:text-gray-300">
+                        {editingId === entry._id ? (
+                          <input
+                            type="text"
+                            value={formValues.appName}
+                            onChange={(e) =>
+                              setFormValues((prev) => ({
+                                ...prev,
+                                appName: e.target.value,
+                              }))
+                            }
+                            className="w-full rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 px-2 py-1 text-sm text-gray-900 dark:text-white"
+                          />
+                        ) : (
+                          entry.appName || "-"
+                        )}
+                      </div>
+                    </td>
                     <td className="px-2 sm:px-4 py-2 sm:py-3">
                       <div className="text-sm font-semibold text-gray-900 dark:text-white">
                         {editingId === entry._id ? (
@@ -239,7 +273,17 @@ export default function OcrDataPage() {
                             rows={2}
                           />
                         ) : (
-                          entry.customerAddress || "-"
+                          <div className="flex items-start gap-2">
+                            <span>{entry.customerAddress || "-"}</span>
+                            {entry.customerAddress && (!entry.lat || !entry.lon) && (
+                              <span
+                                className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400"
+                                title="Location data unavailable"
+                              >
+                                ⚠️ No location
+                              </span>
+                            )}
+                          </div>
                         )}
                       </div>
                     </td>
