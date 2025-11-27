@@ -77,23 +77,19 @@ export async function POST(request: NextRequest) {
       const visitCount = matchingEntries.length;
       const isRepeatCustomer = visitCount > 1;
 
-      // Get previous visit dates (excluding current entry)
-      const previousVisits = matchingEntries
-        .filter((entry) => entry._id.toString() !== exportEntry._id.toString())
-        .map((entry) => entry.processedAt || entry.createdAt)
-        .sort((a, b) => new Date(b).getTime() - new Date(a).getTime())
-        .slice(0, 5); // Last 5 visits
+      // Get all unique customer names for this address
+      const customerNames = Array.from(
+        new Set(matchingEntries.map((entry) => entry.customerName).filter(Boolean))
+      );
 
       return NextResponse.json({
         success: true,
         id: exportEntry._id.toString(),
         entryId: exportEntry.entryId,
         message: "OCR screenshot processed and saved successfully",
-        customerInfo: {
-          isRepeatCustomer,
-          visitCount,
-          previousVisitDates: previousVisits,
-        },
+        isRepeatCustomer,
+        visitCount,
+        customerNames,
       });
     } catch (processError) {
       console.error("Error processing OCR screenshot:", processError);
