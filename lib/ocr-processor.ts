@@ -1,5 +1,3 @@
-import { vl } from "moondream";
-
 const MOONDREAM_ENDPOINT = process.env.MOONDREAM_ENDPOINT;
 
 const CSV_HEADERS = ["Customer Name", "Customer Address"];
@@ -73,19 +71,27 @@ function parseCsvRow(rawText: string): { row: ParsedRow | null; error: string | 
 
 async function requestCsvRow(
   imageBase64: string,
-  model: vl,
+  endpoint: string,
   maxAttempts: number = 3
 ): Promise<{ row: ParsedRow; rawResponse: string }> {
+  if (!endpoint) {
+    throw new Error("MOONDREAM_ENDPOINT environment variable is not set");
+  }
+
   let lastError: string | null = null;
   let currentPrompt = CSV_PROMPT;
 
-  // Convert base64 to buffer for moondream
-  // Remove data URL prefix if present
-  let base64Data = imageBase64;
-  if (base64Data.startsWith("data:image")) {
-    base64Data = base64Data.split(",")[1];
+  // Ensure the image is in data URL format
+  let imageUrl = imageBase64;
+  if (!imageUrl.startsWith("data:image")) {
+    // If it's just base64, add the data URL prefix
+    imageUrl = `data:image/png;base64,${imageUrl}`;
   }
-  const imageBuffer = Buffer.from(base64Data, "base64");
+
+  // Ensure endpoint has /v1/query path
+  const queryUrl = endpoint.endsWith("/") 
+    ? `${endpoint}v1/query` 
+    : `${endpoint}/v1/query`;
 
   for (let attempt = 0; attempt < maxAttempts; attempt++) {
     if (attempt > 0) {
@@ -93,23 +99,24 @@ async function requestCsvRow(
     }
 
     try {
-      const response = await model.query({
-        image: imageBuffer,
-        question: currentPrompt,
+      const response = await fetch(queryUrl, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          image_url: imageUrl,
+          question: currentPrompt,
+        }),
       });
-      
-      // Handle both string and async generator responses
-      let rawCsv: string;
-      if (typeof response.answer === "string") {
-        rawCsv = response.answer.trim();
-      } else {
-        // Handle async generator - collect all chunks
-        let fullAnswer = "";
-        for await (const chunk of response.answer) {
-          fullAnswer += chunk;
-        }
-        rawCsv = fullAnswer.trim();
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`Moondream API error: ${response.status} - ${errorText}`);
       }
+
+      const data = await response.json();
+      const rawCsv = (data.answer || "").trim();
 
       const { row, error } = parseCsvRow(rawCsv);
       if (row && !error) {
@@ -129,10 +136,11 @@ export async function processOcrScreenshot(screenshot: string): Promise<{
   customerAddress: string;
   rawResponse: string;
 }> {
-  // Initialize Moondream model with custom endpoint
-  const model = new vl({ endpoint: MOONDREAM_ENDPOINT });
+  if (!MOONDREAM_ENDPOINT) {
+    throw new Error("MOONDREAM_ENDPOINT environment variable is not set");
+  }
 
-  const { row, rawResponse } = await requestCsvRow(screenshot, model);
+  const { row, rawResponse } = await requestCsvRow(screenshot, MOONDREAM_ENDPOINT);
 
   return {
     customerName: row["Customer Name"],
