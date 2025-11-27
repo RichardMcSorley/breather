@@ -7,6 +7,7 @@ import OcrExport from "@/lib/models/OcrExport";
 import { handleApiError } from "@/lib/api-error-handler";
 import { processOcrScreenshot } from "@/lib/ocr-processor";
 import { geocodeAddress } from "@/lib/geocode-helper";
+import { isSameAddress } from "@/lib/ocr-analytics";
 import { randomBytes } from "crypto";
 
 export async function POST(request: NextRequest) {
@@ -35,8 +36,24 @@ export async function POST(request: NextRequest) {
     try {
       const processed = await processOcrScreenshot(screenshot);
 
-      // Geocode the address
-      const geocodeData = await geocodeAddress(processed.customerAddress);
+      // Check for existing geocode data with exact address match
+      let geocodeData: { lat: number; lon: number; displayName?: string } | null = null;
+      const existingEntry = await OcrExport.findOne({
+        customerAddress: processed.customerAddress,
+        lat: { $exists: true, $ne: null },
+        lon: { $exists: true, $ne: null },
+      }).lean();
+
+      if (existingEntry && existingEntry.lat != null && existingEntry.lon != null) {
+        geocodeData = {
+          lat: existingEntry.lat,
+          lon: existingEntry.lon,
+          displayName: existingEntry.geocodeDisplayName,
+        };
+      } else {
+        // If not found in cache, geocode the address
+        geocodeData = await geocodeAddress(processed.customerAddress);
+      }
 
       // Save to ocrexports collection
       const exportEntry = await OcrExport.create({
@@ -52,11 +69,31 @@ export async function POST(request: NextRequest) {
         processedAt: new Date(),
       });
 
+      // Check for repeat customers by address (address is the unique identifier)
+      const allUserEntries = await OcrExport.find({ userId }).lean();
+      const matchingEntries = allUserEntries.filter((entry) =>
+        isSameAddress(entry.customerAddress, processed.customerAddress)
+      );
+      const visitCount = matchingEntries.length;
+      const isRepeatCustomer = visitCount > 1;
+
+      // Get previous visit dates (excluding current entry)
+      const previousVisits = matchingEntries
+        .filter((entry) => entry._id.toString() !== exportEntry._id.toString())
+        .map((entry) => entry.processedAt || entry.createdAt)
+        .sort((a, b) => new Date(b).getTime() - new Date(a).getTime())
+        .slice(0, 5); // Last 5 visits
+
       return NextResponse.json({
         success: true,
         id: exportEntry._id.toString(),
         entryId: exportEntry.entryId,
         message: "OCR screenshot processed and saved successfully",
+        customerInfo: {
+          isRepeatCustomer,
+          visitCount,
+          previousVisitDates: previousVisits,
+        },
       });
     } catch (processError) {
       console.error("Error processing OCR screenshot:", processError);

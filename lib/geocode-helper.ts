@@ -1,3 +1,50 @@
+import connectDB from "./mongodb";
+import OcrExport from "./models/OcrExport";
+
+/**
+ * Normalize an address for comparison (lowercase, trim whitespace)
+ */
+function normalizeAddress(address: string): string {
+  return address.toLowerCase().trim().replace(/\s+/g, " ");
+}
+
+/**
+ * Check database for existing geocoded address
+ * Returns geocode data if found, null otherwise
+ */
+async function checkDatabaseForAddress(address: string): Promise<{
+  lat: number;
+  lon: number;
+  displayName: string;
+} | null> {
+  try {
+    await connectDB();
+    const normalizedAddress = normalizeAddress(address);
+    
+    // Find entries with matching normalized address that have geocode data
+    const existingEntry = await OcrExport.findOne({
+      customerAddress: { $regex: new RegExp(normalizedAddress.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i") },
+      lat: { $exists: true, $ne: null },
+      lon: { $exists: true, $ne: null },
+    })
+      .sort({ updatedAt: -1 }) // Get most recently updated
+      .lean();
+
+    if (existingEntry && existingEntry.lat != null && existingEntry.lon != null) {
+      return {
+        lat: existingEntry.lat,
+        lon: existingEntry.lon,
+        displayName: existingEntry.geocodeDisplayName || address,
+      };
+    }
+
+    return null;
+  } catch (error) {
+    console.warn(`Error checking database for address ${address}:`, error);
+    return null;
+  }
+}
+
 /**
  * Try to geocode an address with the Nominatim API
  */
@@ -60,6 +107,7 @@ function generateAddressVariations(address: string): string[] {
 /**
  * Helper function to geocode an address
  * Returns null if geocoding fails (doesn't throw errors)
+ * Checks database first before making API calls
  */
 export async function geocodeAddress(address: string): Promise<{
   lat: number;
@@ -71,13 +119,27 @@ export async function geocodeAddress(address: string): Promise<{
   }
 
   try {
-    // Try the original address first
+    // Check database first for cached geocode data
+    const cachedResult = await checkDatabaseForAddress(address);
+    if (cachedResult) {
+      console.log(`Using cached geocode data for address: "${address}"`);
+      return cachedResult;
+    }
+
+    // If not in database, try the original address with API
     let result = await tryGeocode(address);
     
     // If that fails, try variations
     if (!result) {
       const variations = generateAddressVariations(address);
       for (const variation of variations) {
+        // Check database for variation too
+        const cachedVariation = await checkDatabaseForAddress(variation);
+        if (cachedVariation) {
+          console.log(`Using cached geocode data for variation: "${variation}" (original: "${address}")`);
+          return cachedVariation;
+        }
+
         result = await tryGeocode(variation);
         if (result) {
           console.log(`Geocoded using variation: "${variation}" (original: "${address}")`);

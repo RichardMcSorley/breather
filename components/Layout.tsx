@@ -23,7 +23,7 @@ export default function Layout({ children }: LayoutProps) {
     { href: "/history", label: "Logs", icon: "🕐" },
     { href: "/bills", label: "Bills", icon: "📄" },
     { href: "/mileage", label: "Mileage", icon: "🚗" },
-    { href: "/ocr-data", label: "OCR", icon: "🧾" },
+    { href: "/ocr-data", label: "Customers", icon: "🧾" },
   ];
 
   return (

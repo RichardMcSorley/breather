@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
+import { getServerSession } from "next-auth";
+import { authOptions } from "../auth/[...nextauth]/config";
 import connectDB from "@/lib/mongodb";
 import OcrExport from "@/lib/models/OcrExport";
 import { handleApiError } from "@/lib/api-error-handler";
@@ -8,22 +10,22 @@ const DEFAULT_LIMIT = 100;
 
 export async function GET(request: NextRequest) {
   try {
+    const session = await getServerSession(authOptions);
+    if (!session?.user?.id) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
     await connectDB();
 
     const { searchParams } = new URL(request.url);
-    const userId = searchParams.get("userId");
     const limitParam = searchParams.get("limit");
     const limit = Math.min(
       DEFAULT_LIMIT,
       Math.max(1, Number(limitParam) || DEFAULT_LIMIT)
     );
 
-    const query: Record<string, string> = {};
-    if (userId) {
-      query.userId = userId;
-    }
-
-    const exportsData = await OcrExport.find(query)
+    // Only return entries for the authenticated user
+    const exportsData = await OcrExport.find({ userId: session.user.id })
       .sort({ processedAt: -1 })
       .limit(limit)
       .lean();
@@ -36,6 +38,11 @@ export async function GET(request: NextRequest) {
 
 export async function PATCH(request: NextRequest) {
   try {
+    const session = await getServerSession(authOptions);
+    if (!session?.user?.id) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
     await connectDB();
 
     const body = await request.json();
@@ -43,6 +50,15 @@ export async function PATCH(request: NextRequest) {
 
     if (!id) {
       return NextResponse.json({ error: "Missing id" }, { status: 400 });
+    }
+
+    // Verify the entry belongs to the user
+    const existingEntry = await OcrExport.findById(id).lean();
+    if (!existingEntry) {
+      return NextResponse.json({ error: "Entry not found" }, { status: 404 });
+    }
+    if (existingEntry.userId !== session.user.id) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
     }
 
     const updateSet: Record<string, any> = {};
@@ -111,6 +127,11 @@ export async function PATCH(request: NextRequest) {
 
 export async function DELETE(request: NextRequest) {
   try {
+    const session = await getServerSession(authOptions);
+    if (!session?.user?.id) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
     await connectDB();
 
     const { searchParams } = new URL(request.url);
@@ -118,6 +139,15 @@ export async function DELETE(request: NextRequest) {
 
     if (!id) {
       return NextResponse.json({ error: "Missing id" }, { status: 400 });
+    }
+
+    // Verify the entry belongs to the user before deleting
+    const existingEntry = await OcrExport.findById(id).lean();
+    if (!existingEntry) {
+      return NextResponse.json({ error: "Entry not found" }, { status: 404 });
+    }
+    if (existingEntry.userId !== session.user.id) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
     }
 
     const result = await OcrExport.findByIdAndDelete(id);
