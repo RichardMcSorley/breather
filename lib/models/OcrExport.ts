@@ -6,6 +6,9 @@ export interface IOcrExport extends Document {
   customerName: string;
   customerAddress: string;
   rawResponse?: string;
+  lat?: number;
+  lon?: number;
+  geocodeDisplayName?: string;
   processedAt: Date;
   createdAt: Date;
   updatedAt: Date;
@@ -32,6 +35,15 @@ const OcrExportSchema: Schema = new Schema(
       required: true,
     },
     rawResponse: {
+      type: String,
+    },
+    lat: {
+      type: Number,
+    },
+    lon: {
+      type: Number,
+    },
+    geocodeDisplayName: {
       type: String,
     },
     processedAt: {

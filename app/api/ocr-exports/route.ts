@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import connectDB from "@/lib/mongodb";
 import OcrExport from "@/lib/models/OcrExport";
 import { handleApiError } from "@/lib/api-error-handler";
+import { geocodeAddress } from "@/lib/geocode-helper";
 
 const DEFAULT_LIMIT = 100;
 
@@ -44,12 +45,24 @@ export async function PATCH(request: NextRequest) {
       return NextResponse.json({ error: "Missing id" }, { status: 400 });
     }
 
-    const update: Record<string, string> = {};
+    const update: Record<string, any> = {};
     if (typeof customerName === "string") {
       update.customerName = customerName;
     }
     if (typeof customerAddress === "string") {
       update.customerAddress = customerAddress;
+      // If address is updated, geocode it
+      const geocodeData = await geocodeAddress(customerAddress);
+      if (geocodeData) {
+        update.lat = geocodeData.lat;
+        update.lon = geocodeData.lon;
+        update.geocodeDisplayName = geocodeData.displayName;
+      } else {
+        // Clear geocoding data if geocoding fails
+        update.lat = null;
+        update.lon = null;
+        update.geocodeDisplayName = null;
+      }
     }
     if (typeof rawResponse === "string") {
       update.rawResponse = rawResponse;

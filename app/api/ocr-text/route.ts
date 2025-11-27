@@ -6,6 +6,7 @@ import connectDB from "@/lib/mongodb";
 import OcrExport from "@/lib/models/OcrExport";
 import { handleApiError } from "@/lib/api-error-handler";
 import { processOcrScreenshot } from "@/lib/ocr-processor";
+import { geocodeAddress } from "@/lib/geocode-helper";
 import { randomBytes } from "crypto";
 
 export async function POST(request: NextRequest) {
@@ -34,6 +35,9 @@ export async function POST(request: NextRequest) {
     try {
       const processed = await processOcrScreenshot(screenshot);
 
+      // Geocode the address
+      const geocodeData = await geocodeAddress(processed.customerAddress);
+
       // Save to ocrexports collection
       const exportEntry = await OcrExport.create({
         entryId,
@@ -41,6 +45,9 @@ export async function POST(request: NextRequest) {
         customerName: processed.customerName,
         customerAddress: processed.customerAddress,
         rawResponse: processed.rawResponse,
+        lat: geocodeData?.lat,
+        lon: geocodeData?.lon,
+        geocodeDisplayName: geocodeData?.displayName,
         processedAt: new Date(),
       });
 

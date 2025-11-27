@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import Layout from "@/components/Layout";
 import Card from "@/components/ui/Card";
+import CustomerLocationMap from "@/components/CustomerLocationMap";
 import { format } from "date-fns";
 
 interface OcrExportEntry {
@@ -165,6 +166,15 @@ export default function OcrDataPage() {
         </Card>
       )}
 
+      {entries.length > 0 && (
+        <Card className="p-6 mb-6">
+          <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
+            Customer Locations Map
+          </h3>
+          <CustomerLocationMap entries={entries} />
+        </Card>
+      )}
+
       <Card className="overflow-hidden">
         {entries.length === 0 ? (
           <div className="text-center py-12 text-gray-500 dark:text-gray-400">
@@ -176,22 +186,13 @@ export default function OcrDataPage() {
               <thead className="bg-gray-50 dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700">
                 <tr>
                   <th className="px-2 sm:px-4 py-2 sm:py-3 text-left text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider">
-                    Entry ID
-                  </th>
-                  <th className="px-2 sm:px-4 py-2 sm:py-3 text-left text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider">
-                    User ID
-                  </th>
-                  <th className="px-2 sm:px-4 py-2 sm:py-3 text-left text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider">
                     Customer Name
                   </th>
                   <th className="px-2 sm:px-4 py-2 sm:py-3 text-left text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider">
                     Customer Address
                   </th>
                   <th className="px-2 sm:px-4 py-2 sm:py-3 text-left text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider">
-                    Processed At
-                  </th>
-                  <th className="px-2 sm:px-4 py-2 sm:py-3 text-left text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider">
-                    Raw Response
+                    Date 
                   </th>
                   <th className="px-2 sm:px-4 py-2 sm:py-3 text-right text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider">
                     Actions
@@ -204,16 +205,6 @@ export default function OcrDataPage() {
                     key={entry._id}
                     className="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
                   >
-                    <td className="px-2 sm:px-4 py-2 sm:py-3 whitespace-nowrap">
-                      <div className="text-xs font-mono text-gray-600 dark:text-gray-400">
-                        {entry.entryId}
-                      </div>
-                    </td>
-                    <td className="px-2 sm:px-4 py-2 sm:py-3 whitespace-nowrap">
-                      <div className="text-sm text-gray-700 dark:text-gray-300">
-                        {entry.userId}
-                      </div>
-                    </td>
                     <td className="px-2 sm:px-4 py-2 sm:py-3">
                       <div className="text-sm font-semibold text-gray-900 dark:text-white">
                         {editingId === entry._id ? (
@@ -255,27 +246,6 @@ export default function OcrDataPage() {
                     <td className="px-2 sm:px-4 py-2 sm:py-3 whitespace-nowrap">
                       <div className="text-xs sm:text-sm text-gray-700 dark:text-gray-300">
                         {formatDate(entry.processedAt || entry.createdAt)}
-                      </div>
-                    </td>
-                    <td className="px-2 sm:px-4 py-2 sm:py-3">
-                      <div className="text-xs text-gray-600 dark:text-gray-400 max-w-md">
-                        {editingId === entry._id ? (
-                          <textarea
-                            value={formValues.rawResponse}
-                            onChange={(e) =>
-                              setFormValues((prev) => ({
-                                ...prev,
-                                rawResponse: e.target.value,
-                              }))
-                            }
-                            className="w-full rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 px-2 py-1 text-xs text-gray-900 dark:text-white"
-                            rows={2}
-                          />
-                        ) : (
-                          <div className="truncate" title={entry.rawResponse}>
-                            {truncateText(entry.rawResponse || "", 200)}
-                          </div>
-                        )}
                       </div>
                     </td>
                     <td className="px-2 sm:px-4 py-2 sm:py-3 whitespace-nowrap text-right">
