@@ -32,6 +32,7 @@ interface EditCustomerEntriesModalProps {
   isOpen: boolean;
   onClose: () => void;
   address: string | null;
+  entryId?: string | null;
   userId?: string;
   onUpdate?: () => void;
 }
@@ -40,6 +41,7 @@ export default function EditCustomerEntriesModal({
   isOpen,
   onClose,
   address,
+  entryId,
   userId,
   onUpdate,
 }: EditCustomerEntriesModalProps) {
@@ -64,6 +66,18 @@ export default function EditCustomerEntriesModal({
       setEditingId(null);
     }
   }, [isOpen, address, userId]);
+
+  // Auto-start editing when data loads and entryId is provided
+  useEffect(() => {
+    if (data && entryId && !editingId && !loading) {
+      const entryToEdit = data.visits.find(
+        (visit: Visit) => visit._id === entryId
+      );
+      if (entryToEdit) {
+        startEditing(entryToEdit);
+      }
+    }
+  }, [data, entryId, editingId, loading]);
 
   const fetchCustomerDetails = async () => {
     if (!address) return;

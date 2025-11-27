@@ -2,9 +2,9 @@
 
 import { useState, useEffect } from "react";
 import { useSession } from "next-auth/react";
+import { useSearchParams } from "next/navigation";
 import Layout from "@/components/Layout";
 import Card from "@/components/ui/Card";
-import CustomerLocationMap from "@/components/CustomerLocationMap";
 import CustomerFrequencyList from "@/components/CustomerFrequencyList";
 import CustomerDetailsModal from "@/components/CustomerDetailsModal";
 import EditCustomerEntriesModal from "@/components/EditCustomerEntriesModal";
@@ -27,11 +27,13 @@ interface OcrExportEntry {
 
 export default function OcrDataPage() {
   const { data: session } = useSession();
+  const searchParams = useSearchParams();
   const [entries, setEntries] = useState<OcrExportEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [selectedCustomer, setSelectedCustomer] = useState<string | null>(null);
   const [editingAddress, setEditingAddress] = useState<string | null>(null);
+  const [editingEntryId, setEditingEntryId] = useState<string | null>(null);
 
   const userId = session?.user?.id;
 
@@ -40,6 +42,23 @@ export default function OcrDataPage() {
       fetchOcrData();
     }
   }, [userId]);
+
+  // Check for address query parameter and auto-open customer details
+  useEffect(() => {
+    const addressParam = searchParams.get("address");
+    const entryIdParam = searchParams.get("entryId");
+    if (addressParam && userId) {
+      const decodedAddress = decodeURIComponent(addressParam);
+      if (entryIdParam) {
+        // If entryId is present, open edit modal
+        setEditingAddress(decodedAddress);
+        setEditingEntryId(entryIdParam);
+      } else {
+        // Otherwise, open view modal
+        setSelectedCustomer(decodedAddress);
+      }
+    }
+  }, [searchParams, userId]);
 
   const fetchOcrData = async () => {
     if (!userId) return;
@@ -93,15 +112,6 @@ export default function OcrDataPage() {
         </Card>
       )}
 
-      {entries.length > 0 && (
-        <Card className="p-6 mb-6">
-          <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
-            Customer Locations Map
-          </h3>
-          <CustomerLocationMap entries={entries} />
-        </Card>
-      )}
-
       {/* Customer Frequency List */}
       <div className="mb-6">
         <CustomerFrequencyList
@@ -123,12 +133,17 @@ export default function OcrDataPage() {
       {/* Edit Customer Entries Modal */}
       <EditCustomerEntriesModal
         isOpen={editingAddress !== null}
-        onClose={() => setEditingAddress(null)}
+        onClose={() => {
+          setEditingAddress(null);
+          setEditingEntryId(null);
+        }}
         address={editingAddress}
+        entryId={editingEntryId}
         userId={userId}
         onUpdate={() => {
           fetchOcrData();
           setEditingAddress(null);
+          setEditingEntryId(null);
         }}
       />
     </Layout>

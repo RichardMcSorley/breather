@@ -149,9 +149,6 @@ export default function CustomerFrequencyList({
                     Customer Name(s)
                   </th>
                   <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider">
-                    Address
-                  </th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider">
                     Visits
                   </th>
                   <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider">
@@ -185,11 +182,6 @@ export default function CustomerFrequencyList({
                             (+{customer.customerNames.length - 1} more)
                           </span>
                         )}
-                      </div>
-                    </td>
-                    <td className="px-4 py-3">
-                      <div className="text-sm text-gray-700 dark:text-gray-300">
-                        {customer.address}
                       </div>
                     </td>
                     <td className="px-4 py-3">
