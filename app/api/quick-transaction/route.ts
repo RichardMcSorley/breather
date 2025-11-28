@@ -6,7 +6,7 @@ import connectDB from "@/lib/mongodb";
 import Transaction from "@/lib/models/Transaction";
 import { startOfDay, endOfDay } from "date-fns";
 import { handleApiError } from "@/lib/api-error-handler";
-import { parseESTAsUTC, getCurrentESTAsUTC, formatDateAsUTC } from "@/lib/date-utils";
+import { parseESTAsUTC, getCurrentESTAsUTC, formatDateAsUTC, parseDateOnlyAsUTC } from "@/lib/date-utils";
 import { parseFloatSafe } from "@/lib/validation";
 
 export async function POST(request: NextRequest) {
@@ -75,15 +75,14 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    // Calculate today's earnings using EST timezone
-    // Parse EST date string to get start/end of day in EST, then convert to UTC
-    const estStartDate = parseESTAsUTC(estDateString, "00:00");
-    const estEndDate = parseESTAsUTC(estDateString, "23:59");
-    // Set to end of day (23:59:59.999)
-    estEndDate.setUTCSeconds(59, 999);
-    
-    const todayStart = estStartDate;
-    const todayEnd = estEndDate;
+    // Calculate today's earnings using UTC date range (matching dashboard summary API behavior)
+    // Parse the date string as UTC to ensure consistency with dashboard
+    // The date string represents a calendar date, which we treat as UTC for consistent querying
+    const dateForQuery = parseDateOnlyAsUTC(estDateString);
+    const todayStart = new Date(dateForQuery);
+    todayStart.setUTCHours(0, 0, 0, 0);
+    const todayEnd = new Date(dateForQuery);
+    todayEnd.setUTCHours(23, 59, 59, 999);
 
     // Get all transactions for today (matching dashboard summary API behavior)
     // Then filter out bills in JavaScript, same as dashboard does
