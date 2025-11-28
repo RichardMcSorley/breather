@@ -306,7 +306,7 @@ export default function EditCustomerEntriesModal({
                         <div className="text-xs text-gray-500 dark:text-gray-400 mb-1">Screenshot</div>
                         <div className="rounded-lg border border-gray-300 dark:border-gray-600 overflow-hidden">
                           <img
-                            src={visit.screenshot}
+                            src={`data:image/png;base64,${visit.screenshot}`}
                             alt="Customer screenshot"
                             className="w-full h-auto max-h-[300px] object-contain"
                           />

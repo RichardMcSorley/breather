@@ -2,7 +2,10 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "../auth/[...nextauth]/config";
 import connectDB from "@/lib/mongodb";
+import mongoose from "mongoose";
 import Transaction from "@/lib/models/Transaction";
+import DeliveryOrder from "@/lib/models/DeliveryOrder";
+import OcrExport from "@/lib/models/OcrExport";
 import { handleApiError } from "@/lib/api-error-handler";
 import { parseDateAsUTC, parseDateOnlyAsUTC, formatDateAsUTC } from "@/lib/date-utils";
 import { parseFloatSafe, validatePagination, isValidEnum, TRANSACTION_TYPES } from "@/lib/validation";
@@ -16,6 +19,17 @@ export async function GET(request: NextRequest) {
     }
 
     await connectDB();
+
+    // Ensure models are registered for population
+    // In Next.js, models need to be explicitly referenced to be registered
+    if (!mongoose.models.DeliveryOrder) {
+      // Model should already be registered via import, but ensure it's available
+      DeliveryOrder;
+    }
+    if (!mongoose.models.OcrExport) {
+      // Model should already be registered via import, but ensure it's available
+      OcrExport;
+    }
 
     const { searchParams } = new URL(request.url);
     const startDate = searchParams.get("startDate");
@@ -57,8 +71,8 @@ export async function GET(request: NextRequest) {
     }
 
     const transactions = await Transaction.find(query)
-      .populate("linkedOcrExportId", "customerName customerAddress appName entryId")
-      .populate("linkedDeliveryOrderId", "restaurantName appName miles money entryId")
+      .populate("linkedOcrExportIds", "customerName customerAddress appName entryId")
+      .populate("linkedDeliveryOrderIds", "restaurantName appName miles money entryId")
       .sort({ date: -1, createdAt: -1 })
       .skip((page - 1) * limit)
       .limit(limit)
@@ -75,27 +89,31 @@ export async function GET(request: NextRequest) {
         updatedAt: t.updatedAt.toISOString(),
       };
 
-      // Add linked customer info if present
-      if (t.linkedOcrExportId && typeof t.linkedOcrExportId === 'object') {
-        formatted.linkedOcrExport = {
-          id: String(t.linkedOcrExportId._id),
-          customerName: t.linkedOcrExportId.customerName,
-          customerAddress: t.linkedOcrExportId.customerAddress,
-          appName: t.linkedOcrExportId.appName,
-          entryId: t.linkedOcrExportId.entryId,
-        };
+      // Add linked customers info if present
+      if (t.linkedOcrExportIds && Array.isArray(t.linkedOcrExportIds)) {
+        formatted.linkedOcrExports = t.linkedOcrExportIds
+          .filter((customer: any) => customer && typeof customer === 'object' && '_id' in customer)
+          .map((customer: any) => ({
+            id: String(customer._id),
+            customerName: customer.customerName,
+            customerAddress: customer.customerAddress,
+            appName: customer.appName,
+            entryId: customer.entryId,
+          }));
       }
 
-      // Add linked delivery order info if present
-      if (t.linkedDeliveryOrderId && typeof t.linkedDeliveryOrderId === 'object') {
-        formatted.linkedDeliveryOrder = {
-          id: String(t.linkedDeliveryOrderId._id),
-          restaurantName: t.linkedDeliveryOrderId.restaurantName,
-          appName: t.linkedDeliveryOrderId.appName,
-          miles: t.linkedDeliveryOrderId.miles,
-          money: t.linkedDeliveryOrderId.money,
-          entryId: t.linkedDeliveryOrderId.entryId,
-        };
+      // Add linked delivery orders info if present
+      if (t.linkedDeliveryOrderIds && Array.isArray(t.linkedDeliveryOrderIds)) {
+        formatted.linkedDeliveryOrders = t.linkedDeliveryOrderIds
+          .filter((order: any) => order && typeof order === 'object' && '_id' in order)
+          .map((order: any) => ({
+            id: String(order._id),
+            restaurantName: order.restaurantName,
+            appName: order.appName,
+            miles: order.miles,
+            money: order.money,
+            entryId: order.entryId,
+          }));
       }
 
       return formatted;

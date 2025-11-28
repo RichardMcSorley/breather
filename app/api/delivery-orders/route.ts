@@ -120,17 +120,23 @@ export async function GET(request: NextRequest) {
     // Create a map of order ID to linked transactions
     const transactionsByOrderId = new Map<string, any[]>();
     linkedTransactions.forEach((t) => {
-      const orderId = t.linkedDeliveryOrderId?.toString();
-      if (orderId) {
-        if (!transactionsByOrderId.has(orderId)) {
-          transactionsByOrderId.set(orderId, []);
-        }
-        transactionsByOrderId.get(orderId)!.push({
-          _id: t._id.toString(),
-          amount: t.amount,
-          date: t.date,
-          tag: t.tag,
-          notes: t.notes,
+      // Handle array of linked delivery order IDs
+      const orderIds = t.linkedDeliveryOrderIds || [];
+      if (Array.isArray(orderIds)) {
+        orderIds.forEach((orderIdObj) => {
+          const orderId = orderIdObj?.toString();
+          if (orderId) {
+            if (!transactionsByOrderId.has(orderId)) {
+              transactionsByOrderId.set(orderId, []);
+            }
+            transactionsByOrderId.get(orderId)!.push({
+              _id: t._id.toString(),
+              amount: t.amount,
+              date: t.date,
+              tag: t.tag,
+              notes: t.notes,
+            });
+          }
         });
       }
     });

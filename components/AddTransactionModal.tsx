@@ -1,7 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
-import { useRouter } from "next/navigation";
+import React, { useState, useEffect, useRef } from "react";
 import { useSession } from "next-auth/react";
 import { useQueryClient } from "@tanstack/react-query";
 import Modal from "./ui/Modal";
@@ -9,6 +8,10 @@ import Input from "./ui/Input";
 import Button from "./ui/Button";
 import LinkCustomerModal from "./LinkCustomerModal";
 import LinkOrderModal from "./LinkOrderModal";
+import ScreenshotModal from "./ScreenshotModal";
+import EditCustomerEntriesModal from "./EditCustomerEntriesModal";
+import EditDeliveryOrderModal from "./EditDeliveryOrderModal";
+import TransactionLinkedInfo from "./TransactionLinkedInfo";
 import { useTransaction, useSettings, useCreateTransaction, useUpdateTransaction, useUpdateSettings, queryKeys } from "@/hooks/useQueries";
 
 interface AddTransactionModalProps {
@@ -48,7 +51,6 @@ export default function AddTransactionModal({
   initialIsBill,
   initialType,
 }: AddTransactionModalProps) {
-  const router = useRouter();
   const { data: session } = useSession();
   const queryClient = useQueryClient();
   const { data: transactionData } = useTransaction(transactionId);
@@ -58,6 +60,11 @@ export default function AddTransactionModal({
   const updateSettings = useUpdateSettings();
   const [showLinkCustomerModal, setShowLinkCustomerModal] = useState(false);
   const [showLinkOrderModal, setShowLinkOrderModal] = useState(false);
+  const [showCustomerScreenshot, setShowCustomerScreenshot] = useState(false);
+  const [showOrderScreenshot, setShowOrderScreenshot] = useState(false);
+  const [editingCustomerAddress, setEditingCustomerAddress] = useState<string | null>(null);
+  const [editingCustomerEntryId, setEditingCustomerEntryId] = useState<string | null>(null);
+  const [editingOrderId, setEditingOrderId] = useState<string | null>(null);
   
   const [transactionType, setTransactionType] = useState<"income" | "expense">(initialType || type);
   const [formData, setFormData] = useState({
@@ -222,6 +229,7 @@ export default function AddTransactionModal({
   };
 
   return (
+    <div>
     <Modal
       isOpen={isOpen}
       onClose={onClose}
@@ -373,154 +381,21 @@ export default function AddTransactionModal({
           placeholder="Add any notes..."
         />
 
-        {/* Linked Customer/Order Info - Only show when editing and transaction is income */}
-        {transactionId && transactionData && transactionType === "income" && (
-          <div className="pt-4 border-t border-gray-200 dark:border-gray-700">
-            <div className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
-              Linked Information
-            </div>
-            {transactionData.linkedOcrExport && (
-              <div className="mb-3 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <div className="text-xs text-blue-600 dark:text-blue-400 mb-1">Linked Customer</div>
-                    <div className="text-sm font-semibold text-gray-900 dark:text-white">
-                      👤 {transactionData.linkedOcrExport.customerName}
-                    </div>
-                    <div className="text-xs text-gray-600 dark:text-gray-400 mt-1">
-                      {transactionData.linkedOcrExport.customerAddress}
-                    </div>
-                    {transactionData.linkedOcrExport.appName && (
-                      <div className="text-xs text-gray-500 dark:text-gray-500 mt-1">
-                        App: {transactionData.linkedOcrExport.appName}
-                      </div>
-                    )}
-                  </div>
-                  <div className="flex gap-2">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        const encodedAddress = encodeURIComponent(transactionData.linkedOcrExport.customerAddress);
-                        router.push(`/ocr-data?address=${encodedAddress}`);
-                        onClose();
-                      }}
-                      className="px-3 py-1 text-xs rounded bg-blue-600 text-white hover:bg-blue-700"
-                    >
-                      View
-                    </button>
-                    <button
-                      type="button"
-                      onClick={async () => {
-                        if (!transactionId || !transactionData.linkedOcrExport) return;
-                        try {
-                          const response = await fetch("/api/link", {
-                            method: "POST",
-                            headers: {
-                              "Content-Type": "application/json",
-                            },
-                            body: JSON.stringify({
-                              transactionId,
-                              ocrExportId: transactionData.linkedOcrExport.id,
-                              action: "unlink",
-                            }),
-                          });
-                          if (response.ok) {
-                            queryClient.invalidateQueries({ queryKey: queryKeys.transaction(transactionId) });
-                          }
-                        } catch (error) {
-                          console.error("Failed to unlink customer:", error);
-                        }
-                      }}
-                      className="px-3 py-1 text-xs rounded bg-red-600 text-white hover:bg-red-700"
-                    >
-                      Unlink
-                    </button>
-                  </div>
-                </div>
-              </div>
-            )}
-            {transactionData.linkedDeliveryOrder && (
-              <div className="p-3 bg-purple-50 dark:bg-purple-900/20 rounded-lg border border-purple-200 dark:border-purple-800">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <div className="text-xs text-purple-600 dark:text-purple-400 mb-1">Linked Delivery Order</div>
-                    <div className="text-sm font-semibold text-gray-900 dark:text-white">
-                      📦 {transactionData.linkedDeliveryOrder.restaurantName}
-                    </div>
-                    <div className="text-xs text-gray-600 dark:text-gray-400 mt-1">
-                      {transactionData.linkedDeliveryOrder.appName} • {transactionData.linkedDeliveryOrder.miles?.toFixed(1) || "0"} mi • ${transactionData.linkedDeliveryOrder.money?.toFixed(2) || "0.00"}
-                    </div>
-                    {transactionData.linkedDeliveryOrder.miles && transactionData.linkedDeliveryOrder.money && (
-                      <div className="text-xs text-gray-500 dark:text-gray-500 mt-1">
-                        Ratio: ${(transactionData.linkedDeliveryOrder.money / transactionData.linkedDeliveryOrder.miles).toFixed(2)}/mi
-                      </div>
-                    )}
-                  </div>
-                  <div className="flex gap-2">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        router.push(`/delivery-orders?orderId=${transactionData.linkedDeliveryOrder.id}`);
-                        onClose();
-                      }}
-                      className="px-3 py-1 text-xs rounded bg-purple-600 text-white hover:bg-purple-700"
-                    >
-                      View
-                    </button>
-                    <button
-                      type="button"
-                      onClick={async () => {
-                        if (!transactionId || !transactionData.linkedDeliveryOrder) return;
-                        try {
-                          const response = await fetch("/api/link", {
-                            method: "POST",
-                            headers: {
-                              "Content-Type": "application/json",
-                            },
-                            body: JSON.stringify({
-                              transactionId,
-                              deliveryOrderId: transactionData.linkedDeliveryOrder.id,
-                              action: "unlink",
-                            }),
-                          });
-                          if (response.ok) {
-                            queryClient.invalidateQueries({ queryKey: queryKeys.transaction(transactionId) });
-                          }
-                        } catch (error) {
-                          console.error("Failed to unlink order:", error);
-                        }
-                      }}
-                      className="px-3 py-1 text-xs rounded bg-red-600 text-white hover:bg-red-700"
-                    >
-                      Unlink
-                    </button>
-                  </div>
-                </div>
-              </div>
-            )}
-            {!transactionData.linkedOcrExport && !transactionData.linkedDeliveryOrder && (
-              <div className="text-sm text-gray-500 dark:text-gray-400 p-3 bg-gray-50 dark:bg-gray-900 rounded-lg mb-3">
-                No linked customer or order
-              </div>
-            )}
-            <div className="mt-3 flex gap-2">
-              <button
-                type="button"
-                onClick={() => setShowLinkCustomerModal(true)}
-                className="px-3 py-1.5 text-xs rounded bg-blue-600 text-white hover:bg-blue-700"
-              >
-                Link Customer
-              </button>
-              <button
-                type="button"
-                onClick={() => setShowLinkOrderModal(true)}
-                className="px-3 py-1.5 text-xs rounded bg-purple-600 text-white hover:bg-purple-700"
-              >
-                Link Order
-              </button>
-            </div>
-          </div>
-        )}
+        <TransactionLinkedInfo
+          transactionId={transactionId}
+          transactionData={transactionData}
+          transactionType={transactionType}
+          onClose={onClose}
+          onShowLinkCustomerModal={() => setShowLinkCustomerModal(true)}
+          onShowLinkOrderModal={() => setShowLinkOrderModal(true)}
+          onEditCustomer={(address, entryId) => {
+            setEditingCustomerAddress(address);
+            setEditingCustomerEntryId(entryId || null);
+          }}
+          onEditOrder={(orderId) => {
+            setEditingOrderId(orderId);
+          }}
+        />
 
         <div className="flex gap-3 pt-4">
           <Button
@@ -541,33 +416,78 @@ export default function AddTransactionModal({
           </Button>
         </div>
       </form>
-
-      <LinkCustomerModal
-        isOpen={showLinkCustomerModal}
-        onClose={() => setShowLinkCustomerModal(false)}
-        transactionId={transactionId || null}
-        userId={session?.user?.id}
-        onLink={() => {
-          // Refetch transaction data to show updated links
-          if (transactionId) {
-            queryClient.invalidateQueries({ queryKey: queryKeys.transaction(transactionId) });
-          }
-        }}
-      />
-
-      <LinkOrderModal
-        isOpen={showLinkOrderModal}
-        onClose={() => setShowLinkOrderModal(false)}
-        transactionId={transactionId || null}
-        userId={session?.user?.id}
-        onLink={() => {
-          // Refetch transaction data to show updated links
-          if (transactionId) {
-            queryClient.invalidateQueries({ queryKey: queryKeys.transaction(transactionId) });
-          }
-        }}
-      />
     </Modal>
+
+    <LinkCustomerModal
+      isOpen={showLinkCustomerModal}
+      onClose={() => setShowLinkCustomerModal(false)}
+      transactionId={transactionId || null}
+      userId={session?.user?.id}
+      onLink={() => {
+        // Refetch transaction data to show updated links
+        if (transactionId) {
+          queryClient.invalidateQueries({ queryKey: queryKeys.transaction(transactionId) });
+        }
+      }}
+    />
+
+    <LinkOrderModal
+      isOpen={showLinkOrderModal}
+      onClose={() => setShowLinkOrderModal(false)}
+      transactionId={transactionId || null}
+      userId={session?.user?.id}
+      onLink={() => {
+        // Refetch transaction data to show updated links
+        if (transactionId) {
+          queryClient.invalidateQueries({ queryKey: queryKeys.transaction(transactionId) });
+        }
+      }}
+    />
+
+    <ScreenshotModal
+      isOpen={showCustomerScreenshot}
+      onClose={() => setShowCustomerScreenshot(false)}
+      screenshot={transactionData?.linkedOcrExport?.screenshot}
+      title={`Customer Screenshot - ${transactionData?.linkedOcrExport?.customerName || ""}`}
+    />
+
+    <ScreenshotModal
+      isOpen={showOrderScreenshot}
+      onClose={() => setShowOrderScreenshot(false)}
+      screenshot={transactionData?.linkedDeliveryOrder?.screenshot}
+      title={`Order Screenshot - ${transactionData?.linkedDeliveryOrder?.restaurantName || ""}`}
+    />
+
+    <EditCustomerEntriesModal
+      isOpen={editingCustomerAddress !== null}
+      onClose={() => {
+        setEditingCustomerAddress(null);
+        setEditingCustomerEntryId(null);
+      }}
+      address={editingCustomerAddress}
+      entryId={editingCustomerEntryId}
+      userId={session?.user?.id}
+      onUpdate={() => {
+        // Optionally refresh transaction data if needed
+        if (transactionId) {
+          queryClient.invalidateQueries({ queryKey: queryKeys.transaction(transactionId) });
+        }
+      }}
+    />
+
+    <EditDeliveryOrderModal
+      isOpen={editingOrderId !== null}
+      onClose={() => setEditingOrderId(null)}
+      orderId={editingOrderId}
+      userId={session?.user?.id}
+      onUpdate={() => {
+        // Optionally refresh transaction data if needed
+        if (transactionId) {
+          queryClient.invalidateQueries({ queryKey: queryKeys.transaction(transactionId) });
+        }
+      }}
+    />
+    </div>
   );
 }
 

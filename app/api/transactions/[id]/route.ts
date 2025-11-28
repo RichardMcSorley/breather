@@ -30,8 +30,8 @@ export async function GET(
       _id: id,
       userId: session.user.id,
     })
-      .populate("linkedOcrExportId", "customerName customerAddress appName entryId")
-      .populate("linkedDeliveryOrderId", "restaurantName appName miles money entryId")
+      .populate("linkedOcrExportIds", "customerName customerAddress appName entryId screenshot")
+      .populate("linkedDeliveryOrderIds", "restaurantName appName miles money entryId screenshot")
       .lean();
 
     if (!transaction) {
@@ -55,29 +55,33 @@ export async function GET(
       updatedAt: transaction.updatedAt.toISOString(),
     };
 
-    // Add linked customer info if present
-    if (transaction.linkedOcrExportId && typeof transaction.linkedOcrExportId === 'object' && '_id' in transaction.linkedOcrExportId) {
-      const linkedCustomer = transaction.linkedOcrExportId as any;
-      transactionObj.linkedOcrExport = {
-        id: String(linkedCustomer._id),
-        customerName: linkedCustomer.customerName,
-        customerAddress: linkedCustomer.customerAddress,
-        appName: linkedCustomer.appName,
-        entryId: linkedCustomer.entryId,
-      };
+    // Add linked customers info if present
+    if (transaction.linkedOcrExportIds && Array.isArray(transaction.linkedOcrExportIds)) {
+      transactionObj.linkedOcrExports = transaction.linkedOcrExportIds
+        .filter((customer: any) => customer && typeof customer === 'object' && '_id' in customer)
+        .map((customer: any) => ({
+          id: String(customer._id),
+          customerName: customer.customerName,
+          customerAddress: customer.customerAddress,
+          appName: customer.appName,
+          entryId: customer.entryId,
+          screenshot: customer.screenshot,
+        }));
     }
 
-    // Add linked delivery order info if present
-    if (transaction.linkedDeliveryOrderId && typeof transaction.linkedDeliveryOrderId === 'object' && '_id' in transaction.linkedDeliveryOrderId) {
-      const linkedOrder = transaction.linkedDeliveryOrderId as any;
-      transactionObj.linkedDeliveryOrder = {
-        id: String(linkedOrder._id),
-        restaurantName: linkedOrder.restaurantName,
-        appName: linkedOrder.appName,
-        miles: linkedOrder.miles,
-        money: linkedOrder.money,
-        entryId: linkedOrder.entryId,
-      };
+    // Add linked delivery orders info if present
+    if (transaction.linkedDeliveryOrderIds && Array.isArray(transaction.linkedDeliveryOrderIds)) {
+      transactionObj.linkedDeliveryOrders = transaction.linkedDeliveryOrderIds
+        .filter((order: any) => order && typeof order === 'object' && '_id' in order)
+        .map((order: any) => ({
+          id: String(order._id),
+          restaurantName: order.restaurantName,
+          appName: order.appName,
+          miles: order.miles,
+          money: order.money,
+          entryId: order.entryId,
+          screenshot: order.screenshot,
+        }));
     }
 
     return NextResponse.json(transactionObj);

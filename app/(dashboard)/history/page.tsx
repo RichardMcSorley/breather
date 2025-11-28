@@ -3,9 +3,10 @@
 import { useState, useEffect } from "react";
 import { useSession } from "next-auth/react";
 import { format, isToday, isYesterday } from "date-fns";
-import { useRouter } from "next/navigation";
 import Layout from "@/components/Layout";
 import AddTransactionModal from "@/components/AddTransactionModal";
+import EditCustomerEntriesModal from "@/components/EditCustomerEntriesModal";
+import EditDeliveryOrderModal from "@/components/EditDeliveryOrderModal";
 import { useTransactions, useDeleteTransaction } from "@/hooks/useQueries";
 
 interface LinkedCustomer {
@@ -36,8 +37,8 @@ interface Transaction {
   isBill: boolean;
   isBalanceAdjustment?: boolean; // Kept for filtering out existing balance adjustments
   dueDate?: string;
-  linkedOcrExport?: LinkedCustomer;
-  linkedDeliveryOrder?: LinkedOrder;
+  linkedOcrExports?: LinkedCustomer[];
+  linkedDeliveryOrders?: LinkedOrder[];
 }
 
 /**
@@ -63,7 +64,6 @@ const buildLocalDateFromParts = (dateString: string, timeString?: string) => {
 
 export default function HistoryPage() {
   const { data: session } = useSession();
-  const router = useRouter();
   const [showAddModal, setShowAddModal] = useState(false);
   const [editingTransaction, setEditingTransaction] = useState<string | null>(null);
   const [transactionType, setTransactionType] = useState<"income" | "expense">("income");
@@ -71,6 +71,9 @@ export default function HistoryPage() {
   const [filterTag, setFilterTag] = useState<string>("all");
   const [page, setPage] = useState(1);
   const limit = 50;
+  const [editingCustomerAddress, setEditingCustomerAddress] = useState<string | null>(null);
+  const [editingCustomerEntryId, setEditingCustomerEntryId] = useState<string | null>(null);
+  const [editingOrderId, setEditingOrderId] = useState<string | null>(null);
   
   // Reset to page 1 when filters change
   useEffect(() => {
@@ -111,6 +114,59 @@ export default function HistoryPage() {
   const formatTime = (dateString: string, timeString: string) => {
     const date = buildLocalDateFromParts(dateString, timeString);
     return format(date, "h:mm a");
+  };
+
+  // App name to color mapping
+  const getAppTagColor = (appName: string) => {
+    const appColors: Record<string, { bg: string; text: string }> = {
+      "DoorDash": { bg: "bg-red-100 dark:bg-red-900/30", text: "text-red-700 dark:text-red-300" },
+      "Uber": { bg: "bg-black dark:bg-gray-800", text: "text-white dark:text-gray-100" },
+      "UberEats": { bg: "bg-black dark:bg-gray-800", text: "text-white dark:text-gray-100" },
+      "Instacart": { bg: "bg-purple-100 dark:bg-purple-900/30", text: "text-purple-700 dark:text-purple-300" },
+      "GrubHub": { bg: "bg-orange-100 dark:bg-orange-900/30", text: "text-orange-700 dark:text-orange-300" },
+      "Roadie": { bg: "bg-blue-100 dark:bg-blue-900/30", text: "text-blue-700 dark:text-blue-300" },
+      "Shipt": { bg: "bg-green-100 dark:bg-green-900/30", text: "text-green-700 dark:text-green-300" },
+      "ProxyPics": { bg: "bg-indigo-100 dark:bg-indigo-900/30", text: "text-indigo-700 dark:text-indigo-300" },
+    };
+
+    return appColors[appName] || { bg: "bg-gray-100 dark:bg-gray-700", text: "text-gray-500 dark:text-gray-400" };
+  };
+
+  // Get app initials
+  const getAppInitials = (appName: string): string => {
+    const initials: Record<string, string> = {
+      "DoorDash": "DD",
+      "Uber": "UB",
+      "UberEats": "UE",
+      "Instacart": "IC",
+      "GrubHub": "GH",
+      "Roadie": "RD",
+      "Shipt": "SP",
+      "ProxyPics": "PP",
+    };
+
+    if (initials[appName]) {
+      return initials[appName];
+    }
+
+    // Fallback: use first two letters
+    return appName.substring(0, 2).toUpperCase();
+  };
+
+  // Get icon color for app (for the circle background)
+  const getAppIconColor = (appName: string) => {
+    const iconColors: Record<string, { bg: string; text: string }> = {
+      "DoorDash": { bg: "bg-red-500 dark:bg-red-600", text: "text-white" },
+      "Uber": { bg: "bg-black dark:bg-gray-900", text: "text-white" },
+      "UberEats": { bg: "bg-black dark:bg-gray-900", text: "text-white" },
+      "Instacart": { bg: "bg-purple-500 dark:bg-purple-600", text: "text-white" },
+      "GrubHub": { bg: "bg-orange-500 dark:bg-orange-600", text: "text-white" },
+      "Roadie": { bg: "bg-blue-500 dark:bg-blue-600", text: "text-white" },
+      "Shipt": { bg: "bg-green-500 dark:bg-green-600", text: "text-white" },
+      "ProxyPics": { bg: "bg-indigo-500 dark:bg-indigo-600", text: "text-white" },
+    };
+
+    return iconColors[appName] || { bg: "bg-gray-500 dark:bg-gray-600", text: "text-white" };
   };
 
   const groupedTransactions = transactions.reduce((acc: Record<string, Transaction[]>, transaction: Transaction) => {
@@ -241,63 +297,93 @@ export default function HistoryPage() {
               <div className="space-y-2">
                 {typedTransactions.map((transaction: Transaction) => {
                   const isIncome = transaction.type === "income";
+                  // Use transaction tag as app name
+                  const appName = transaction.tag;
+                  
                   return (
                     <div
                       key={transaction._id}
-                      className="bg-white dark:bg-gray-800 rounded-lg p-4 border border-gray-200 dark:border-gray-700 flex items-center justify-between"
+                      className={`rounded-lg p-4 border flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 ${
+                        isIncome 
+                          ? "bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700"
+                          : "bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800/50"
+                      }`}
                     >
-                      <div className="flex items-center gap-3 flex-1">
-                        <div
-                          className={`w-10 h-10 rounded-lg flex items-center justify-center ${
-                            isIncome 
-                              ? "bg-green-100 dark:bg-green-900/30" 
-                              : "bg-red-100 dark:bg-red-900/30"
-                          }`}
-                        >
-                          <span className="text-xl">📊</span>
-                        </div>
+                      <div className="flex items-center gap-3 flex-1 min-w-0">
+                        {appName ? (
+                          (() => {
+                            const iconColor = getAppIconColor(appName);
+                            const initials = getAppInitials(appName);
+                            return (
+                              <div
+                                className={`w-10 h-10 rounded-lg flex items-center justify-center ${iconColor.bg} ${iconColor.text}`}
+                              >
+                                <span className="text-xs font-bold">{initials}</span>
+                              </div>
+                            );
+                          })()
+                        ) : (
+                          <div
+                            className={`w-10 h-10 rounded-lg flex items-center justify-center ${
+                              isIncome 
+                                ? "bg-green-100 dark:bg-green-900/30" 
+                                : "bg-red-100 dark:bg-red-900/30"
+                            }`}
+                          >
+                            <span className="text-xl">📊</span>
+                          </div>
+                        )}
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2">
-                            {transaction.tag && (
-                              <span className="text-xs text-gray-500 dark:text-gray-400 bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded">
-                                {transaction.tag}
-                              </span>
+                            {appName && (
+                              (() => {
+                                const appColor = getAppTagColor(appName);
+                                return (
+                                  <span className={`text-xs px-2 py-1 rounded ${appColor.bg} ${appColor.text}`}>
+                                    {appName}
+                                  </span>
+                                );
+                              })()
                             )}
-                          </div>
-                          <div className="text-xs text-gray-500 dark:text-gray-400">
-                            {formatTime(transaction.date, transaction.time)}
+                            <span className="text-xs text-gray-500 dark:text-gray-400">
+                              {formatTime(transaction.date, transaction.time)}
+                            </span>
                           </div>
                           {transaction.notes ? (
                             <div className="text-sm text-gray-600 dark:text-gray-300 mt-1 truncate">
                               {transaction.notes}
                             </div>
                           ) : null}
-                          {isIncome && (transaction.linkedOcrExport || transaction.linkedDeliveryOrder) && (
-                            <div className="mt-2 space-y-1.5">
-                              {transaction.linkedOcrExport && (
+                          {isIncome && ((transaction.linkedOcrExports && transaction.linkedOcrExports.length > 0) || (transaction.linkedDeliveryOrders && transaction.linkedDeliveryOrders.length > 0)) && (
+                            <div className="mt-2 flex flex-col sm:flex-row sm:items-center gap-2 flex-wrap">
+                              {transaction.linkedDeliveryOrders?.map((order) => (
                                 <button
+                                  key={order.id}
                                   onClick={() => {
-                                    const encodedAddress = encodeURIComponent(transaction.linkedOcrExport!.customerAddress);
-                                    router.push(`/ocr-data?address=${encodedAddress}`);
+                                    setEditingOrderId(order.id);
                                   }}
-                                  className="text-xs text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 hover:underline flex items-center gap-1"
+                                  className="text-xs text-purple-600 dark:text-purple-400 hover:text-purple-800 dark:hover:text-purple-300 hover:underline flex items-center gap-1 text-left"
                                 >
-                                  👤 {transaction.linkedOcrExport.customerName}
+                                  📦 {order.restaurantName} - ${order.money.toFixed(2)} / {order.miles.toFixed(1)}mi {order.miles > 0 && `($${(order.money / order.miles).toFixed(2)}/mi)`}
                                 </button>
-                              )}
-                              {transaction.linkedDeliveryOrder && (
+                              ))}
+                              {transaction.linkedOcrExports?.map((customer) => (
                                 <button
+                                  key={customer.id}
                                   onClick={() => {
-                                    router.push(`/delivery-orders?orderId=${transaction.linkedDeliveryOrder!.id}`);
+                                    setEditingCustomerAddress(customer.customerAddress);
+                                    setEditingCustomerEntryId(customer.entryId || null);
                                   }}
-                                  className="text-xs text-purple-600 dark:text-purple-400 hover:text-purple-800 dark:hover:text-purple-300 hover:underline flex items-center gap-1"
+                                  className="text-xs text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 hover:underline flex items-center gap-1 text-left"
                                 >
-                                  📦 {transaction.linkedDeliveryOrder.restaurantName} ({transaction.linkedDeliveryOrder.appName}) - ${transaction.linkedDeliveryOrder.money.toFixed(2)} / {transaction.linkedDeliveryOrder.miles.toFixed(1)}mi
+                                  👤 {customer.customerName} {customer.customerAddress}
                                 </button>
-                              )}
+                              ))}
                             </div>
                           )}
                         </div>
+                      </div>
+                      <div className="flex items-center justify-between sm:justify-end gap-3 sm:ml-4">
                         <div
                           className={`text-lg font-bold ${
                             isIncome 
@@ -308,8 +394,7 @@ export default function HistoryPage() {
                           {isIncome ? "+" : "-"}
                           {formatCurrency(Math.abs(transaction.amount))}
                         </div>
-                      </div>
-                      <div className="flex items-center gap-2 ml-4">
+                        <div className="flex items-center gap-2">
                         <button
                           onClick={() => setEditingTransaction(transaction._id)}
                           className="p-2 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white min-w-[44px] min-h-[44px] flex items-center justify-center"
@@ -322,6 +407,7 @@ export default function HistoryPage() {
                         >
                           🗑️
                         </button>
+                        </div>
                       </div>
                     </div>
                   );
@@ -411,6 +497,30 @@ export default function HistoryPage() {
           transactionId={editingTransaction || undefined}
         />
       )}
+
+      <EditCustomerEntriesModal
+        isOpen={editingCustomerAddress !== null}
+        onClose={() => {
+          setEditingCustomerAddress(null);
+          setEditingCustomerEntryId(null);
+        }}
+        address={editingCustomerAddress}
+        entryId={editingCustomerEntryId}
+        userId={session?.user?.id}
+        onUpdate={() => {
+          // Optionally refresh transactions if needed
+        }}
+      />
+
+      <EditDeliveryOrderModal
+        isOpen={editingOrderId !== null}
+        onClose={() => setEditingOrderId(null)}
+        orderId={editingOrderId}
+        userId={session?.user?.id}
+        onUpdate={() => {
+          // Optionally refresh transactions if needed
+        }}
+      />
     </Layout>
   );
 }

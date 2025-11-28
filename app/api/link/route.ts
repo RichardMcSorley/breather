@@ -41,39 +41,35 @@ export async function POST(request: NextRequest) {
       }
 
       if (action === "link") {
-        // Add order to customer's linked orders (we'll store in a new field or use existing pattern)
-        // For now, we'll link via transactions, but we need a way to link orders to customers directly
-        // Let's add linkedDeliveryOrderIds to OcrExport model
-        if (!ocrExport.linkedDeliveryOrderIds) {
-          ocrExport.linkedDeliveryOrderIds = [];
-        }
-        if (!ocrExport.linkedDeliveryOrderIds.includes(deliveryOrder._id)) {
-          ocrExport.linkedDeliveryOrderIds.push(deliveryOrder._id);
-          await ocrExport.save();
+        // Add order to customer's linked orders
+        if (!ocrExport.linkedDeliveryOrderIds || !ocrExport.linkedDeliveryOrderIds.includes(deliveryOrder._id)) {
+          await OcrExport.findByIdAndUpdate(
+            ocrExportId,
+            { $addToSet: { linkedDeliveryOrderIds: deliveryOrder._id } },
+            { new: true }
+          );
         }
 
         // Add customer to order's linked customers
-        if (!deliveryOrder.linkedOcrExportIds) {
-          deliveryOrder.linkedOcrExportIds = [];
-        }
-        if (!deliveryOrder.linkedOcrExportIds.includes(ocrExport._id)) {
-          deliveryOrder.linkedOcrExportIds.push(ocrExport._id);
-          await deliveryOrder.save();
+        if (!deliveryOrder.linkedOcrExportIds || !deliveryOrder.linkedOcrExportIds.includes(ocrExport._id)) {
+          await DeliveryOrder.findByIdAndUpdate(
+            deliveryOrderId,
+            { $addToSet: { linkedOcrExportIds: ocrExport._id } },
+            { new: true }
+          );
         }
       } else {
         // Unlink
-        if (ocrExport.linkedDeliveryOrderIds) {
-          ocrExport.linkedDeliveryOrderIds = ocrExport.linkedDeliveryOrderIds.filter(
-            (id) => id.toString() !== deliveryOrderId
-          );
-          await ocrExport.save();
-        }
-        if (deliveryOrder.linkedOcrExportIds) {
-          deliveryOrder.linkedOcrExportIds = deliveryOrder.linkedOcrExportIds.filter(
-            (id) => id.toString() !== ocrExportId
-          );
-          await deliveryOrder.save();
-        }
+        await OcrExport.findByIdAndUpdate(
+          ocrExportId,
+          { $pull: { linkedDeliveryOrderIds: deliveryOrder._id } },
+          { new: true }
+        );
+        await DeliveryOrder.findByIdAndUpdate(
+          deliveryOrderId,
+          { $pull: { linkedOcrExportIds: ocrExport._id } },
+          { new: true }
+        );
       }
 
       return NextResponse.json({ success: true, message: `Order ${action}ed successfully` });
@@ -113,18 +109,19 @@ export async function POST(request: NextRequest) {
           return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
         }
 
-        // Update transaction
-        transaction.linkedOcrExportId = ocrExport._id;
-        await transaction.save();
+        // Update transaction - add to array
+        await Transaction.findByIdAndUpdate(
+          transactionId,
+          { $addToSet: { linkedOcrExportIds: ocrExport._id } },
+          { new: true }
+        );
 
         // Update OcrExport
-        if (!ocrExport.linkedTransactionIds) {
-          ocrExport.linkedTransactionIds = [];
-        }
-        if (!ocrExport.linkedTransactionIds.includes(transaction._id)) {
-          ocrExport.linkedTransactionIds.push(transaction._id);
-          await ocrExport.save();
-        }
+        await OcrExport.findByIdAndUpdate(
+          ocrExportId,
+          { $addToSet: { linkedTransactionIds: transaction._id } },
+          { new: true }
+        );
       }
 
       // Link to DeliveryOrder
@@ -141,18 +138,19 @@ export async function POST(request: NextRequest) {
           return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
         }
 
-        // Update transaction
-        transaction.linkedDeliveryOrderId = deliveryOrder._id;
-        await transaction.save();
+        // Update transaction - add to array
+        await Transaction.findByIdAndUpdate(
+          transactionId,
+          { $addToSet: { linkedDeliveryOrderIds: deliveryOrder._id } },
+          { new: true }
+        );
 
         // Update DeliveryOrder
-        if (!deliveryOrder.linkedTransactionIds) {
-          deliveryOrder.linkedTransactionIds = [];
-        }
-        if (!deliveryOrder.linkedTransactionIds.includes(transaction._id)) {
-          deliveryOrder.linkedTransactionIds.push(transaction._id);
-          await deliveryOrder.save();
-        }
+        await DeliveryOrder.findByIdAndUpdate(
+          deliveryOrderId,
+          { $addToSet: { linkedTransactionIds: transaction._id } },
+          { new: true }
+        );
       }
     } else if (action === "unlink") {
       // Unlink from OcrExport
@@ -161,18 +159,17 @@ export async function POST(request: NextRequest) {
           return NextResponse.json({ error: "Invalid OcrExport ID" }, { status: 400 });
         }
 
-        const ocrExport = await OcrExport.findById(ocrExportId);
-        if (ocrExport && ocrExport.linkedTransactionIds) {
-          ocrExport.linkedTransactionIds = ocrExport.linkedTransactionIds.filter(
-            (id) => id.toString() !== transactionId
-          );
-          await ocrExport.save();
-        }
+        await OcrExport.findByIdAndUpdate(
+          ocrExportId,
+          { $pull: { linkedTransactionIds: transaction._id } },
+          { new: true }
+        );
 
-        if (transaction.linkedOcrExportId?.toString() === ocrExportId) {
-          transaction.linkedOcrExportId = undefined;
-          await transaction.save();
-        }
+        await Transaction.findByIdAndUpdate(
+          transactionId,
+          { $pull: { linkedOcrExportIds: ocrExportId } },
+          { new: true }
+        );
       }
 
       // Unlink from DeliveryOrder
@@ -181,18 +178,17 @@ export async function POST(request: NextRequest) {
           return NextResponse.json({ error: "Invalid DeliveryOrder ID" }, { status: 400 });
         }
 
-        const deliveryOrder = await DeliveryOrder.findById(deliveryOrderId);
-        if (deliveryOrder && deliveryOrder.linkedTransactionIds) {
-          deliveryOrder.linkedTransactionIds = deliveryOrder.linkedTransactionIds.filter(
-            (id) => id.toString() !== transactionId
-          );
-          await deliveryOrder.save();
-        }
+        await DeliveryOrder.findByIdAndUpdate(
+          deliveryOrderId,
+          { $pull: { linkedTransactionIds: transaction._id } },
+          { new: true }
+        );
 
-        if (transaction.linkedDeliveryOrderId?.toString() === deliveryOrderId) {
-          transaction.linkedDeliveryOrderId = undefined;
-          await transaction.save();
-        }
+        await Transaction.findByIdAndUpdate(
+          transactionId,
+          { $pull: { linkedDeliveryOrderIds: deliveryOrderId } },
+          { new: true }
+        );
       }
     }
 

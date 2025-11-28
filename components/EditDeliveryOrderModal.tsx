@@ -182,7 +182,7 @@ export default function EditDeliveryOrderModal({
               </label>
               <div className="rounded-lg border border-gray-300 dark:border-gray-600 overflow-hidden">
                 <img
-                  src={order.screenshot}
+                  src={`data:image/png;base64,${order.screenshot}`}
                   alt="Order screenshot"
                   className="w-full h-auto max-h-[400px] object-contain"
                 />
