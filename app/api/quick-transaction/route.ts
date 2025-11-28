@@ -85,21 +85,20 @@ export async function POST(request: NextRequest) {
     const todayStart = estStartDate;
     const todayEnd = estEndDate;
 
-    // Get all transactions for today (including those with linkedDeliveryOrderIds)
-    // Only exclude bills - transactions linked to orders should be included
-    // Match JavaScript filter behavior (!t.isBill): include where isBill is not true
-    // This includes false, null, and undefined values
-    const todayTransactions = await Transaction.find({
+    // Get all transactions for today (matching dashboard summary API behavior)
+    // Then filter out bills in JavaScript, same as dashboard does
+    const allTodayTransactions = await Transaction.find({
       userId,
       date: {
         $gte: todayStart,
         $lte: todayEnd,
       },
-      $or: [
-        { isBill: { $ne: true } },
-        { isBill: { $exists: false } },
-      ],
     }).lean();
+
+    // Filter out bills using same logic as dashboard (!t.isBill)
+    const todayTransactions = allTodayTransactions.filter((t) => {
+      return !t.isBill;
+    });
 
     const todayIncome = todayTransactions
       .filter((t) => t.type === "income")
