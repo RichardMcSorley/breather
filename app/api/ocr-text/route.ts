@@ -92,8 +92,8 @@ export async function POST(request: NextRequest) {
         isRepeatCustomer,
         visitCount,
         customerNames,
-        viewLink: `https://breather-chi.vercel.app/dashboard/ocr-data?address=${encodedAddress}`,
-        editLink: `https://breather-chi.vercel.app/dashboard/ocr-data?entryId=${exportEntry._id.toString()}&address=${encodedAddress}`,
+        viewLink: `https://breather-chi.vercel.app/ocr-data?address=${encodedAddress}`,
+        editLink: `https://breather-chi.vercel.app/ocr-data?entryId=${exportEntry._id.toString()}&address=${encodedAddress}`,
       };
 
       return NextResponse.json(response);
