@@ -10,6 +10,7 @@ import { handleApiError } from "@/lib/api-error-handler";
 import { parseDateAsUTC, parseDateOnlyAsUTC, formatDateAsUTC } from "@/lib/date-utils";
 import { parseFloatSafe, validatePagination, isValidEnum, TRANSACTION_TYPES } from "@/lib/validation";
 import { TransactionQuery, FormattedTransaction, TransactionListResponse } from "@/lib/types";
+import { attemptAutoLinkTransactionToCustomer, attemptAutoLinkTransactionToOrder } from "@/lib/auto-link-helper";
 
 export async function GET(request: NextRequest) {
   try {
@@ -188,6 +189,17 @@ export async function POST(request: NextRequest) {
       tag,
       dueDate: parsedDueDate,
     });
+
+    // Attempt auto-linking for income transactions
+    if (type === "income") {
+      try {
+        await attemptAutoLinkTransactionToCustomer(transaction, session.user.id);
+        await attemptAutoLinkTransactionToOrder(transaction, session.user.id);
+      } catch (autoLinkError) {
+        // Silently fail auto-linking - don't break transaction creation
+        console.error("Auto-linking error:", autoLinkError);
+      }
+    }
 
     // Convert to plain object and format dates as YYYY-MM-DD strings using UTC
     const transactionObj = transaction.toObject();
