@@ -10,7 +10,7 @@ import Tag from "@/components/ui/Tag";
 import { useSettings, useUpdateSettings } from "@/hooks/useQueries";
 
 // Default tags
-const DEFAULT_INCOME_TAGS = ["DoorDash", "Uber", "Instacart", "GrubHub", "Roadie", "Shipt", "ProxyPics"];
+const DEFAULT_INCOME_TAGS = ["Uber Driver", "Dasher", "GH Drivers", "Shopper", "Roadie", "ProxyPics"];
 const DEFAULT_EXPENSE_TAGS = ["Gas", "Maintenance", "Insurance", "Tolls", "Parking", "Car Wash", "Oil Change", "Withdraw Fees"];
 
 export default function ConfigurationPage() {

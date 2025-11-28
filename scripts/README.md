@@ -142,3 +142,144 @@ The screenshot will be:
 2. Extracted data saved to `ocrexports` collection
 3. Original OCR entry deleted from `ocrtexts` collection
 
+## Migration Script: Tags and Sources
+
+The migration script updates tags and app names across transactions, customers (OcrExport), and orders (DeliveryOrder) collections.
+
+### Mappings
+
+- "Uber Driver" → "Uber Eats"
+- "Dasher" → "DoorDash"
+- "GH Drivers" → "GrubHub"
+- "Shopper" → "Instacart"
+- "Shipt" → removed (null for transactions/customers, empty string for orders)
+
+### Prerequisites
+
+1. **Environment variables**:
+   - `MONGODB_URI` - Your MongoDB connection string (must be set in `.env.local` or `.env`)
+
+2. **Dependencies**:
+   - Node.js >= 20.10.0
+   - All project dependencies installed (`npm install`)
+
+### Usage
+
+Run the migration script using one of these methods:
+
+**Option 1: Using tsx (recommended)**
+
+If you have `.env.local` or `.env` file, use dotenv-cli to load it:
+```bash
+npx dotenv-cli -e .env.local -- npx tsx scripts/migrate-tags-and-sources.ts
+```
+
+Or export the variable first:
+```bash
+export MONGODB_URI="your-connection-string"
+npx tsx scripts/migrate-tags-and-sources.ts
+```
+
+**Option 2: Using ts-node**
+
+If you have `.env.local` or `.env` file, use dotenv-cli:
+```bash
+npx dotenv-cli -e .env.local -- npx ts-node --esm scripts/migrate-tags-and-sources.ts
+```
+
+Or export the variable first:
+```bash
+export MONGODB_URI="your-connection-string"
+npx ts-node --esm scripts/migrate-tags-and-sources.ts
+```
+
+**Option 3: Compile and run**
+```bash
+# Compile TypeScript
+npx tsc scripts/migrate-tags-and-sources.ts --outDir dist --module esnext --moduleResolution node --esModuleInterop
+
+# Run compiled JavaScript
+node dist/scripts/migrate-tags-and-sources.js
+```
+
+### What it does
+
+1. Connects to MongoDB using the connection string from environment variables
+2. Updates **Transactions** collection:
+   - Migrates `tag` field according to mappings
+   - Removes "Shipt" tags (sets to null)
+3. Updates **OcrExport** (customers) collection:
+   - Migrates `appName` field according to mappings
+   - Removes "Shipt" app names (sets to null)
+4. Updates **DeliveryOrder** (orders) collection:
+   - Migrates `appName` field according to mappings
+   - Sets "Shipt" app names to empty string (since appName is required)
+
+### Output
+
+The script provides detailed output:
+- Progress for each collection
+- Number of documents updated per mapping
+- Summary statistics
+- Error reporting if any issues occur
+
+### Example Output
+
+```
+🚀 Starting tag and appName migration...
+
+Mappings:
+  - "Uber Driver" → "Uber Eats"
+  - "Dasher" → "DoorDash"
+  - "GH Drivers" → "GrubHub"
+  - "Shopper" → "Instacart"
+  - "Shipt" → (removed)
+
+📡 Connecting to MongoDB...
+✓ Connected to MongoDB
+
+📊 Migrating Transactions...
+  ✓ Uber Driver → Uber Eats: 15 transactions updated
+  ✓ Dasher → DoorDash: 8 transactions updated
+  ...
+
+👤 Migrating OcrExport (Customers)...
+  ✓ Uber Driver → Uber Eats: 12 customers updated
+  ...
+
+📦 Migrating DeliveryOrder (Orders)...
+  ✓ Dasher → DoorDash: 5 orders updated
+  ...
+
+============================================================
+📊 Migration Summary
+============================================================
+
+Transactions:
+  Updated: 23
+  Errors: 0
+
+OcrExport (Customers):
+  Updated: 12
+  Errors: 0
+
+DeliveryOrder (Orders):
+  Updated: 5
+  Errors: 0
+
+============================================================
+Total Updated: 40
+Total Errors: 0
+============================================================
+
+✅ Migration completed successfully!
+```
+
+### Important Notes
+
+- **Backup your database** before running the migration
+- The script performs case-insensitive matching for variations
+- For DeliveryOrder, "Shipt" is set to empty string (not null) since `appName` is a required field
+- The script is idempotent - safe to run multiple times
+- Review the output carefully before proceeding with production data
+
