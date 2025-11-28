@@ -72,11 +72,6 @@ export default function LinkOrderModal({
           if (transactionData.tag) {
             params.append("filterAppName", transactionData.tag);
           }
-          if (transactionData.date && transactionData.time) {
-            // Combine date and time to create a datetime string
-            const transactionDateTime = `${transactionData.date}T${transactionData.time}`;
-            params.append("filterDateTime", transactionDateTime);
-          }
         }
       }
 
