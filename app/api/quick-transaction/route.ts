@@ -87,13 +87,18 @@ export async function POST(request: NextRequest) {
 
     // Get all transactions for today (including those with linkedDeliveryOrderIds)
     // Only exclude bills - transactions linked to orders should be included
+    // Match JavaScript filter behavior (!t.isBill): include where isBill is not true
+    // This includes false, null, and undefined values
     const todayTransactions = await Transaction.find({
       userId,
       date: {
         $gte: todayStart,
         $lte: todayEnd,
       },
-      isBill: false,
+      $or: [
+        { isBill: { $ne: true } },
+        { isBill: { $exists: false } },
+      ],
     }).lean();
 
     const todayIncome = todayTransactions
