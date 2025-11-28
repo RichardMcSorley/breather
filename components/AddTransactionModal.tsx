@@ -280,7 +280,7 @@ export default function AddTransactionModal({
           placeholder="0.00"
         />
 
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <Input
             label="Date"
             type="date"
