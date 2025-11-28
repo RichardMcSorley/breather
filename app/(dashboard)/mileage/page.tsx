@@ -316,11 +316,16 @@ export default function MileagePage() {
 
       {/* Pagination Controls */}
       {pagination && pagination.totalPages > 1 && (
-        <div className="flex items-center justify-between mt-6 pt-6 border-t border-gray-200 dark:border-gray-700">
-          <div className="text-sm text-gray-600 dark:text-gray-400">
-            Showing {((page - 1) * limit) + 1} to {Math.min(page * limit, pagination.total)} of {pagination.total} entries
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mt-6 pt-6 border-t border-gray-200 dark:border-gray-700">
+          <div className="text-sm text-gray-600 dark:text-gray-400 text-center sm:text-left">
+            <span className="hidden sm:inline">
+              Showing {((page - 1) * limit) + 1} to {Math.min(page * limit, pagination.total)} of {pagination.total} entries
+            </span>
+            <span className="sm:hidden">
+              Page {page} of {pagination.totalPages}
+            </span>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center justify-center gap-2 flex-wrap">
             <button
               onClick={() => setPage(page - 1)}
               disabled={page === 1}
