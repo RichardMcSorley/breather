@@ -111,7 +111,7 @@ export async function GET(request: NextRequest) {
     const orderIds = orders.map((o) => o._id);
     const linkedTransactions = await Transaction.find({
       userId,
-      linkedDeliveryOrderId: { $in: orderIds },
+      linkedDeliveryOrderIds: { $in: orderIds },
       type: "income",
     })
       .sort({ date: -1 })
