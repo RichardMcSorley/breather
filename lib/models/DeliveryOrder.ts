@@ -8,7 +8,7 @@ export interface IDeliveryOrder extends Document {
   money: number;
   milesToMoneyRatio: number;
   restaurantName: string;
-  time: string;
+  time?: string;
   screenshot?: string;
   rawResponse?: string;
   linkedTransactionIds?: mongoose.Types.ObjectId[];
@@ -51,7 +51,7 @@ const DeliveryOrderSchema: Schema = new Schema(
     },
     time: {
       type: String,
-      required: true,
+      required: false,
     },
     screenshot: {
       type: String,
