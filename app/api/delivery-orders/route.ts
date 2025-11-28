@@ -5,6 +5,7 @@ import Transaction from "@/lib/models/Transaction";
 import { handleApiError } from "@/lib/api-error-handler";
 import { processOrderScreenshot } from "@/lib/order-ocr-processor";
 import { randomBytes } from "crypto";
+import { attemptAutoLinkOrderToTransaction } from "@/lib/auto-link-helper";
 
 export async function POST(request: NextRequest) {
   try {
@@ -56,6 +57,14 @@ export async function POST(request: NextRequest) {
         rawResponse: processed.rawResponse,
         processedAt: new Date(),
       });
+
+      // Attempt auto-linking to matching transaction
+      try {
+        await attemptAutoLinkOrderToTransaction(deliveryOrder, userId);
+      } catch (autoLinkError) {
+        // Silently fail auto-linking - don't break order creation
+        console.error("Auto-linking error:", autoLinkError);
+      }
 
       // Build response
       const response = {

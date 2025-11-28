@@ -9,6 +9,7 @@ import { processOcrScreenshot } from "@/lib/ocr-processor";
 import { geocodeAddress } from "@/lib/geocode-helper";
 import { isSameAddress } from "@/lib/ocr-analytics";
 import { randomBytes } from "crypto";
+import { attemptAutoLinkCustomerToTransaction } from "@/lib/auto-link-helper";
 
 export async function POST(request: NextRequest) {
   try {
@@ -69,6 +70,14 @@ export async function POST(request: NextRequest) {
         geocodeDisplayName: geocodeData?.displayName,
         processedAt: new Date(),
       });
+
+      // Attempt auto-linking to matching transaction
+      try {
+        await attemptAutoLinkCustomerToTransaction(exportEntry, userId);
+      } catch (autoLinkError) {
+        // Silently fail auto-linking - don't break customer creation
+        console.error("Auto-linking error:", autoLinkError);
+      }
 
       // Check for repeat customers by address (address is the unique identifier)
       const allUserEntries = await OcrExport.find({ userId }).lean();

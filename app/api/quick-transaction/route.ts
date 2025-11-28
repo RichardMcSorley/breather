@@ -8,6 +8,7 @@ import { startOfDay, endOfDay } from "date-fns";
 import { handleApiError } from "@/lib/api-error-handler";
 import { parseESTAsUTC, getCurrentESTAsUTC, formatDateAsUTC, parseDateOnlyAsUTC } from "@/lib/date-utils";
 import { parseFloatSafe } from "@/lib/validation";
+import { attemptAutoLinkTransactionToCustomer, attemptAutoLinkTransactionToOrder } from "@/lib/auto-link-helper";
 
 export async function POST(request: NextRequest) {
   try {
@@ -64,7 +65,7 @@ export async function POST(request: NextRequest) {
     // Create the transaction only if amount is not 0
     if (shouldCreateTransaction) {
       // Create the transaction with user's local date/time
-      await Transaction.create({
+      const transaction = await Transaction.create({
         userId,
         amount: transactionAmount,
         type: transactionType,
@@ -73,6 +74,17 @@ export async function POST(request: NextRequest) {
         isBill: false,
         tag: source || undefined,
       });
+
+      // Attempt auto-linking for income transactions
+      if (transactionType === "income") {
+        try {
+          await attemptAutoLinkTransactionToCustomer(transaction, userId);
+          await attemptAutoLinkTransactionToOrder(transaction, userId);
+        } catch (autoLinkError) {
+          // Silently fail auto-linking - don't break transaction creation
+          console.error("Auto-linking error:", autoLinkError);
+        }
+      }
     }
 
     // Calculate today's earnings using EST timezone
