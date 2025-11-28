@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, Suspense } from "react";
 import { useSession } from "next-auth/react";
 import { useSearchParams } from "next/navigation";
 import Layout from "@/components/Layout";
@@ -25,7 +25,7 @@ interface OcrExportEntry {
   updatedAt: string;
 }
 
-export default function OcrDataPage() {
+function OcrDataPageContent() {
   const { data: session } = useSession();
   const searchParams = useSearchParams();
   const [entries, setEntries] = useState<OcrExportEntry[]>([]);
@@ -147,6 +147,22 @@ export default function OcrDataPage() {
         }}
       />
     </Layout>
+  );
+}
+
+export default function OcrDataPage() {
+  return (
+    <Suspense
+      fallback={
+        <Layout>
+          <div className="flex items-center justify-center min-h-[60vh]">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-gray-900 dark:border-white"></div>
+          </div>
+        </Layout>
+      }
+    >
+      <OcrDataPageContent />
+    </Suspense>
   );
 }
 
