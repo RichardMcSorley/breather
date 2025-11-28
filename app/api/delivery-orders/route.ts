@@ -96,7 +96,6 @@ export async function GET(request: NextRequest) {
     const userId = searchParams.get("userId");
     const filterAmount = searchParams.get("filterAmount");
     const filterAppName = searchParams.get("filterAppName");
-    const filterDateTime = searchParams.get("filterDateTime");
 
     if (!userId) {
       return NextResponse.json({ error: "Missing userId" }, { status: 400 });
@@ -106,17 +105,6 @@ export async function GET(request: NextRequest) {
 
     // Parse filter values
     const filterAmountNum = filterAmount ? parseFloat(filterAmount) : null;
-    let filterDate: Date | null = null;
-    if (filterDateTime) {
-      try {
-        filterDate = new Date(filterDateTime);
-        if (isNaN(filterDate.getTime())) {
-          filterDate = null;
-        }
-      } catch {
-        filterDate = null;
-      }
-    }
 
     // Get delivery orders for the user, sorted by most recent first
     let orders = await DeliveryOrder.find({ userId })
@@ -125,23 +113,13 @@ export async function GET(request: NextRequest) {
       .lean();
 
     // Apply filters if provided
-    if (filterAppName || filterDate || filterAmountNum !== null) {
+    if (filterAppName || filterAmountNum !== null) {
       orders = orders.filter((order) => {
         // Check appName filter
         if (filterAppName) {
           const orderAppName = (order.appName || "").trim().toLowerCase();
           const filterAppNameLower = filterAppName.trim().toLowerCase();
           if (orderAppName !== filterAppNameLower) {
-            return false;
-          }
-        }
-
-        // Check time filter (within 1 hour)
-        if (filterDate) {
-          const orderDate = new Date(order.processedAt);
-          const timeDiff = Math.abs(filterDate.getTime() - orderDate.getTime());
-          const oneHourInMs = 60 * 60 * 1000; // 1 hour in milliseconds
-          if (timeDiff > oneHourInMs) {
             return false;
           }
         }

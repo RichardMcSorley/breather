@@ -17,7 +17,6 @@ export async function GET(request: NextRequest) {
     const limitParam = searchParams.get("limit");
     const filterAmount = searchParams.get("filterAmount");
     const filterAppName = searchParams.get("filterAppName");
-    const filterDateTime = searchParams.get("filterDateTime");
 
     const page = Math.max(1, parseInt(pageParam || "1"));
     const limit = Math.min(100, Math.max(1, parseInt(limitParam || "50")));
@@ -25,17 +24,6 @@ export async function GET(request: NextRequest) {
 
     // Parse filter values
     const filterAmountNum = filterAmount ? parseFloat(filterAmount) : null;
-    let filterDate: Date | null = null;
-    if (filterDateTime) {
-      try {
-        filterDate = new Date(filterDateTime);
-        if (isNaN(filterDate.getTime())) {
-          filterDate = null;
-        }
-      } catch {
-        filterDate = null;
-      }
-    }
 
     // Build query
     const query: Record<string, any> = {};
@@ -92,7 +80,7 @@ export async function GET(request: NextRequest) {
     });
 
     // Apply filters if provided
-    if (filterAppName || filterDate || filterAmountNum !== null) {
+    if (filterAppName || filterAmountNum !== null) {
       // Get all entry IDs for customers that might have linked transactions
       const allEntryIds = Array.from(addressGroups.values()).flat().map((v: any) => v._id);
       
@@ -130,16 +118,6 @@ export async function GET(request: NextRequest) {
             const visitAppName = (visit.appName || "").trim().toLowerCase();
             const filterAppNameLower = filterAppName.trim().toLowerCase();
             if (visitAppName !== filterAppNameLower) {
-              return false;
-            }
-          }
-
-          // Check time filter (within 1 hour)
-          if (filterDate) {
-            const visitDate = new Date(visit.processedAt || visit.createdAt);
-            const timeDiff = Math.abs(filterDate.getTime() - visitDate.getTime());
-            const oneHourInMs = 60 * 60 * 1000; // 1 hour in milliseconds
-            if (timeDiff > oneHourInMs) {
               return false;
             }
           }
