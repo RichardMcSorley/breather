@@ -23,7 +23,6 @@ const DeliveryOrderSchema: Schema = new Schema(
     entryId: {
       type: String,
       required: true,
-      index: true,
     },
     userId: {
       type: String,

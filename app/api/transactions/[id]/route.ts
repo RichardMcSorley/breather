@@ -56,25 +56,27 @@ export async function GET(
     };
 
     // Add linked customer info if present
-    if (transaction.linkedOcrExportId && typeof transaction.linkedOcrExportId === 'object') {
+    if (transaction.linkedOcrExportId && typeof transaction.linkedOcrExportId === 'object' && '_id' in transaction.linkedOcrExportId) {
+      const linkedCustomer = transaction.linkedOcrExportId as any;
       transactionObj.linkedOcrExport = {
-        id: String(transaction.linkedOcrExportId._id),
-        customerName: transaction.linkedOcrExportId.customerName,
-        customerAddress: transaction.linkedOcrExportId.customerAddress,
-        appName: transaction.linkedOcrExportId.appName,
-        entryId: transaction.linkedOcrExportId.entryId,
+        id: String(linkedCustomer._id),
+        customerName: linkedCustomer.customerName,
+        customerAddress: linkedCustomer.customerAddress,
+        appName: linkedCustomer.appName,
+        entryId: linkedCustomer.entryId,
       };
     }
 
     // Add linked delivery order info if present
-    if (transaction.linkedDeliveryOrderId && typeof transaction.linkedDeliveryOrderId === 'object') {
+    if (transaction.linkedDeliveryOrderId && typeof transaction.linkedDeliveryOrderId === 'object' && '_id' in transaction.linkedDeliveryOrderId) {
+      const linkedOrder = transaction.linkedDeliveryOrderId as any;
       transactionObj.linkedDeliveryOrder = {
-        id: String(transaction.linkedDeliveryOrderId._id),
-        restaurantName: transaction.linkedDeliveryOrderId.restaurantName,
-        appName: transaction.linkedDeliveryOrderId.appName,
-        miles: transaction.linkedDeliveryOrderId.miles,
-        money: transaction.linkedDeliveryOrderId.money,
-        entryId: transaction.linkedDeliveryOrderId.entryId,
+        id: String(linkedOrder._id),
+        restaurantName: linkedOrder.restaurantName,
+        appName: linkedOrder.appName,
+        miles: linkedOrder.miles,
+        money: linkedOrder.money,
+        entryId: linkedOrder.entryId,
       };
     }
 
