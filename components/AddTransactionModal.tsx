@@ -26,7 +26,7 @@ interface AddTransactionModalProps {
   initialType?: "income" | "expense";
 }
 
-const DEFAULT_INCOME_SOURCE_TAGS = ["DoorDash", "Uber", "Uber Eats", "Instacart", "GrubHub", "Roadie", "ProxyPics"];
+const DEFAULT_INCOME_SOURCE_TAGS = ["Uber Driver", "Dasher", "GH Drivers", "Shopper", "Roadie", "ProxyPics"];
 const DEFAULT_EXPENSE_SOURCE_TAGS = ["Gas", "Maintenance", "Insurance", "Tolls", "Parking", "Car Wash", "Oil Change", "Withdraw Fees"];
 
 const formatLocalDate = (value: Date | string) => {
