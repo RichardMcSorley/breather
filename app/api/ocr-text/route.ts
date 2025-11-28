@@ -82,6 +82,7 @@ export async function POST(request: NextRequest) {
         new Set(matchingEntries.map((entry) => entry.customerName).filter(Boolean))
       );
 
+      const encodedAddress = encodeURIComponent(processed.customerAddress);
       // Build response
       const response: any = {
         success: true,
@@ -91,17 +92,9 @@ export async function POST(request: NextRequest) {
         isRepeatCustomer,
         visitCount,
         customerNames,
+        viewLink: `https://breather-chi.vercel.app/dashboard/ocr-data?address=${encodedAddress}`,
+        editLink: `https://breather-chi.vercel.app/dashboard/ocr-data?entryId=${exportEntry._id.toString()}&address=${encodedAddress}`,
       };
-
-      // Add viewLink for repeat customers
-      if (isRepeatCustomer) {
-        const encodedAddress = encodeURIComponent(processed.customerAddress);
-        response.viewLink = `https://breather-chi.vercel.app/dashboard/ocr-data?address=${encodedAddress}`;
-      }
-
-      // Add editLink for the new entry
-      const encodedAddress = encodeURIComponent(processed.customerAddress);
-      response.editLink = `https://breather-chi.vercel.app/dashboard/ocr-data?entryId=${exportEntry._id.toString()}&address=${encodedAddress}`;
 
       return NextResponse.json(response);
     } catch (processError) {
