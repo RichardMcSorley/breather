@@ -94,6 +94,9 @@ export async function GET(request: NextRequest) {
 
     const { searchParams } = new URL(request.url);
     const userId = searchParams.get("userId");
+    const filterAmount = searchParams.get("filterAmount");
+    const filterAppName = searchParams.get("filterAppName");
+    const filterDateTime = searchParams.get("filterDateTime");
 
     if (!userId) {
       return NextResponse.json({ error: "Missing userId" }, { status: 400 });
@@ -101,11 +104,59 @@ export async function GET(request: NextRequest) {
 
     const limit = Math.min(100, parseInt(searchParams.get("limit") || "100", 10));
 
+    // Parse filter values
+    const filterAmountNum = filterAmount ? parseFloat(filterAmount) : null;
+    let filterDate: Date | null = null;
+    if (filterDateTime) {
+      try {
+        filterDate = new Date(filterDateTime);
+        if (isNaN(filterDate.getTime())) {
+          filterDate = null;
+        }
+      } catch {
+        filterDate = null;
+      }
+    }
+
     // Get delivery orders for the user, sorted by most recent first
-    const orders = await DeliveryOrder.find({ userId })
+    let orders = await DeliveryOrder.find({ userId })
       .sort({ processedAt: -1 })
       .limit(limit)
       .lean();
+
+    // Apply filters if provided
+    if (filterAppName || filterDate || filterAmountNum !== null) {
+      orders = orders.filter((order) => {
+        // Check appName filter
+        if (filterAppName) {
+          const orderAppName = (order.appName || "").trim().toLowerCase();
+          const filterAppNameLower = filterAppName.trim().toLowerCase();
+          if (orderAppName !== filterAppNameLower) {
+            return false;
+          }
+        }
+
+        // Check time filter (within 1 hour)
+        if (filterDate) {
+          const orderDate = new Date(order.processedAt);
+          const timeDiff = Math.abs(filterDate.getTime() - orderDate.getTime());
+          const oneHourInMs = 60 * 60 * 1000; // 1 hour in milliseconds
+          if (timeDiff > oneHourInMs) {
+            return false;
+          }
+        }
+
+        // Check amount filter (match order's money field)
+        if (filterAmountNum !== null) {
+          const orderMoneyMatch = Math.abs(order.money - filterAmountNum) < 0.01;
+          if (!orderMoneyMatch) {
+            return false;
+          }
+        }
+
+        return true;
+      });
+    }
 
     // Get all linked transactions for these orders
     const orderIds = orders.map((o) => o._id);

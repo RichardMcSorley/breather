@@ -41,6 +41,44 @@ export async function POST(request: NextRequest) {
       }
 
       if (action === "link") {
+        // Validate filters: appName match, time within 1 hour
+        const customerAppName = (ocrExport.appName || "").trim().toLowerCase();
+        const orderAppName = (deliveryOrder.appName || "").trim().toLowerCase();
+        if (customerAppName && orderAppName && customerAppName !== orderAppName) {
+          return NextResponse.json({ 
+            error: "Cannot link: customer appName does not match order appName" 
+          }, { status: 400 });
+        }
+
+        // Check time within 1 hour
+        const customerDate = new Date(ocrExport.processedAt);
+        const orderDate = new Date(deliveryOrder.processedAt);
+        const timeDiff = Math.abs(customerDate.getTime() - orderDate.getTime());
+        const oneHourInMs = 60 * 60 * 1000; // 1 hour in milliseconds
+        if (timeDiff > oneHourInMs) {
+          return NextResponse.json({ 
+            error: "Cannot link: customer and order are not within 1 hour of each other" 
+          }, { status: 400 });
+        }
+
+        // Check amount match: if customer has linked transactions, check if order.money matches any
+        if (ocrExport.linkedTransactionIds && ocrExport.linkedTransactionIds.length > 0) {
+          const linkedTransactions = await Transaction.find({
+            _id: { $in: ocrExport.linkedTransactionIds },
+            type: "income",
+          }).lean();
+          
+          const hasMatchingAmount = linkedTransactions.some((t: any) => {
+            return Math.abs(t.amount - deliveryOrder.money) < 0.01;
+          });
+          
+          if (!hasMatchingAmount) {
+            return NextResponse.json({ 
+              error: "Cannot link: order amount does not match any linked transaction amounts for this customer" 
+            }, { status: 400 });
+          }
+        }
+
         // Add order to customer's linked orders
         if (!ocrExport.linkedDeliveryOrderIds || !ocrExport.linkedDeliveryOrderIds.includes(deliveryOrder._id)) {
           await OcrExport.findByIdAndUpdate(
@@ -109,6 +147,36 @@ export async function POST(request: NextRequest) {
           return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
         }
 
+        // Validate filters: appName, time within 1 hour
+        if (transaction.tag) {
+          const transactionTag = (transaction.tag || "").trim().toLowerCase();
+          const customerAppName = (ocrExport.appName || "").trim().toLowerCase();
+          if (transactionTag && customerAppName && transactionTag !== customerAppName) {
+            return NextResponse.json({ 
+              error: "Cannot link: transaction source/appName does not match customer appName" 
+            }, { status: 400 });
+          }
+        }
+
+        // Check time within 1 hour
+        const transactionDateTime = new Date(transaction.date);
+        // Parse time string (format: HH:MM or HH:MM:SS)
+        const timeParts = transaction.time.split(":");
+        if (timeParts.length >= 2) {
+          transactionDateTime.setHours(parseInt(timeParts[0]) || 0);
+          transactionDateTime.setMinutes(parseInt(timeParts[1]) || 0);
+          transactionDateTime.setSeconds(parseInt(timeParts[2]) || 0);
+        }
+        
+        const customerDate = new Date(ocrExport.processedAt);
+        const timeDiff = Math.abs(transactionDateTime.getTime() - customerDate.getTime());
+        const oneHourInMs = 60 * 60 * 1000; // 1 hour in milliseconds
+        if (timeDiff > oneHourInMs) {
+          return NextResponse.json({ 
+            error: "Cannot link: transaction and customer are not within 1 hour of each other" 
+          }, { status: 400 });
+        }
+
         // Update transaction - add to array
         await Transaction.findByIdAndUpdate(
           transactionId,
@@ -136,6 +204,44 @@ export async function POST(request: NextRequest) {
         }
         if (deliveryOrder.userId !== session.user.id) {
           return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
+        }
+
+        // Validate filters: appName, amount match, time within 1 hour
+        if (transaction.tag) {
+          const transactionTag = (transaction.tag || "").trim().toLowerCase();
+          const orderAppName = (deliveryOrder.appName || "").trim().toLowerCase();
+          if (transactionTag && orderAppName && transactionTag !== orderAppName) {
+            return NextResponse.json({ 
+              error: "Cannot link: transaction source/appName does not match order appName" 
+            }, { status: 400 });
+          }
+        }
+
+        // Check amount match
+        const amountDiff = Math.abs(transaction.amount - deliveryOrder.money);
+        if (amountDiff >= 0.01) {
+          return NextResponse.json({ 
+            error: "Cannot link: transaction amount does not match order amount" 
+          }, { status: 400 });
+        }
+
+        // Check time within 1 hour
+        const transactionDateTime = new Date(transaction.date);
+        // Parse time string (format: HH:MM or HH:MM:SS)
+        const timeParts = transaction.time.split(":");
+        if (timeParts.length >= 2) {
+          transactionDateTime.setHours(parseInt(timeParts[0]) || 0);
+          transactionDateTime.setMinutes(parseInt(timeParts[1]) || 0);
+          transactionDateTime.setSeconds(parseInt(timeParts[2]) || 0);
+        }
+        
+        const orderDate = new Date(deliveryOrder.processedAt);
+        const timeDiff = Math.abs(transactionDateTime.getTime() - orderDate.getTime());
+        const oneHourInMs = 60 * 60 * 1000; // 1 hour in milliseconds
+        if (timeDiff > oneHourInMs) {
+          return NextResponse.json({ 
+            error: "Cannot link: transaction and order are not within 1 hour of each other" 
+          }, { status: 400 });
         }
 
         // Update transaction - add to array

@@ -36,7 +36,7 @@ export default function LinkCustomerModal({
       setCustomers([]);
       setError(null);
     }
-  }, [isOpen, userId]);
+  }, [isOpen, userId, transactionId]);
 
   const fetchCustomers = async () => {
     if (!userId) return;
@@ -45,7 +45,34 @@ export default function LinkCustomerModal({
       setLoading(true);
       setError(null);
 
-      const response = await fetch(`/api/ocr-exports/customers?userId=${userId}&limit=100`);
+      // Build query parameters
+      const params = new URLSearchParams({
+        userId,
+        limit: "100",
+      });
+
+      // If transactionId is provided, fetch transaction data and add filters
+      if (transactionId) {
+        const transactionResponse = await fetch(`/api/transactions/${transactionId}`);
+        if (transactionResponse.ok) {
+          const transactionData = await transactionResponse.json();
+          
+          // Add filtering parameters
+          if (transactionData.amount) {
+            params.append("filterAmount", transactionData.amount.toString());
+          }
+          if (transactionData.tag) {
+            params.append("filterAppName", transactionData.tag);
+          }
+          if (transactionData.date && transactionData.time) {
+            // Combine date and time to create a datetime string
+            const transactionDateTime = `${transactionData.date}T${transactionData.time}`;
+            params.append("filterDateTime", transactionDateTime);
+          }
+        }
+      }
+
+      const response = await fetch(`/api/ocr-exports/customers?${params.toString()}`);
       if (!response.ok) {
         throw new Error("Failed to fetch customers");
       }
