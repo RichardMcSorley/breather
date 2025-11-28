@@ -39,6 +39,7 @@ describe("proxy", () => {
       "/bills/:path*",
       "/mileage/:path*",
       "/configuration/:path*",
+      "/ocr-data/:path*",
     ]);
   });
 
@@ -60,6 +61,7 @@ describe("proxy", () => {
       "/bills/:path*",
       "/mileage/:path*",
       "/configuration/:path*",
+      "/ocr-data/:path*",
     ];
     
     protectedRoutes.forEach((route) => {

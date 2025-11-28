@@ -1,12 +1,12 @@
 import { withAuth } from "next-auth/middleware";
 
-export const proxy = withAuth({
+export default withAuth({
   pages: {
     signIn: "/login",
   },
 });
 
 export const config = {
-  matcher: ["/dashboard/:path*", "/history/:path*", "/bills/:path*", "/mileage/:path*", "/configuration/:path*"],
+  matcher: ["/dashboard/:path*", "/history/:path*", "/bills/:path*", "/mileage/:path*", "/configuration/:path*", "/ocr-data/:path*"],
 };
 
