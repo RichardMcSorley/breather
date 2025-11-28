@@ -85,6 +85,8 @@ export async function POST(request: NextRequest) {
     const todayStart = estStartDate;
     const todayEnd = estEndDate;
 
+    // Get all transactions for today (including those with linkedDeliveryOrderIds)
+    // Only exclude bills - transactions linked to orders should be included
     const todayTransactions = await Transaction.find({
       userId,
       date: {

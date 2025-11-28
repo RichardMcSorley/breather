@@ -3,6 +3,8 @@ import { NextRequest } from "next/server";
 import { POST } from "@/app/api/quick-transaction/route";
 import { setupTestDB, teardownTestDB, clearDatabase } from "../../setup/db";
 import Transaction from "@/lib/models/Transaction";
+import DeliveryOrder from "@/lib/models/DeliveryOrder";
+import mongoose from "mongoose";
 import { getServerSession } from "next-auth";
 
 // Mock NextAuth
@@ -377,6 +379,60 @@ describe("POST /api/quick-transaction", () => {
 
     expect(response.status).toBe(200);
     expect(data.success).toBe(true);
+  });
+
+  it("should include transactions with linked delivery orders in daily sum calculation", async () => {
+    // Create a delivery order
+    const deliveryOrder = await DeliveryOrder.create({
+      userId: TEST_USER_ID,
+      entryId: "test-order-1",
+      appName: "Uber Eats",
+      miles: 5,
+      money: 15,
+      milesToMoneyRatio: 3,
+      restaurantName: "Test Restaurant",
+      processedAt: new Date("2024-01-15T10:00:00Z"),
+    });
+
+    // Create a transaction linked to the delivery order
+    const linkedTransaction = await Transaction.create({
+      userId: TEST_USER_ID,
+      amount: 50,
+      type: "income",
+      date: new Date("2024-01-15T10:00:00Z"),
+      time: "10:00",
+      isBill: false,
+      linkedDeliveryOrderIds: [deliveryOrder._id],
+    });
+
+    // Create another transaction without linked orders
+    await Transaction.create({
+      userId: TEST_USER_ID,
+      amount: 30,
+      type: "income",
+      date: new Date("2024-01-15T10:00:00Z"),
+      time: "10:00",
+      isBill: false,
+    });
+
+    const request = new NextRequest("http://localhost:3000/api/quick-transaction", {
+      method: "POST",
+      body: JSON.stringify({
+        userId: TEST_USER_ID,
+        amount: 20,
+        localDate: "2024-01-15",
+        localTime: "14:00",
+      }),
+    });
+
+    const response = await POST(request);
+    const data = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(data.success).toBe(true);
+    // Should include all transactions: 50 (linked) + 30 (unlinked) + 20 (new) = 100
+    expect(data.todayIncome).toBe(100);
+    expect(data.todayEarnings).toBe(100);
   });
 });
 
