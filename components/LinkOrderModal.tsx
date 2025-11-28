@@ -44,7 +44,7 @@ export default function LinkOrderModal({
       setOrders([]);
       setError(null);
     }
-  }, [isOpen, userId]);
+  }, [isOpen, userId, transactionId]);
 
   const fetchOrders = async () => {
     if (!userId) return;
@@ -53,7 +53,34 @@ export default function LinkOrderModal({
       setLoading(true);
       setError(null);
 
-      const response = await fetch(`/api/delivery-orders?userId=${userId}&limit=100`);
+      // Build query parameters
+      const params = new URLSearchParams({
+        userId,
+        limit: "100",
+      });
+
+      // If transactionId is provided, fetch transaction data and add filters
+      if (transactionId) {
+        const transactionResponse = await fetch(`/api/transactions/${transactionId}`);
+        if (transactionResponse.ok) {
+          const transactionData = await transactionResponse.json();
+          
+          // Add filtering parameters
+          if (transactionData.amount) {
+            params.append("filterAmount", transactionData.amount.toString());
+          }
+          if (transactionData.tag) {
+            params.append("filterAppName", transactionData.tag);
+          }
+          if (transactionData.date && transactionData.time) {
+            // Combine date and time to create a datetime string
+            const transactionDateTime = `${transactionData.date}T${transactionData.time}`;
+            params.append("filterDateTime", transactionDateTime);
+          }
+        }
+      }
+
+      const response = await fetch(`/api/delivery-orders?${params.toString()}`);
       if (!response.ok) {
         throw new Error("Failed to fetch delivery orders");
       }
