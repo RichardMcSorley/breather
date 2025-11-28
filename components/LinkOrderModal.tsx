@@ -36,6 +36,8 @@ export default function LinkOrderModal({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [linkingId, setLinkingId] = useState<string | null>(null);
+  const [filtersActive, setFiltersActive] = useState(false);
+  const [activeFilters, setActiveFilters] = useState<{ amount?: number; appName?: string }>({});
 
   useEffect(() => {
     if (isOpen && userId) {
@@ -43,10 +45,12 @@ export default function LinkOrderModal({
     } else {
       setOrders([]);
       setError(null);
+      setFiltersActive(false);
+      setActiveFilters({});
     }
   }, [isOpen, userId, transactionId]);
 
-  const fetchOrders = async () => {
+  const fetchOrders = async (skipFilters = false) => {
     if (!userId) return;
 
     try {
@@ -59,8 +63,10 @@ export default function LinkOrderModal({
         limit: "100",
       });
 
-      // If transactionId is provided, fetch transaction data and add filters
-      if (transactionId) {
+      const filters: { amount?: number; appName?: string } = {};
+
+      // If transactionId is provided and filters are not skipped, fetch transaction data and add filters
+      if (transactionId && !skipFilters) {
         const transactionResponse = await fetch(`/api/transactions/${transactionId}`);
         if (transactionResponse.ok) {
           const transactionData = await transactionResponse.json();
@@ -68,12 +74,17 @@ export default function LinkOrderModal({
           // Add filtering parameters
           if (transactionData.amount) {
             params.append("filterAmount", transactionData.amount.toString());
+            filters.amount = transactionData.amount;
           }
           if (transactionData.tag) {
             params.append("filterAppName", transactionData.tag);
+            filters.appName = transactionData.tag;
           }
         }
       }
+
+      setFiltersActive(!skipFilters && (filters.amount !== undefined || filters.appName !== undefined));
+      setActiveFilters(filters);
 
       const response = await fetch(`/api/delivery-orders?${params.toString()}`);
       if (!response.ok) {
@@ -87,6 +98,10 @@ export default function LinkOrderModal({
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleClearFilters = () => {
+    fetchOrders(true);
   };
 
   const handleLink = async (orderId: string) => {
@@ -145,6 +160,27 @@ export default function LinkOrderModal({
 
   return (
     <Modal isOpen={isOpen} onClose={onClose} title="Link Delivery Order">
+      {filtersActive && (
+        <div className="mb-4 p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg flex items-center justify-between">
+          <div className="flex-1">
+            <div className="text-sm font-medium text-blue-900 dark:text-blue-300 mb-1">
+              Filters Active
+            </div>
+            <div className="text-xs text-blue-700 dark:text-blue-400">
+              {activeFilters.amount !== undefined && `Amount: $${activeFilters.amount.toFixed(2)}`}
+              {activeFilters.amount !== undefined && activeFilters.appName && " • "}
+              {activeFilters.appName && `App: ${activeFilters.appName}`}
+            </div>
+          </div>
+          <button
+            onClick={handleClearFilters}
+            className="ml-4 px-3 py-1 text-xs rounded bg-blue-600 text-white hover:bg-blue-700 transition-colors"
+          >
+            Clear Filters
+          </button>
+        </div>
+      )}
+
       {loading && orders.length === 0 && (
         <div className="flex items-center justify-center min-h-[200px]">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900 dark:border-white"></div>
@@ -159,7 +195,19 @@ export default function LinkOrderModal({
 
       {orders.length === 0 && !loading && (
         <div className="text-center py-8 text-gray-500 dark:text-gray-400">
-          No delivery orders found.
+          {filtersActive ? (
+            <>
+              No delivery orders found matching the filters.
+              <button
+                onClick={handleClearFilters}
+                className="block mt-2 text-blue-600 dark:text-blue-400 hover:underline"
+              >
+                Clear filters to see all orders
+              </button>
+            </>
+          ) : (
+            "No delivery orders found."
+          )}
         </div>
       )}
 
