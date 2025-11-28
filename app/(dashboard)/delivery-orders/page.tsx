@@ -2,9 +2,11 @@
 
 import { useState, useEffect, Suspense } from "react";
 import { useSession } from "next-auth/react";
+import { useSearchParams } from "next/navigation";
 import Layout from "@/components/Layout";
 import Card from "@/components/ui/Card";
 import DeliveryOrdersList from "@/components/DeliveryOrdersList";
+import EditDeliveryOrderModal from "@/components/EditDeliveryOrderModal";
 
 interface DeliveryOrder {
   id: string;
@@ -21,9 +23,11 @@ interface DeliveryOrder {
 
 function DeliveryOrdersPageContent() {
   const { data: session } = useSession();
+  const searchParams = useSearchParams();
   const [orders, setOrders] = useState<DeliveryOrder[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [editingOrderId, setEditingOrderId] = useState<string | null>(null);
 
   const userId = session?.user?.id;
 
@@ -32,6 +36,14 @@ function DeliveryOrdersPageContent() {
       fetchOrders();
     }
   }, [userId]);
+
+  // Check for orderId query parameter and auto-open edit modal
+  useEffect(() => {
+    const orderIdParam = searchParams.get("orderId");
+    if (orderIdParam && userId) {
+      setEditingOrderId(orderIdParam);
+    }
+  }, [searchParams, userId]);
 
   const fetchOrders = async () => {
     if (!userId) return;
@@ -92,8 +104,21 @@ function DeliveryOrdersPageContent() {
         <DeliveryOrdersList
           userId={userId}
           onRefresh={fetchOrders}
+          onEditClick={(orderId) => setEditingOrderId(orderId)}
         />
       </div>
+
+      {/* Edit Delivery Order Modal */}
+      <EditDeliveryOrderModal
+        isOpen={editingOrderId !== null}
+        onClose={() => setEditingOrderId(null)}
+        orderId={editingOrderId}
+        userId={userId}
+        onUpdate={() => {
+          fetchOrders();
+          setEditingOrderId(null);
+        }}
+      />
     </Layout>
   );
 }

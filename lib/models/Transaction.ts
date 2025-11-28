@@ -11,6 +11,8 @@ export interface ITransaction extends Document {
   notes?: string;
   tag?: string;
   dueDate?: Date;
+  linkedOcrExportId?: mongoose.Types.ObjectId;
+  linkedDeliveryOrderId?: mongoose.Types.ObjectId;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -56,6 +58,16 @@ const TransactionSchema: Schema = new Schema(
     },
     dueDate: {
       type: Date,
+    },
+    linkedOcrExportId: {
+      type: Schema.Types.ObjectId,
+      ref: "OcrExport",
+      index: true,
+    },
+    linkedDeliveryOrderId: {
+      type: Schema.Types.ObjectId,
+      ref: "DeliveryOrder",
+      index: true,
     },
   },
   {

@@ -62,6 +62,7 @@ export async function POST(request: NextRequest) {
         appName: appName || undefined,
         customerName: processed.customerName,
         customerAddress: processed.customerAddress,
+        screenshot: screenshot,
         rawResponse: processed.rawResponse,
         lat: geocodeData?.lat,
         lon: geocodeData?.lon,

@@ -6,10 +6,13 @@ export interface IOcrExport extends Document {
   appName?: string;
   customerName: string;
   customerAddress: string;
+  screenshot?: string;
   rawResponse?: string;
   lat?: number;
   lon?: number;
   geocodeDisplayName?: string;
+  linkedTransactionIds?: mongoose.Types.ObjectId[];
+  linkedDeliveryOrderIds?: mongoose.Types.ObjectId[];
   processedAt: Date;
   createdAt: Date;
   updatedAt: Date;
@@ -38,6 +41,9 @@ const OcrExportSchema: Schema = new Schema(
       type: String,
       required: true,
     },
+    screenshot: {
+      type: String,
+    },
     rawResponse: {
       type: String,
     },
@@ -54,6 +60,14 @@ const OcrExportSchema: Schema = new Schema(
       type: Date,
       required: true,
     },
+    linkedTransactionIds: [{
+      type: Schema.Types.ObjectId,
+      ref: "Transaction",
+    }],
+    linkedDeliveryOrderIds: [{
+      type: Schema.Types.ObjectId,
+      ref: "DeliveryOrder",
+    }],
   },
   {
     timestamps: true,

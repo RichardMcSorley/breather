@@ -9,7 +9,10 @@ export interface IDeliveryOrder extends Document {
   milesToMoneyRatio: number;
   restaurantName: string;
   time: string;
+  screenshot?: string;
   rawResponse?: string;
+  linkedTransactionIds?: mongoose.Types.ObjectId[];
+  linkedOcrExportIds?: mongoose.Types.ObjectId[];
   processedAt: Date;
   createdAt: Date;
   updatedAt: Date;
@@ -51,6 +54,9 @@ const DeliveryOrderSchema: Schema = new Schema(
       type: String,
       required: true,
     },
+    screenshot: {
+      type: String,
+    },
     rawResponse: {
       type: String,
     },
@@ -58,6 +64,14 @@ const DeliveryOrderSchema: Schema = new Schema(
       type: Date,
       required: true,
     },
+    linkedTransactionIds: [{
+      type: Schema.Types.ObjectId,
+      ref: "Transaction",
+    }],
+    linkedOcrExportIds: [{
+      type: Schema.Types.ObjectId,
+      ref: "OcrExport",
+    }],
   },
   {
     timestamps: true,

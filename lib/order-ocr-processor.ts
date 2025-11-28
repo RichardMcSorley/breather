@@ -7,14 +7,12 @@ interface ParsedOrder {
   Miles: number;
   Money: number;
   "Restaurant/Pickup Name": string;
-  Time: string;
 }
 
 const YAML_PROMPT = `Extract the delivery order information from this image. Return in YAML format with the following keys:
 - "Miles": The number of miles for this delivery (as a number, e.g., 2.5)
 - "Money": The payment amount for this delivery (as a number, e.g., 8.50)
-- "Restaurant/Pickup Name": The name of the restaurant or pickup location
-- "Time": The time of the order (can be in any format, e.g., "2:30 PM" or "14:30")`;
+- "Restaurant/Pickup Name": The name of the restaurant or pickup location`;
 
 function parseYamlResponse(rawText: string): { order: ParsedOrder | null; error: string | null } {
   rawText = rawText.trim();
@@ -51,7 +49,6 @@ function parseYamlResponse(rawText: string): { order: ParsedOrder | null; error:
     const milesValue = parsed["Miles"] ?? parsed.miles ?? parsed.Miles ?? 0;
     const moneyValue = parsed["Money"] ?? parsed.money ?? parsed.Money ?? 0;
     const restaurantName = parsed["Restaurant/Pickup Name"] ?? parsed["Restaurant Name"] ?? parsed.restaurantName ?? parsed.restaurant ?? parsed["Pickup Name"] ?? "";
-    const timeValue = parsed["Time"] ?? parsed.time ?? parsed.Time ?? "";
 
     // Convert to numbers, handling strings that might contain currency symbols or units
     const miles = typeof milesValue === "number" 
@@ -66,7 +63,6 @@ function parseYamlResponse(rawText: string): { order: ParsedOrder | null; error:
       Miles: miles,
       Money: money,
       "Restaurant/Pickup Name": String(restaurantName).trim(),
-      Time: String(timeValue).trim(),
     };
 
     console.log("📊 Extracted order data:", JSON.stringify(order, null, 2));
@@ -153,7 +149,6 @@ export async function processOrderScreenshot(screenshot: string): Promise<{
   miles: number;
   money: number;
   restaurantName: string;
-  time: string;
   rawResponse: string;
 }> {
   if (!MOONDREAM_API_KEY) {
@@ -166,7 +161,6 @@ export async function processOrderScreenshot(screenshot: string): Promise<{
     miles: order.Miles,
     money: order.Money,
     restaurantName: order["Restaurant/Pickup Name"],
-    time: order.Time,
     rawResponse,
   };
 }

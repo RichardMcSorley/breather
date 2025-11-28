@@ -25,17 +25,21 @@ export async function GET(
       return NextResponse.json({ error: "Invalid transaction ID" }, { status: 400 });
     }
 
+    // Populate linked entities
     const transaction = await Transaction.findOne({
       _id: id,
       userId: session.user.id,
-    }).lean();
+    })
+      .populate("linkedOcrExportId", "customerName customerAddress appName entryId")
+      .populate("linkedDeliveryOrderId", "restaurantName appName miles money entryId")
+      .lean();
 
     if (!transaction) {
       return NextResponse.json({ error: "Transaction not found" }, { status: 404 });
     }
 
     // Format dates as YYYY-MM-DD strings using UTC
-    const transactionObj = {
+    const transactionObj: any = {
       _id: String(transaction._id),
       userId: transaction.userId,
       amount: transaction.amount,
@@ -49,7 +53,30 @@ export async function GET(
       dueDate: transaction.dueDate ? formatDateAsUTC(new Date(transaction.dueDate)) : undefined,
       createdAt: transaction.createdAt.toISOString(),
       updatedAt: transaction.updatedAt.toISOString(),
-    } as TransactionResponse;
+    };
+
+    // Add linked customer info if present
+    if (transaction.linkedOcrExportId && typeof transaction.linkedOcrExportId === 'object') {
+      transactionObj.linkedOcrExport = {
+        id: String(transaction.linkedOcrExportId._id),
+        customerName: transaction.linkedOcrExportId.customerName,
+        customerAddress: transaction.linkedOcrExportId.customerAddress,
+        appName: transaction.linkedOcrExportId.appName,
+        entryId: transaction.linkedOcrExportId.entryId,
+      };
+    }
+
+    // Add linked delivery order info if present
+    if (transaction.linkedDeliveryOrderId && typeof transaction.linkedDeliveryOrderId === 'object') {
+      transactionObj.linkedDeliveryOrder = {
+        id: String(transaction.linkedDeliveryOrderId._id),
+        restaurantName: transaction.linkedDeliveryOrderId.restaurantName,
+        appName: transaction.linkedDeliveryOrderId.appName,
+        miles: transaction.linkedDeliveryOrderId.miles,
+        money: transaction.linkedDeliveryOrderId.money,
+        entryId: transaction.linkedDeliveryOrderId.entryId,
+      };
+    }
 
     return NextResponse.json(transactionObj);
   } catch (error) {

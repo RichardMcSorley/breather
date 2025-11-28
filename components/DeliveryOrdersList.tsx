@@ -20,13 +20,16 @@ interface DeliveryOrder {
 interface DeliveryOrdersListProps {
   userId?: string;
   onRefresh?: () => void;
+  onEditClick?: (orderId: string) => void;
 }
 
 export default function DeliveryOrdersList({
   userId,
   onRefresh,
+  onEditClick,
 }: DeliveryOrdersListProps) {
   const [orders, setOrders] = useState<DeliveryOrder[]>([]);
+  const [allOrders, setAllOrders] = useState<DeliveryOrder[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [page, setPage] = useState(1);
@@ -55,13 +58,14 @@ export default function DeliveryOrdersList({
       }
 
       const data = await response.json();
-      const allOrders = data.orders || [];
+      const fetchedOrders = data.orders || [];
+      setAllOrders(fetchedOrders);
       
       // Client-side pagination
       const startIndex = (page - 1) * ITEMS_PER_PAGE;
       const endIndex = startIndex + ITEMS_PER_PAGE;
-      setOrders(allOrders.slice(startIndex, endIndex));
-      setTotalPages(Math.ceil(allOrders.length / ITEMS_PER_PAGE));
+      setOrders(fetchedOrders.slice(startIndex, endIndex));
+      setTotalPages(Math.ceil(fetchedOrders.length / ITEMS_PER_PAGE));
     } catch (err) {
       setError(err instanceof Error ? err.message : "An error occurred");
     } finally {
@@ -141,11 +145,22 @@ export default function DeliveryOrdersList({
     );
   }
 
-  // Calculate statistics
-  const totalOrders = orders.length;
-  const totalMiles = orders.reduce((sum, order) => sum + order.miles, 0);
-  const totalMoney = orders.reduce((sum, order) => sum + order.money, 0);
-  const avgRatio = totalMiles > 0 ? totalMoney / totalMiles : 0;
+  // Calculate statistics from all orders (not just paginated ones)
+  const avgMiles = allOrders.length > 0 
+    ? allOrders.reduce((sum, order) => sum + order.miles, 0) / allOrders.length 
+    : 0;
+  const avgRatio = allOrders.length > 0
+    ? allOrders.reduce((sum, order) => sum + order.milesToMoneyRatio, 0) / allOrders.length
+    : 0;
+  const highestMiles = allOrders.length > 0
+    ? Math.max(...allOrders.map(order => order.miles))
+    : 0;
+  const highestEarnings = allOrders.length > 0
+    ? Math.max(...allOrders.map(order => order.money))
+    : 0;
+  const lowestEarnings = allOrders.length > 0
+    ? Math.min(...allOrders.map(order => order.money))
+    : 0;
 
   return (
     <Card className="overflow-hidden">
@@ -159,31 +174,15 @@ export default function DeliveryOrdersList({
       </div>
 
       {/* Statistics */}
-      {orders.length > 0 && (
+      {allOrders.length > 0 && (
         <div className="p-6 bg-gray-50 dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700">
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
             <div>
               <div className="text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                Total Orders
+                Avg Miles
               </div>
               <div className="text-2xl font-bold text-gray-900 dark:text-white mt-1">
-                {totalOrders}
-              </div>
-            </div>
-            <div>
-              <div className="text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                Total Miles
-              </div>
-              <div className="text-2xl font-bold text-gray-900 dark:text-white mt-1">
-                {totalMiles.toFixed(1)}
-              </div>
-            </div>
-            <div>
-              <div className="text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                Total Earnings
-              </div>
-              <div className="text-2xl font-bold text-gray-900 dark:text-white mt-1">
-                {formatCurrency(totalMoney)}
+                {avgMiles.toFixed(1)}
               </div>
             </div>
             <div>
@@ -192,6 +191,30 @@ export default function DeliveryOrdersList({
               </div>
               <div className="text-2xl font-bold text-gray-900 dark:text-white mt-1">
                 {avgRatio.toFixed(2)}
+              </div>
+            </div>
+            <div>
+              <div className="text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                Highest Miles
+              </div>
+              <div className="text-2xl font-bold text-gray-900 dark:text-white mt-1">
+                {highestMiles.toFixed(1)}
+              </div>
+            </div>
+            <div>
+              <div className="text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                Highest Earnings
+              </div>
+              <div className="text-2xl font-bold text-gray-900 dark:text-white mt-1">
+                {formatCurrency(highestEarnings)}
+              </div>
+            </div>
+            <div>
+              <div className="text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                Lowest Earnings
+              </div>
+              <div className="text-2xl font-bold text-gray-900 dark:text-white mt-1">
+                {formatCurrency(lowestEarnings)}
               </div>
             </div>
           </div>
@@ -273,16 +296,29 @@ export default function DeliveryOrdersList({
                       </div>
                     </td>
                     <td className="px-4 py-3 whitespace-nowrap text-right">
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleDeleteClick(order.id);
-                        }}
-                        disabled={deletingId === order.id}
-                        className="px-3 py-1 text-sm rounded bg-red-600 text-white hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed"
-                      >
-                        {deletingId === order.id ? "Deleting..." : "Delete"}
-                      </button>
+                      <div className="flex gap-2 justify-end">
+                        {onEditClick && (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onEditClick(order.id);
+                            }}
+                            className="px-3 py-1 text-sm rounded bg-blue-600 text-white hover:bg-blue-700"
+                          >
+                            Edit
+                          </button>
+                        )}
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleDeleteClick(order.id);
+                          }}
+                          disabled={deletingId === order.id}
+                          className="px-3 py-1 text-sm rounded bg-red-600 text-white hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          {deletingId === order.id ? "Deleting..." : "Delete"}
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))}

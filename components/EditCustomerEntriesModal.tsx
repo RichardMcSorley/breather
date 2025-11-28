@@ -10,6 +10,7 @@ interface Visit {
   customerName: string;
   customerAddress: string;
   appName?: string;
+  screenshot?: string;
   processedAt: string;
   createdAt: string;
   lat?: number;
@@ -300,6 +301,18 @@ export default function EditCustomerEntriesModal({
                         </span>
                       )}
                     </div>
+                    {visit.screenshot && (
+                      <div className="mt-3">
+                        <div className="text-xs text-gray-500 dark:text-gray-400 mb-1">Screenshot</div>
+                        <div className="rounded-lg border border-gray-300 dark:border-gray-600 overflow-hidden">
+                          <img
+                            src={visit.screenshot}
+                            alt="Customer screenshot"
+                            className="w-full h-auto max-h-[300px] object-contain"
+                          />
+                        </div>
+                      </div>
+                    )}
                     <div className="flex gap-2 mt-3">
                       <button
                         onClick={() => startEditing(visit)}

@@ -18,6 +18,26 @@ interface Visit {
   geocodeDisplayName?: string;
 }
 
+interface LinkedTransaction {
+  _id: string;
+  amount: number;
+  date: string;
+  time: string;
+  tag?: string;
+  notes?: string;
+}
+
+interface LinkedOrder {
+  id: string;
+  restaurantName: string;
+  appName: string;
+  miles: number;
+  money: number;
+  milesToMoneyRatio: number;
+  time: string;
+  processedAt: string;
+}
+
 interface CustomerDetails {
   address: string;
   customerName: string;
@@ -27,6 +47,8 @@ interface CustomerDetails {
   lastVisitDate: string | null;
   apps: string[];
   visits: Visit[];
+  linkedTransactions?: LinkedTransaction[];
+  linkedOrders?: LinkedOrder[];
 }
 
 interface CustomerDetailsModalProps {
@@ -400,6 +422,74 @@ export default function CustomerDetailsModal({
                   </div>
                 </div>
               )}
+
+              {/* Linked Transactions */}
+              <div className="mb-6">
+                <div className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
+                  Linked Income Transactions
+                </div>
+                {data.linkedTransactions && data.linkedTransactions.length > 0 ? (
+                  <div className="space-y-2">
+                    {data.linkedTransactions.map((transaction) => (
+                      <div
+                        key={transaction._id}
+                        className="p-3 bg-gray-50 dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-700 flex items-center justify-between"
+                      >
+                        <div>
+                          <div className="font-semibold text-gray-900 dark:text-white">
+                            ${transaction.amount.toFixed(2)}
+                          </div>
+                          <div className="text-xs text-gray-600 dark:text-gray-400">
+                            {format(new Date(transaction.date), "MMM d, yyyy")} at {transaction.time}
+                          </div>
+                        </div>
+                        {transaction.tag && (
+                          <span className="text-xs px-2 py-0.5 rounded bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400">
+                            {transaction.tag}
+                          </span>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="text-sm text-gray-500 dark:text-gray-400 p-3 bg-gray-50 dark:bg-gray-900 rounded-lg">
+                    No linked transactions
+                  </div>
+                )}
+              </div>
+
+              {/* Linked Orders */}
+              <div>
+                <div className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
+                  Linked Delivery Orders
+                </div>
+                {data.linkedOrders && data.linkedOrders.length > 0 ? (
+                  <div className="space-y-2">
+                    {data.linkedOrders.map((order) => (
+                      <div
+                        key={order.id}
+                        className="p-3 bg-gray-50 dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-700 flex items-center justify-between"
+                      >
+                        <div>
+                          <div className="font-semibold text-gray-900 dark:text-white">
+                            📦 {order.restaurantName}
+                          </div>
+                          <div className="text-xs text-gray-600 dark:text-gray-400">
+                            {order.appName} • {order.miles.toFixed(1)} mi • ${order.money.toFixed(2)}
+                          </div>
+                          <div className="text-xs text-gray-500 dark:text-gray-500 mt-1">
+                            Ratio: ${order.milesToMoneyRatio.toFixed(2)}/mi
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="text-sm text-gray-500 dark:text-gray-400 p-3 bg-gray-50 dark:bg-gray-900 rounded-lg">
+                    No linked orders
+                  </div>
+                )}
+              </div>
             </div>
           )}
         </div>

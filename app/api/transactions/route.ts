@@ -57,14 +57,16 @@ export async function GET(request: NextRequest) {
     }
 
     const transactions = await Transaction.find(query)
+      .populate("linkedOcrExportId", "customerName customerAddress appName entryId")
+      .populate("linkedDeliveryOrderId", "restaurantName appName miles money entryId")
       .sort({ date: -1, createdAt: -1 })
       .skip((page - 1) * limit)
       .limit(limit)
       .lean();
 
     // Format dates as YYYY-MM-DD strings to avoid timezone issues
-    const formattedTransactions: FormattedTransaction[] = transactions.map((t) => {
-      const formatted: FormattedTransaction = {
+    const formattedTransactions: FormattedTransaction[] = transactions.map((t: any) => {
+      const formatted: any = {
         ...t,
         _id: t._id.toString(),
         date: t.date ? formatDateAsUTC(new Date(t.date)) : "",
@@ -72,6 +74,30 @@ export async function GET(request: NextRequest) {
         createdAt: t.createdAt.toISOString(),
         updatedAt: t.updatedAt.toISOString(),
       };
+
+      // Add linked customer info if present
+      if (t.linkedOcrExportId && typeof t.linkedOcrExportId === 'object') {
+        formatted.linkedOcrExport = {
+          id: String(t.linkedOcrExportId._id),
+          customerName: t.linkedOcrExportId.customerName,
+          customerAddress: t.linkedOcrExportId.customerAddress,
+          appName: t.linkedOcrExportId.appName,
+          entryId: t.linkedOcrExportId.entryId,
+        };
+      }
+
+      // Add linked delivery order info if present
+      if (t.linkedDeliveryOrderId && typeof t.linkedDeliveryOrderId === 'object') {
+        formatted.linkedDeliveryOrder = {
+          id: String(t.linkedDeliveryOrderId._id),
+          restaurantName: t.linkedDeliveryOrderId.restaurantName,
+          appName: t.linkedDeliveryOrderId.appName,
+          miles: t.linkedDeliveryOrderId.miles,
+          money: t.linkedDeliveryOrderId.money,
+          entryId: t.linkedDeliveryOrderId.entryId,
+        };
+      }
+
       return formatted;
     });
 

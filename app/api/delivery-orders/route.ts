@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import connectDB from "@/lib/mongodb";
 import DeliveryOrder from "@/lib/models/DeliveryOrder";
+import Transaction from "@/lib/models/Transaction";
 import { handleApiError } from "@/lib/api-error-handler";
 import { processOrderScreenshot } from "@/lib/order-ocr-processor";
 import { randomBytes } from "crypto";
@@ -50,7 +51,8 @@ export async function POST(request: NextRequest) {
         money: processed.money,
         milesToMoneyRatio,
         restaurantName: processed.restaurantName,
-        time: processed.time,
+        time: "", // Time not extracted from screenshot, can be updated later
+        screenshot: screenshot,
         rawResponse: processed.rawResponse,
         processedAt: new Date(),
       });
@@ -61,12 +63,13 @@ export async function POST(request: NextRequest) {
         id: deliveryOrder._id.toString(),
         entryId: deliveryOrder.entryId,
         message: "Delivery order processed and saved successfully",
-          miles: deliveryOrder.miles,
-          money: deliveryOrder.money,
-          milesToMoneyRatio: deliveryOrder.milesToMoneyRatio,
-          restaurantName: deliveryOrder.restaurantName,
-          time: deliveryOrder.time,
-          appName: deliveryOrder.appName,
+        miles: deliveryOrder.miles,
+        money: deliveryOrder.money,
+        milesToMoneyRatio: deliveryOrder.milesToMoneyRatio,
+        restaurantName: deliveryOrder.restaurantName,
+        time: deliveryOrder.time,
+        appName: deliveryOrder.appName,
+        editLink: `https://breather-chi.vercel.app/delivery-orders?orderId=${deliveryOrder._id.toString()}`,
       };
 
       return NextResponse.json(response);
@@ -104,6 +107,34 @@ export async function GET(request: NextRequest) {
       .limit(limit)
       .lean();
 
+    // Get all linked transactions for these orders
+    const orderIds = orders.map((o) => o._id);
+    const linkedTransactions = await Transaction.find({
+      userId,
+      linkedDeliveryOrderId: { $in: orderIds },
+      type: "income",
+    })
+      .sort({ date: -1 })
+      .lean();
+
+    // Create a map of order ID to linked transactions
+    const transactionsByOrderId = new Map<string, any[]>();
+    linkedTransactions.forEach((t) => {
+      const orderId = t.linkedDeliveryOrderId?.toString();
+      if (orderId) {
+        if (!transactionsByOrderId.has(orderId)) {
+          transactionsByOrderId.set(orderId, []);
+        }
+        transactionsByOrderId.get(orderId)!.push({
+          _id: t._id.toString(),
+          amount: t.amount,
+          date: t.date,
+          tag: t.tag,
+          notes: t.notes,
+        });
+      }
+    });
+
     return NextResponse.json({
       success: true,
       orders: orders.map((order) => ({
@@ -115,8 +146,10 @@ export async function GET(request: NextRequest) {
         milesToMoneyRatio: order.milesToMoneyRatio,
         restaurantName: order.restaurantName,
         time: order.time,
+        screenshot: order.screenshot,
         processedAt: order.processedAt.toISOString(),
         createdAt: order.createdAt.toISOString(),
+        linkedTransactions: transactionsByOrderId.get(order._id.toString()) || [],
       })),
     });
   } catch (error) {
@@ -148,6 +181,85 @@ export async function DELETE(request: NextRequest) {
     }
 
     return NextResponse.json({ success: true, message: "Order deleted successfully" });
+  } catch (error) {
+    return handleApiError(error);
+  }
+}
+
+export async function PATCH(request: NextRequest) {
+  try {
+    await connectDB();
+
+    const body = await request.json();
+    const { id, appName, miles, money, restaurantName, time } = body;
+
+    if (!id) {
+      return NextResponse.json({ error: "Missing id" }, { status: 400 });
+    }
+
+    // Verify the order exists
+    const existingOrder = await DeliveryOrder.findById(id).lean();
+    if (!existingOrder) {
+      return NextResponse.json({ error: "Order not found" }, { status: 404 });
+    }
+
+    const updateSet: Record<string, any> = {};
+
+    if (typeof appName === "string") {
+      updateSet.appName = appName;
+    }
+    if (typeof miles === "number" && miles > 0) {
+      updateSet.miles = miles;
+    }
+    if (typeof money === "number" && money > 0) {
+      updateSet.money = money;
+    }
+    if (typeof restaurantName === "string") {
+      updateSet.restaurantName = restaurantName;
+    }
+    if (typeof time === "string") {
+      updateSet.time = time;
+    }
+
+    // Recalculate ratio if miles or money changed
+    if (updateSet.miles !== undefined || updateSet.money !== undefined) {
+      const finalMiles = updateSet.miles ?? existingOrder.miles;
+      const finalMoney = updateSet.money ?? existingOrder.money;
+      updateSet.milesToMoneyRatio = finalMoney / finalMiles;
+    }
+
+    if (Object.keys(updateSet).length === 0) {
+      return NextResponse.json({ error: "No fields to update" }, { status: 400 });
+    }
+
+    const result = await DeliveryOrder.findByIdAndUpdate(
+      id,
+      { $set: updateSet },
+      {
+        new: true,
+        runValidators: true,
+      }
+    ).lean();
+
+    if (!result) {
+      return NextResponse.json({ error: "Order not found" }, { status: 404 });
+    }
+
+    return NextResponse.json({
+      success: true,
+      order: {
+        id: result._id.toString(),
+        entryId: result.entryId,
+        appName: result.appName,
+        miles: result.miles,
+        money: result.money,
+        milesToMoneyRatio: result.milesToMoneyRatio,
+        restaurantName: result.restaurantName,
+        time: result.time,
+        processedAt: result.processedAt.toISOString(),
+        createdAt: result.createdAt.toISOString(),
+      },
+    });
   } catch (error) {
     return handleApiError(error);
   }

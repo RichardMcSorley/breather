@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import connectDB from "@/lib/mongodb";
 import OcrExport from "@/lib/models/OcrExport";
+import Transaction from "@/lib/models/Transaction";
+import DeliveryOrder from "@/lib/models/DeliveryOrder";
 import { handleApiError } from "@/lib/api-error-handler";
 import { isSameAddress } from "@/lib/ocr-analytics";
 
@@ -123,6 +125,24 @@ export async function GET(
       Object.entries(addressCounts).sort((a, b) => b[1] - a[1])[0]?.[0] ||
       decodedAddress;
 
+    // Get all linked transactions for these entries
+    const entryIds = matchingEntries.map((e) => e._id);
+    const linkedTransactions = await Transaction.find({
+      userId: userId || undefined,
+      linkedOcrExportId: { $in: entryIds },
+      type: "income",
+    })
+      .sort({ date: -1 })
+      .lean();
+
+    // Get all linked delivery orders for these entries
+    const linkedOrders = await DeliveryOrder.find({
+      userId: userId || undefined,
+      linkedOcrExportIds: { $in: entryIds },
+    })
+      .sort({ processedAt: -1 })
+      .lean();
+
     return NextResponse.json({
       address: canonicalAddress,
       customerName: primaryCustomerName,
@@ -144,11 +164,30 @@ export async function GET(
         customerName: entry.customerName,
         customerAddress: entry.customerAddress,
         appName: entry.appName,
+        screenshot: entry.screenshot,
         processedAt: entry.processedAt,
         createdAt: entry.createdAt,
         lat: entry.lat,
         lon: entry.lon,
         geocodeDisplayName: entry.geocodeDisplayName,
+      })),
+      linkedTransactions: linkedTransactions.map((t) => ({
+        _id: t._id.toString(),
+        amount: t.amount,
+        date: t.date,
+        time: t.time,
+        tag: t.tag,
+        notes: t.notes,
+      })),
+      linkedOrders: linkedOrders.map((o) => ({
+        id: o._id.toString(),
+        restaurantName: o.restaurantName,
+        appName: o.appName,
+        miles: o.miles,
+        money: o.money,
+        milesToMoneyRatio: o.milesToMoneyRatio,
+        time: o.time,
+        processedAt: o.processedAt,
       })),
     });
   } catch (error) {

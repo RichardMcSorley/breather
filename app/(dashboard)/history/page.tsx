@@ -3,9 +3,27 @@
 import { useState, useEffect } from "react";
 import { useSession } from "next-auth/react";
 import { format, isToday, isYesterday } from "date-fns";
+import { useRouter } from "next/navigation";
 import Layout from "@/components/Layout";
 import AddTransactionModal from "@/components/AddTransactionModal";
 import { useTransactions, useDeleteTransaction } from "@/hooks/useQueries";
+
+interface LinkedCustomer {
+  id: string;
+  customerName: string;
+  customerAddress: string;
+  appName?: string;
+  entryId: string;
+}
+
+interface LinkedOrder {
+  id: string;
+  restaurantName: string;
+  appName: string;
+  miles: number;
+  money: number;
+  entryId: string;
+}
 
 interface Transaction {
   _id: string;
@@ -18,6 +36,8 @@ interface Transaction {
   isBill: boolean;
   isBalanceAdjustment?: boolean; // Kept for filtering out existing balance adjustments
   dueDate?: string;
+  linkedOcrExport?: LinkedCustomer;
+  linkedDeliveryOrder?: LinkedOrder;
 }
 
 /**
@@ -43,6 +63,7 @@ const buildLocalDateFromParts = (dateString: string, timeString?: string) => {
 
 export default function HistoryPage() {
   const { data: session } = useSession();
+  const router = useRouter();
   const [showAddModal, setShowAddModal] = useState(false);
   const [editingTransaction, setEditingTransaction] = useState<string | null>(null);
   const [transactionType, setTransactionType] = useState<"income" | "expense">("income");
@@ -251,6 +272,31 @@ export default function HistoryPage() {
                               {transaction.notes}
                             </div>
                           ) : null}
+                          {isIncome && (transaction.linkedOcrExport || transaction.linkedDeliveryOrder) && (
+                            <div className="mt-2 space-y-1.5">
+                              {transaction.linkedOcrExport && (
+                                <button
+                                  onClick={() => {
+                                    const encodedAddress = encodeURIComponent(transaction.linkedOcrExport!.customerAddress);
+                                    router.push(`/ocr-data?address=${encodedAddress}`);
+                                  }}
+                                  className="text-xs text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 hover:underline flex items-center gap-1"
+                                >
+                                  👤 {transaction.linkedOcrExport.customerName}
+                                </button>
+                              )}
+                              {transaction.linkedDeliveryOrder && (
+                                <button
+                                  onClick={() => {
+                                    router.push(`/delivery-orders?orderId=${transaction.linkedDeliveryOrder!.id}`);
+                                  }}
+                                  className="text-xs text-purple-600 dark:text-purple-400 hover:text-purple-800 dark:hover:text-purple-300 hover:underline flex items-center gap-1"
+                                >
+                                  📦 {transaction.linkedDeliveryOrder.restaurantName} ({transaction.linkedDeliveryOrder.appName}) - ${transaction.linkedDeliveryOrder.money.toFixed(2)} / {transaction.linkedDeliveryOrder.miles.toFixed(1)}mi
+                                </button>
+                              )}
+                            </div>
+                          )}
                         </div>
                         <div
                           className={`text-lg font-bold ${

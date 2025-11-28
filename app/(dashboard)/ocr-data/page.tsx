@@ -55,7 +55,7 @@ function OcrDataPageContent() {
         setEditingEntryId(entryIdParam);
       } else {
         // Otherwise, open view modal
-        setSelectedCustomer(decodedAddress);
+      setSelectedCustomer(decodedAddress);
       }
     }
   }, [searchParams, userId]);
