@@ -6,7 +6,7 @@ import connectDB from "@/lib/mongodb";
 import Transaction from "@/lib/models/Transaction";
 import { startOfDay, endOfDay } from "date-fns";
 import { handleApiError } from "@/lib/api-error-handler";
-import { parseESTAsUTC, getCurrentESTAsUTC, formatDateAsUTC } from "@/lib/date-utils";
+import { parseESTAsUTC, getCurrentESTAsUTC, formatDateAsUTC, parseDateOnlyAsUTC } from "@/lib/date-utils";
 import { parseFloatSafe } from "@/lib/validation";
 
 export async function POST(request: NextRequest) {
@@ -76,7 +76,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Calculate today's earnings using EST timezone
-    // Parse EST date string to get start/end of day in EST, then convert to UTC
+    // Parse EST date string to get start/end of day in EST, then convert to UTC for database query
     const estStartDate = parseESTAsUTC(estDateString, "00:00");
     const estEndDate = parseESTAsUTC(estDateString, "23:59");
     // Set to end of day (23:59:59.999)
