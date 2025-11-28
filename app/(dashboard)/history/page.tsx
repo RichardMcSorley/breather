@@ -120,18 +120,10 @@ export default function HistoryPage() {
   const getAppTagColor = (appName: string) => {
     const appColors: Record<string, { bg: string; text: string }> = {
       "DoorDash": { bg: "bg-red-100 dark:bg-red-900/30", text: "text-red-700 dark:text-red-300" },
-      "Dasher": { bg: "bg-red-100 dark:bg-red-900/30", text: "text-red-700 dark:text-red-300" },
       "Uber": { bg: "bg-black dark:bg-gray-800", text: "text-white dark:text-gray-100" },
-      "Uber Driver": { bg: "bg-black dark:bg-gray-800", text: "text-white dark:text-gray-100" },
-      "UberEats": { bg: "bg-black dark:bg-gray-800", text: "text-white dark:text-gray-100" },
       "Uber Eats": { bg: "bg-black dark:bg-gray-800", text: "text-white dark:text-gray-100" },
       "Instacart": { bg: "bg-purple-100 dark:bg-purple-900/30", text: "text-purple-700 dark:text-purple-300" },
-      "Shopper": { bg: "bg-purple-100 dark:bg-purple-900/30", text: "text-purple-700 dark:text-purple-300" },
       "GrubHub": { bg: "bg-orange-100 dark:bg-orange-900/30", text: "text-orange-700 dark:text-orange-300" },
-      "GH Drivers": { bg: "bg-orange-100 dark:bg-orange-900/30", text: "text-orange-700 dark:text-orange-300" },
-      "Roadie": { bg: "bg-blue-100 dark:bg-blue-900/30", text: "text-blue-700 dark:text-blue-300" },
-      "Shipt": { bg: "bg-green-100 dark:bg-green-900/30", text: "text-green-700 dark:text-green-300" },
-      "ProxyPics": { bg: "bg-indigo-100 dark:bg-indigo-900/30", text: "text-indigo-700 dark:text-indigo-300" },
     };
 
     return appColors[appName] || { bg: "bg-gray-100 dark:bg-gray-700", text: "text-gray-500 dark:text-gray-400" };
@@ -141,18 +133,10 @@ export default function HistoryPage() {
   const getAppInitials = (appName: string): string => {
     const initials: Record<string, string> = {
       "DoorDash": "DD",
-      "Dasher": "DD",
       "Uber": "UB",
-      "Uber Driver": "UB",
-      "UberEats": "UE",
       "Uber Eats": "UE",
       "Instacart": "IC",
-      "Shopper": "IC",
       "GrubHub": "GH",
-      "GH Drivers": "GH",
-      "Roadie": "RD",
-      "Shipt": "SP",
-      "ProxyPics": "PP",
     };
 
     if (initials[appName]) {
@@ -167,18 +151,10 @@ export default function HistoryPage() {
   const getAppIconColor = (appName: string) => {
     const iconColors: Record<string, { bg: string; text: string }> = {
       "DoorDash": { bg: "bg-red-500 dark:bg-red-600", text: "text-white" },
-      "Dasher": { bg: "bg-red-500 dark:bg-red-600", text: "text-white" },
       "Uber": { bg: "bg-black dark:bg-gray-900", text: "text-white" },
-      "Uber Driver": { bg: "bg-black dark:bg-gray-900", text: "text-white" },
-      "UberEats": { bg: "bg-black dark:bg-gray-900", text: "text-white" },
       "Uber Eats": { bg: "bg-black dark:bg-gray-900", text: "text-white" },
       "Instacart": { bg: "bg-purple-500 dark:bg-purple-600", text: "text-white" },
-      "Shopper": { bg: "bg-purple-500 dark:bg-purple-600", text: "text-white" },
       "GrubHub": { bg: "bg-orange-500 dark:bg-orange-600", text: "text-white" },
-      "GH Drivers": { bg: "bg-orange-500 dark:bg-orange-600", text: "text-white" },
-      "Roadie": { bg: "bg-blue-500 dark:bg-blue-600", text: "text-white" },
-      "Shipt": { bg: "bg-green-500 dark:bg-green-600", text: "text-white" },
-      "ProxyPics": { bg: "bg-indigo-500 dark:bg-indigo-600", text: "text-white" },
     };
 
     return iconColors[appName] || { bg: "bg-gray-500 dark:bg-gray-600", text: "text-white" };
