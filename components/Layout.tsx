@@ -24,6 +24,7 @@ export default function Layout({ children }: LayoutProps) {
     { href: "/bills", label: "Bills", icon: "📄" },
     { href: "/mileage", label: "Mileage", icon: "🚗" },
     { href: "/ocr-data", label: "Customers", icon: "🧾" },
+    { href: "/delivery-orders", label: "Orders", icon: "📦" },
   ];
 
   return (

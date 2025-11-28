@@ -1,0 +1,173 @@
+import yaml from "js-yaml";
+
+const MOONDREAM_API_KEY = process.env.MOONDREAM_API_KEY;
+const MOONDREAM_API_URL = "https://api.moondream.ai/v1/query";
+
+interface ParsedOrder {
+  Miles: number;
+  Money: number;
+  "Restaurant/Pickup Name": string;
+  Time: string;
+}
+
+const YAML_PROMPT = `Extract the delivery order information from this image. Return in YAML format with the following keys:
+- "Miles": The number of miles for this delivery (as a number, e.g., 2.5)
+- "Money": The payment amount for this delivery (as a number, e.g., 8.50)
+- "Restaurant/Pickup Name": The name of the restaurant or pickup location
+- "Time": The time of the order (can be in any format, e.g., "2:30 PM" or "14:30")`;
+
+function parseYamlResponse(rawText: string): { order: ParsedOrder | null; error: string | null } {
+  rawText = rawText.trim();
+  if (!rawText) {
+    return { order: null, error: "empty response" };
+  }
+
+  // Log the raw response
+  console.log("📝 Raw Moondream response:", rawText);
+
+  // Try to extract YAML from the response (might have markdown code blocks or other text)
+  let yamlText = rawText;
+  
+  // Remove markdown code blocks if present
+  const yamlMatch = rawText.match(/```(?:yaml)?\s*([\s\S]*?)\s*```/) || rawText.match(/([\s\S]+)/);
+  if (yamlMatch) {
+    yamlText = yamlMatch[1].trim();
+  }
+
+  console.log("🔍 Extracted YAML text:", yamlText);
+
+  try {
+    // Use js-yaml to parse the YAML
+    const parsed = yaml.load(yamlText) as Record<string, any>;
+    
+    console.log("✅ Parsed YAML object:", JSON.stringify(parsed, null, 2));
+    
+    // Validate required fields
+    if (typeof parsed !== "object" || parsed === null) {
+      return { order: null, error: "response is not a YAML object" };
+    }
+
+    // Extract and parse values with fallbacks
+    const milesValue = parsed["Miles"] ?? parsed.miles ?? parsed.Miles ?? 0;
+    const moneyValue = parsed["Money"] ?? parsed.money ?? parsed.Money ?? 0;
+    const restaurantName = parsed["Restaurant/Pickup Name"] ?? parsed["Restaurant Name"] ?? parsed.restaurantName ?? parsed.restaurant ?? parsed["Pickup Name"] ?? "";
+    const timeValue = parsed["Time"] ?? parsed.time ?? parsed.Time ?? "";
+
+    // Convert to numbers, handling strings that might contain currency symbols or units
+    const miles = typeof milesValue === "number" 
+      ? milesValue 
+      : parseFloat(String(milesValue).replace(/[^\d.]/g, "")) || 0;
+    
+    const money = typeof moneyValue === "number"
+      ? moneyValue
+      : parseFloat(String(moneyValue).replace(/[^\d.]/g, "")) || 0;
+
+    const order: ParsedOrder = {
+      Miles: miles,
+      Money: money,
+      "Restaurant/Pickup Name": String(restaurantName).trim(),
+      Time: String(timeValue).trim(),
+    };
+
+    console.log("📊 Extracted order data:", JSON.stringify(order, null, 2));
+
+    // Validate that we have required numeric fields
+    if (order.Miles <= 0) {
+      return { order: null, error: "Miles must be greater than 0" };
+    }
+    if (order.Money <= 0) {
+      return { order: null, error: "Money must be greater than 0" };
+    }
+    if (!order["Restaurant/Pickup Name"]) {
+      return { order: null, error: "Restaurant/Pickup Name is required" };
+    }
+
+    return { order, error: null };
+  } catch (parseError) {
+    console.error("❌ YAML parse error:", parseError);
+    return { 
+      order: null, 
+      error: `YAML parse error: ${parseError instanceof Error ? parseError.message : "unknown error"}` 
+    };
+  }
+}
+
+async function requestYamlOrder(
+  imageBase64: string,
+  maxAttempts: number = 3
+): Promise<{ order: ParsedOrder; rawResponse: string }> {
+  if (!MOONDREAM_API_KEY) {
+    throw new Error("MOONDREAM_API_KEY environment variable is not set");
+  }
+
+  let lastError: string | null = null;
+  let currentPrompt = YAML_PROMPT;
+
+  // Ensure the image is in data URL format
+  let imageUrl = imageBase64;
+  if (!imageUrl.startsWith("data:image")) {
+    // If it's just base64, add the data URL prefix
+    imageUrl = `data:image/png;base64,${imageUrl}`;
+  }
+
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    if (attempt > 0) {
+      currentPrompt = `${YAML_PROMPT}\n\nThe previous response was invalid because ${lastError || "it could not be parsed"}. Please return valid YAML with exactly "Miles" (number), "Money" (number), "Restaurant/Pickup Name" (string), and "Time" (string) fields.`;
+    }
+
+    try {
+      const response = await fetch(MOONDREAM_API_URL, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Moondream-Auth": MOONDREAM_API_KEY,
+        },
+        body: JSON.stringify({
+          image_url: imageUrl,
+          question: currentPrompt,
+        }),
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`Moondream API error: ${response.status} - ${errorText}`);
+      }
+
+      const data = await response.json();
+      const rawResponse = (data.answer || "").trim();
+
+      const { order, error } = parseYamlResponse(rawResponse);
+      if (order && !error) {
+        return { order, rawResponse };
+      }
+      lastError = error || "unknown parsing error";
+    } catch (error) {
+      lastError = error instanceof Error ? error.message : "unknown error";
+    }
+  }
+
+  throw new Error(`Failed to obtain valid YAML response after ${maxAttempts} attempts: ${lastError}`);
+}
+
+export async function processOrderScreenshot(screenshot: string): Promise<{
+  miles: number;
+  money: number;
+  restaurantName: string;
+  time: string;
+  rawResponse: string;
+}> {
+  if (!MOONDREAM_API_KEY) {
+    throw new Error("MOONDREAM_API_KEY environment variable is not set");
+  }
+
+  const { order, rawResponse } = await requestYamlOrder(screenshot);
+
+  return {
+    miles: order.Miles,
+    money: order.Money,
+    restaurantName: order["Restaurant/Pickup Name"],
+    time: order.Time,
+    rawResponse,
+  };
+}
+
