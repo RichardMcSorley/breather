@@ -301,7 +301,7 @@ export default function EditCustomerEntriesModal({
                         </span>
                       )}
                     </div>
-                    {visit.screenshot && (
+                    {visit.screenshot && typeof visit.screenshot === 'string' && visit.screenshot.trim().length > 0 && (
                       <div className="mt-3">
                         <div className="text-xs text-gray-500 dark:text-gray-400 mb-1">Screenshot</div>
                         <div className="rounded-lg border border-gray-300 dark:border-gray-600 overflow-hidden">

@@ -30,8 +30,8 @@ export async function GET(
       _id: id,
       userId: session.user.id,
     })
-      .populate("linkedOcrExportIds", "customerName customerAddress appName entryId screenshot")
-      .populate("linkedDeliveryOrderIds", "restaurantName appName miles money entryId screenshot")
+      .populate("linkedOcrExportIds", "customerName customerAddress appName entryId")
+      .populate("linkedDeliveryOrderIds", "restaurantName appName miles money entryId")
       .lean();
 
     if (!transaction) {
@@ -65,7 +65,6 @@ export async function GET(
           customerAddress: customer.customerAddress,
           appName: customer.appName,
           entryId: customer.entryId,
-          screenshot: customer.screenshot,
         }));
     }
 
@@ -80,7 +79,6 @@ export async function GET(
           miles: order.miles,
           money: order.money,
           entryId: order.entryId,
-          screenshot: order.screenshot,
         }));
     }
 

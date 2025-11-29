@@ -36,7 +36,8 @@ export default function ScreenshotModal({
     return () => document.removeEventListener("keydown", handleEscape);
   }, [isOpen, onClose]);
 
-  if (!isOpen || !screenshot) return null;
+  // Only display if modal is open and screenshot exists and is not empty
+  if (!isOpen || !screenshot || typeof screenshot !== 'string' || screenshot.trim().length === 0) return null;
 
   return (
     <div
