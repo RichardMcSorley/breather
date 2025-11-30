@@ -2,12 +2,14 @@
 
 import { useState, useEffect } from "react";
 import { useSession } from "next-auth/react";
+import { useSearchParams } from "next/navigation";
 import Layout from "@/components/Layout";
 import Input from "@/components/ui/Input";
 import Button from "@/components/ui/Button";
 import Card from "@/components/ui/Card";
 import Tag from "@/components/ui/Tag";
-import { useSettings, useUpdateSettings } from "@/hooks/useQueries";
+import { useSettings, useUpdateSettings, useTeslaConnection, useConnectTesla, useDisconnectTesla, useSyncTesla } from "@/hooks/useQueries";
+import { useToast } from "@/lib/toast";
 
 // Default tags
 const DEFAULT_INCOME_TAGS = ["Uber Driver", "Dasher", "GH Drivers", "Shopper", "Roadie", "ProxyPics"];
@@ -17,6 +19,11 @@ export default function ConfigurationPage() {
   const { data: session } = useSession();
   const { data: settingsData, isLoading: loading } = useSettings();
   const updateSettings = useUpdateSettings();
+  const { data: teslaConnection, isLoading: teslaLoading } = useTeslaConnection();
+  const connectTesla = useConnectTesla();
+  const disconnectTesla = useDisconnectTesla();
+  const syncTesla = useSyncTesla();
+  const toast = useToast();
   
   const [formData, setFormData] = useState({
     irsMileageDeduction: "",
@@ -25,6 +32,7 @@ export default function ConfigurationPage() {
   });
   const [newIncomeTag, setNewIncomeTag] = useState("");
   const [newExpenseTag, setNewExpenseTag] = useState("");
+  const searchParams = useSearchParams();
 
   // Update form data when settings are loaded
   useEffect(() => {
@@ -36,6 +44,28 @@ export default function ConfigurationPage() {
       });
     }
   }, [settingsData]);
+
+  // Handle Tesla OAuth callback messages
+  useEffect(() => {
+    const teslaConnected = searchParams?.get("tesla_connected");
+    const teslaError = searchParams?.get("tesla_error");
+
+    if (teslaConnected === "true") {
+      toast.success("Tesla account connected successfully!");
+      // Remove query params and refresh connection status
+      window.history.replaceState({}, "", "/configuration");
+      // Invalidate queries to refresh connection status
+      setTimeout(() => {
+        window.location.reload();
+      }, 1000);
+    }
+
+    if (teslaError) {
+      toast.error(`Tesla connection failed: ${decodeURIComponent(teslaError)}`);
+      // Remove query params
+      window.history.replaceState({}, "", "/configuration");
+    }
+  }, [searchParams, toast]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -204,6 +234,73 @@ export default function ConfigurationPage() {
             {updateSettings.isPending ? "Saving..." : "Save Configuration"}
           </Button>
         </form>
+      </Card>
+
+      {/* Tesla Integration Section */}
+      <Card className="p-6 mt-6">
+        <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-4">Tesla Integration</h2>
+        <p className="text-gray-600 dark:text-gray-400 mb-6">
+          Connect your Tesla account to automatically sync odometer readings for mileage tracking.
+        </p>
+
+        {teslaLoading ? (
+          <div className="flex items-center justify-center py-8">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900 dark:border-white"></div>
+          </div>
+        ) : teslaConnection?.connected ? (
+          <div className="space-y-4">
+            <div className="p-4 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="font-semibold text-green-900 dark:text-green-100">
+                    ✓ Connected to {teslaConnection.vehicleName}
+                  </p>
+                  {teslaConnection.lastSyncedAt && (
+                    <p className="text-sm text-green-700 dark:text-green-300 mt-1">
+                      Last synced: {new Date(teslaConnection.lastSyncedAt).toLocaleString()}
+                    </p>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            <div className="flex gap-3">
+              <Button
+                variant="primary"
+                onClick={() => syncTesla.mutate()}
+                disabled={syncTesla.isPending}
+                className="flex-1"
+              >
+                {syncTesla.isPending ? "Syncing..." : "Sync Now"}
+              </Button>
+              <Button
+                variant="outline"
+                onClick={() => {
+                  if (confirm("Are you sure you want to disconnect your Tesla account?")) {
+                    disconnectTesla.mutate();
+                  }
+                }}
+                disabled={disconnectTesla.isPending}
+              >
+                Disconnect
+              </Button>
+            </div>
+          </div>
+        ) : (
+          <div>
+            <Button
+              variant="primary"
+              onClick={() => connectTesla.mutate()}
+              disabled={connectTesla.isPending}
+              className="w-full"
+            >
+              {connectTesla.isPending ? "Connecting..." : "Connect Tesla Account"}
+            </Button>
+            <p className="text-sm text-gray-500 dark:text-gray-400 mt-3">
+              You'll be redirected to Tesla to authorize access to your vehicle data.
+            </p>
+          </div>
+        )}
       </Card>
     </Layout>
   );

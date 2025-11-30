@@ -6,7 +6,7 @@ import Layout from "@/components/Layout";
 import Card from "@/components/ui/Card";
 import Button from "@/components/ui/Button";
 import AddMileageModal from "@/components/AddMileageModal";
-import { useMileageEntries, useMileageEntriesForCalculation, useSettings, useDeleteMileageEntry } from "@/hooks/useQueries";
+import { useMileageEntries, useMileageEntriesForCalculation, useSettings, useDeleteMileageEntry, useTeslaConnection, useSyncTesla } from "@/hooks/useQueries";
 
 interface MileageEntry {
   _id: string;
@@ -31,6 +31,8 @@ export default function MileagePage() {
   const { data: allMileageData } = useMileageEntriesForCalculation();
   const { data: settingsData } = useSettings();
   const deleteMileageEntry = useDeleteMileageEntry();
+  const { data: teslaConnection, isLoading: teslaLoading } = useTeslaConnection();
+  const syncTesla = useSyncTesla();
   
   const irsMileageDeduction = settingsData?.irsMileageDeduction || 0.67;
   
@@ -202,12 +204,34 @@ export default function MileagePage() {
       <div className="mb-6">
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-xl font-bold text-gray-900 dark:text-white">Mileage Tracking</h2>
-          <Button
-            variant="primary"
-            onClick={() => setShowAddModal(true)}
-          >
-            Add Entry
-          </Button>
+          <div className="flex gap-2 items-center">
+            {!teslaLoading && teslaConnection?.connected ? (
+              <Button
+                variant="outline"
+                onClick={() => syncTesla.mutate()}
+                disabled={syncTesla.isPending}
+                className="flex items-center gap-2"
+              >
+                {syncTesla.isPending ? (
+                  <>
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-gray-900 dark:border-white"></div>
+                    Syncing...
+                  </>
+                ) : (
+                  <>
+                    <span>🔄</span>
+                    Sync Tesla
+                  </>
+                )}
+              </Button>
+            ) : null}
+            <Button
+              variant="primary"
+              onClick={() => setShowAddModal(true)}
+            >
+              Add Entry
+            </Button>
+          </div>
         </div>
       </div>
 

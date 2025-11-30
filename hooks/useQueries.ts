@@ -20,6 +20,7 @@ export const queryKeys = {
     ["summary", localDate, viewMode] as const,
   heatmap: (localDate: string, viewMode: string, days?: number) => ["heatmap", localDate, viewMode, days] as const,
   appHeatmap: (localDate: string, viewMode: string) => ["appHeatmap", localDate, viewMode] as const,
+  teslaConnection: () => ["teslaConnection"] as const,
 };
 
 // Query Hooks
@@ -674,6 +675,99 @@ export function useQuickTransaction() {
     },
     onError: (error: Error) => {
       toast.error(error.message || "Error creating quick transaction");
+    },
+  });
+}
+
+export function useTeslaConnection() {
+  return useQuery({
+    queryKey: queryKeys.teslaConnection(),
+    queryFn: async () => {
+      const res = await fetch("/api/tesla/connection");
+      if (!res.ok) {
+        if (res.status === 404) {
+          return { connected: false };
+        }
+        throw new Error("Failed to fetch Tesla connection");
+      }
+      return res.json();
+    },
+  });
+}
+
+export function useConnectTesla() {
+  const queryClient = useQueryClient();
+  const toast = useToast();
+
+  return useMutation({
+    mutationFn: async () => {
+      const res = await fetch("/api/tesla/auth");
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({ error: "Unknown error" }));
+        throw new Error(errorData.error || "Failed to get Tesla auth URL");
+      }
+      const data = await res.json();
+      // Redirect to Tesla OAuth
+      window.location.href = data.authUrl;
+    },
+    onError: (error: Error) => {
+      toast.error(error.message || "Error connecting to Tesla");
+    },
+  });
+}
+
+export function useDisconnectTesla() {
+  const queryClient = useQueryClient();
+  const toast = useToast();
+
+  return useMutation({
+    mutationFn: async () => {
+      const res = await fetch("/api/tesla/connection", {
+        method: "DELETE",
+      });
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({ error: "Unknown error" }));
+        throw new Error(errorData.error || "Failed to disconnect Tesla");
+      }
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["teslaConnection"] });
+      toast.success("Tesla account disconnected");
+    },
+    onError: (error: Error) => {
+      toast.error(error.message || "Error disconnecting Tesla");
+    },
+  });
+}
+
+export function useSyncTesla() {
+  const queryClient = useQueryClient();
+  const toast = useToast();
+
+  return useMutation({
+    mutationFn: async () => {
+      const res = await fetch("/api/tesla/sync", {
+        method: "POST",
+      });
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({ error: "Unknown error" }));
+        throw new Error(errorData.error || "Failed to sync Tesla");
+      }
+      return res.json();
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ["mileage"] });
+      queryClient.invalidateQueries({ queryKey: ["summary"] });
+      queryClient.invalidateQueries({ queryKey: ["teslaConnection"] });
+      if (data.entryCreated) {
+        toast.success(data.message || "Mileage synced from Tesla");
+      } else {
+        toast.info(data.message || "No new mileage entry created");
+      }
+    },
+    onError: (error: Error) => {
+      toast.error(error.message || "Error syncing Tesla");
     },
   });
 }

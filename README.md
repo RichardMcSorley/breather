@@ -45,6 +45,13 @@ NEXTAUTH_URL=http://localhost:3000
 NEXTAUTH_SECRET=your_nextauth_secret
 GOOGLE_CLIENT_ID=your_google_client_id
 GOOGLE_CLIENT_SECRET=your_google_client_secret
+
+# Tesla API Integration (Optional)
+TESLA_CLIENT_ID=your_tesla_client_id
+TESLA_CLIENT_SECRET=your_tesla_client_secret
+TESLA_REDIRECT_URI=http://localhost:3000/api/tesla/callback
+TESLA_API_BASE_URL=https://fleet-api.prd.na.vn.cloud.tesla.com
+TESLA_ENCRYPTION_KEY=your_32_character_encryption_key
 ```
 
 3. Generate a NextAuth secret:
@@ -60,18 +67,45 @@ openssl rand -base64 32
    - Create OAuth 2.0 credentials
    - Add authorized redirect URI: `http://localhost:3000/api/auth/callback/google`
 
-5. Create PWA icons (optional):
+5. Set up Tesla API integration (optional):
+   - Go to [Tesla Developer Portal](https://developer.tesla.com/dashboard)
+   - Create a new application
+   - Add redirect URI: `http://localhost:3000/api/tesla/callback` (for development)
+   - Add redirect URI: `https://your-production-domain.com/api/tesla/callback` (for production)
+   - Add allowed origin: `http://localhost:3000` (for development)
+   - Add allowed origin: `https://your-production-domain.com` (for production)
+   - Copy your Client ID and Client Secret
+   - Generate a 32-character encryption key for token storage:
+     ```bash
+     openssl rand -hex 32
+     ```
+   - **IMPORTANT**: Register your application in each region:
+     - Generate a public/private key pair using the helper script:
+       ```bash
+       ./scripts/generate-tesla-keys.sh
+       ```
+       Or manually:
+       ```bash
+       openssl ecparam -name prime256v1 -genkey -noout -out private-key.pem
+       openssl ec -in private-key.pem -pubout -out public-key.pem
+       mkdir -p public/.well-known/appspecific
+       cp public-key.pem public/.well-known/appspecific/com.tesla.3p.public-key.pem
+       ```
+     - The public key will be automatically hosted at: `https://your-domain/.well-known/appspecific/com.tesla.3p.public-key.pem`
+     - Register your application (see Registration section below)
+
+6. Create PWA icons (optional):
    - Create icons in `public/icons/` directory
    - Sizes needed: 72x72, 96x96, 128x128, 144x144, 152x152, 192x192, 384x384, 512x512
    - You can use a tool like [PWA Asset Generator](https://github.com/elegantapp/pwa-asset-generator)
 
-6. Run the development server:
+7. Run the development server:
 
 ```bash
 npm run dev
 ```
 
-7. Open [http://localhost:3000](http://localhost:3000) in your browser.
+8. Open [http://localhost:3000](http://localhost:3000) in your browser.
 
 ## Project Structure
 
@@ -135,6 +169,49 @@ npm run dev
 1. Go to History page
 2. Filter by type (All/Income/Expense) or by income source tag
 3. Edit or delete transactions as needed
+
+### Tesla Integration (Optional)
+
+**Prerequisites:**
+1. Your application must be registered in each region you want to use
+2. You must host a public key at `https://your-domain/.well-known/appspecific/com.tesla.3p.public-key.pem`
+
+**Registration:**
+After setting up your Tesla application, you need to register it in each region:
+
+1. Generate a public/private key pair:
+   ```bash
+   openssl ecparam -name prime256v1 -genkey -noout -out private-key.pem
+   openssl ec -in private-key.pem -pubout -out public-key.pem
+   ```
+
+2. Host the public key on your domain at:
+   ```
+   https://your-domain/.well-known/appspecific/com.tesla.3p.public-key.pem
+   ```
+
+3. Register the application by calling the register endpoint:
+   ```bash
+   # For production (breather-chi.vercel.app)
+   curl -X POST https://breather-chi.vercel.app/api/tesla/register \
+     -H "Content-Type: application/json" \
+     -d '{"domain": "breather-chi.vercel.app"}'
+   
+   # For localhost (development)
+   curl -X POST http://localhost:3000/api/tesla/register \
+     -H "Content-Type: application/json" \
+     -d '{"domain": "localhost:3000"}'
+   ```
+   
+   **Note**: The domain must match your `allowed_origins` from the Tesla Developer Dashboard (without `https://`).
+
+**Using Tesla Integration:**
+1. Go to Configuration page
+2. Scroll to "Tesla Integration" section
+3. Click "Connect Tesla Account"
+4. Authorize the app in Tesla's OAuth flow
+5. Once connected, click "Sync Now" to import your current odometer reading
+6. New mileage entries will be created automatically when the odometer increases by 0.1 miles or more
 
 ## Offline Support
 
