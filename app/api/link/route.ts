@@ -50,24 +50,6 @@ export async function POST(request: NextRequest) {
           }, { status: 400 });
         }
 
-        // Check amount match: if customer has linked transactions, check if order.money matches any
-        if (ocrExport.linkedTransactionIds && ocrExport.linkedTransactionIds.length > 0) {
-          const linkedTransactions = await Transaction.find({
-            _id: { $in: ocrExport.linkedTransactionIds },
-            type: "income",
-          }).lean();
-          
-          const hasMatchingAmount = linkedTransactions.some((t: any) => {
-            return Math.abs(t.amount - deliveryOrder.money) < 0.01;
-          });
-          
-          if (!hasMatchingAmount) {
-            return NextResponse.json({ 
-              error: "Cannot link: order amount does not match any linked transaction amounts for this customer" 
-            }, { status: 400 });
-          }
-        }
-
         // Add order to customer's linked orders
         if (!ocrExport.linkedDeliveryOrderIds || !ocrExport.linkedDeliveryOrderIds.includes(deliveryOrder._id)) {
           await OcrExport.findByIdAndUpdate(
@@ -176,7 +158,7 @@ export async function POST(request: NextRequest) {
           return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
         }
 
-        // Validate filters: appName, amount match
+        // Validate filters: appName
         if (transaction.tag) {
           const transactionTag = (transaction.tag || "").trim().toLowerCase();
           const orderAppName = (deliveryOrder.appName || "").trim().toLowerCase();
@@ -185,14 +167,6 @@ export async function POST(request: NextRequest) {
               error: "Cannot link: transaction source/appName does not match order appName" 
             }, { status: 400 });
           }
-        }
-
-        // Check amount match
-        const amountDiff = Math.abs(transaction.amount - deliveryOrder.money);
-        if (amountDiff >= 0.01) {
-          return NextResponse.json({ 
-            error: "Cannot link: transaction amount does not match order amount" 
-          }, { status: 400 });
         }
 
         // Update transaction - add to array
