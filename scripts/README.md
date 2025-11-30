@@ -148,10 +148,10 @@ The migration script updates tags and app names across transactions, customers (
 
 ### Mappings
 
-- "Uber Driver" → "Uber Eats"
-- "Dasher" → "DoorDash"
-- "GH Drivers" → "GrubHub"
-- "Shopper" → "Instacart"
+- "DoorDash" → "Dasher"
+- "UberEats" / "Uber Eats" / "Uber" → "Uber Driver"
+- "GrubHub" → "GH Drivers"
+- "Instacart" → "Shopper"
 - "Shipt" → removed (null for transactions/customers, empty string for orders)
 
 ### Prerequisites
@@ -229,26 +229,27 @@ The script provides detailed output:
 🚀 Starting tag and appName migration...
 
 Mappings:
-  - "Uber Driver" → "Uber Eats"
-  - "Dasher" → "DoorDash"
-  - "GH Drivers" → "GrubHub"
-  - "Shopper" → "Instacart"
+  - "DoorDash" → "Dasher"
+  - "UberEats" → "Uber Driver"
+  - "Uber Eats" → "Uber Driver"
+  - "GrubHub" → "GH Drivers"
+  - "Instacart" → "Shopper"
   - "Shipt" → (removed)
 
 📡 Connecting to MongoDB...
 ✓ Connected to MongoDB
 
 📊 Migrating Transactions...
-  ✓ Uber Driver → Uber Eats: 15 transactions updated
-  ✓ Dasher → DoorDash: 8 transactions updated
+  ✓ DoorDash → Dasher: 8 transactions updated
+  ✓ UberEats → Uber Driver: 15 transactions updated
   ...
 
 👤 Migrating OcrExport (Customers)...
-  ✓ Uber Driver → Uber Eats: 12 customers updated
+  ✓ DoorDash → Dasher: 12 customers updated
   ...
 
 📦 Migrating DeliveryOrder (Orders)...
-  ✓ Dasher → DoorDash: 5 orders updated
+  ✓ DoorDash → Dasher: 5 orders updated
   ...
 
 ============================================================
@@ -281,5 +282,127 @@ Total Errors: 0
 - The script performs case-insensitive matching for variations
 - For DeliveryOrder, "Shipt" is set to empty string (not null) since `appName` is a required field
 - The script is idempotent - safe to run multiple times
+- Review the output carefully before proceeding with production data
+
+## Migration Script: Remove Screenshots
+
+The migration script removes the `screenshot` field from all collections to clean up existing screenshot data. This is part of the effort to stop persisting screenshots going forward.
+
+### Prerequisites
+
+1. **Environment variables**:
+   - `MONGODB_URI` - Your MongoDB connection string (must be set in `.env.local` or `.env`)
+
+2. **Dependencies**:
+   - Node.js >= 20.10.0
+   - All project dependencies installed (`npm install`)
+
+### Usage
+
+Run the migration script using one of these methods:
+
+**Option 1: Using tsx (recommended)**
+
+If you have `.env.local` or `.env` file, use dotenv-cli to load it:
+```bash
+npx dotenv-cli -e .env.local -- npx tsx scripts/remove-screenshots.ts
+```
+
+Or export the variable first:
+```bash
+export MONGODB_URI="your-connection-string"
+npx tsx scripts/remove-screenshots.ts
+```
+
+**Option 2: Using ts-node**
+
+If you have `.env.local` or `.env` file, use dotenv-cli:
+```bash
+npx dotenv-cli -e .env.local -- npx ts-node --esm scripts/remove-screenshots.ts
+```
+
+Or export the variable first:
+```bash
+export MONGODB_URI="your-connection-string"
+npx ts-node --esm scripts/remove-screenshots.ts
+```
+
+### What it does
+
+1. Connects to MongoDB using the connection string from environment variables
+2. Removes `screenshot` field from **DeliveryOrder** (orders) collection
+3. Removes `screenshot` field from **OcrExport** (customers) collection
+4. Removes `screenshot` field from **OcrText** (OCR text entries) collection
+
+### Output
+
+The script provides detailed output:
+- Count of documents with screenshots found in each collection
+- Number of documents modified per collection
+- Summary statistics
+- Error reporting if any issues occur
+
+### Example Output
+
+```
+🚀 Starting screenshot removal migration...
+
+This will remove the 'screenshot' field from:
+  - DeliveryOrder (orders)
+  - OcrExport (customers)
+  - OcrText (OCR text entries)
+
+📡 Connecting to MongoDB...
+✓ Connected to MongoDB
+
+📦 Removing screenshots from DeliveryOrder (Orders)...
+  Found 150 orders with screenshots
+  ✓ Removed screenshots from 150 orders
+
+👤 Removing screenshots from OcrExport (Customers)...
+  Found 200 customers with screenshots
+  ✓ Removed screenshots from 200 customers
+
+📄 Removing screenshots from OcrText (OCR Text Entries)...
+  Found 50 OCR text entries with screenshots
+  ✓ Removed screenshots from 50 OCR text entries
+
+============================================================
+📊 Migration Summary
+============================================================
+
+DeliveryOrder (Orders):
+  Matched: 150
+  Modified: 150
+  Errors: 0
+
+OcrExport (Customers):
+  Matched: 200
+  Modified: 200
+  Errors: 0
+
+OcrText (OCR Text Entries):
+  Matched: 50
+  Modified: 50
+  Errors: 0
+
+============================================================
+Total Matched: 400
+Total Modified: 400
+Total Errors: 0
+============================================================
+
+✅ Migration completed successfully!
+   Screenshots have been removed from all collections.
+
+🔌 MongoDB connection closed
+```
+
+### Important Notes
+
+- **Backup your database** before running the migration
+- This operation is **irreversible** - screenshots will be permanently removed
+- The script only removes the `screenshot` field - all other data remains intact
+- The script is idempotent - safe to run multiple times (will only affect documents that still have screenshots)
 - Review the output carefully before proceeding with production data
 

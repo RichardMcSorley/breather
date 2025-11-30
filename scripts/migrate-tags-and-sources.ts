@@ -7,10 +7,10 @@
  * - DeliveryOrder (orders): appName field
  * 
  * Mappings:
- * - "Uber Driver" → "Uber Eats"
- * - "Dasher" → "DoorDash"
- * - "GH Drivers" → "GrubHub"
- * - "Shopper" → "Instacart"
+ * - "DoorDash" → "Dasher"
+ * - "UberEats" → "Uber Driver"
+ * - "GrubHub" → "GH Drivers"
+ * - "Instacart" → "Shopper"
  * - "Shipt" → null (removed)
  * 
  * Usage:
@@ -28,10 +28,12 @@ import DeliveryOrder from "../lib/models/DeliveryOrder";
 
 // Tag/appName mapping configuration
 const TAG_MAPPINGS: Record<string, string | null> = {
-  "Uber Driver": "Uber Eats",
-  "Dasher": "DoorDash",
-  "GH Drivers": "GrubHub",
-  "Shopper": "Instacart",
+  "DoorDash": "Dasher",
+  "UberEats": "Uber Driver",
+  "Uber Eats": "Uber Driver", // Also handle with space
+  "Uber": "Uber Driver", // Also handle just "Uber"
+  "GrubHub": "GH Drivers",
+  "Instacart": "Shopper",
   "Shipt": null, // Remove Shipt
 };
 
@@ -83,10 +85,12 @@ async function migrateTransactions(): Promise<MigrationStats["transactions"]> {
 
   // Also handle case-insensitive matches and variations
   const variations: Record<string, string | null> = {
-    "uber driver": "Uber Eats",
-    "dasher": "DoorDash",
-    "gh drivers": "GH Drivers", // Will be handled in second pass
-    "shopper": "Instacart",
+    "doordash": "Dasher",
+    "ubereats": "Uber Driver",
+    "uber eats": "Uber Driver", // Also handle with space
+    "uber": "Uber Driver", // Also handle just "uber"
+    "grubhub": "GH Drivers",
+    "instacart": "Shopper",
     "shipt": null,
   };
 
@@ -143,10 +147,12 @@ async function migrateOcrExports(): Promise<MigrationStats["ocrExports"]> {
 
   // Handle case-insensitive matches
   const variations: Record<string, string | null> = {
-    "uber driver": "Uber Eats",
-    "dasher": "DoorDash",
-    "gh drivers": "GrubHub",
-    "shopper": "Instacart",
+    "doordash": "Dasher",
+    "ubereats": "Uber Driver",
+    "uber eats": "Uber Driver", // Also handle with space
+    "uber": "Uber Driver", // Also handle just "uber"
+    "grubhub": "GH Drivers",
+    "instacart": "Shopper",
     "shipt": null,
   };
 
@@ -214,10 +220,12 @@ async function migrateDeliveryOrders(): Promise<MigrationStats["deliveryOrders"]
 
   // Handle case-insensitive matches
   const variations: Record<string, string | null> = {
-    "uber driver": "Uber Eats",
-    "dasher": "DoorDash",
-    "gh drivers": "GrubHub",
-    "shopper": "Instacart",
+    "doordash": "Dasher",
+    "ubereats": "Uber Driver",
+    "uber eats": "Uber Driver", // Also handle with space
+    "uber": "Uber Driver", // Also handle just "uber"
+    "grubhub": "GH Drivers",
+    "instacart": "Shopper",
     "shipt": "", // Empty string for required field
   };
 
