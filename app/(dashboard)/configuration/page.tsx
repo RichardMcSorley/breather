@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, Suspense } from "react";
 import { useSession } from "next-auth/react";
 import { useSearchParams } from "next/navigation";
 import Layout from "@/components/Layout";
@@ -15,7 +15,7 @@ import { useToast } from "@/lib/toast";
 const DEFAULT_INCOME_TAGS = ["Uber Driver", "Dasher", "GH Drivers", "Shopper", "Roadie", "ProxyPics"];
 const DEFAULT_EXPENSE_TAGS = ["Gas", "Maintenance", "Insurance", "Tolls", "Parking", "Car Wash", "Oil Change", "Withdraw Fees"];
 
-export default function ConfigurationPage() {
+function ConfigurationPageContent() {
   const { data: session } = useSession();
   const { data: settingsData, isLoading: loading } = useSettings();
   const updateSettings = useUpdateSettings();
@@ -303,6 +303,20 @@ export default function ConfigurationPage() {
         )}
       </Card>
     </Layout>
+  );
+}
+
+export default function ConfigurationPage() {
+  return (
+    <Suspense fallback={
+      <Layout>
+        <div className="flex items-center justify-center min-h-[60vh]">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-gray-900 dark:border-white"></div>
+        </div>
+      </Layout>
+    }>
+      <ConfigurationPageContent />
+    </Suspense>
   );
 }
 
