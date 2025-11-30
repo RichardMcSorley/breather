@@ -190,20 +190,30 @@ After setting up your Tesla application, you need to register it in each region:
    https://your-domain/.well-known/appspecific/com.tesla.3p.public-key.pem
    ```
 
-3. Register the application by calling the register endpoint:
+3. Register the application:
+   
+   **For Production (Recommended):**
    ```bash
-   # For production (breather-chi.vercel.app)
+   # First, make sure your dev server is running, then:
    curl -X POST https://breather-chi.vercel.app/api/tesla/register \
      -H "Content-Type: application/json" \
      -d '{"domain": "breather-chi.vercel.app"}'
+   ```
    
-   # For localhost (development)
+   **For Localhost Development:**
+   ```bash
+   # Make sure your dev server is running (npm run dev), then:
+   ./scripts/register-tesla-localhost.sh
+   # Or manually:
    curl -X POST http://localhost:3000/api/tesla/register \
      -H "Content-Type: application/json" \
      -d '{"domain": "localhost:3000"}'
    ```
    
-   **Note**: The domain must match your `allowed_origins` from the Tesla Developer Dashboard (without `https://`).
+   **Note**: 
+   - The domain must match your `allowed_origins` from the Tesla Developer Dashboard (without `https://` or `http://`)
+   - For localhost, Tesla cannot verify the public key, so you may need to register production first
+   - Once registered for production, it typically works for localhost too
 
 **Using Tesla Integration:**
 1. Go to Configuration page

@@ -251,7 +251,7 @@ export default function AddMileageModal({
                   onChange={(e) => setFormData({ ...formData, carId: e.target.value })}
                   className="w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 dark:focus:ring-green-400 focus:border-transparent min-h-[44px] text-gray-900 dark:text-white bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600"
                 >
-                  {cars.map((car) => (
+                  {cars.map((car: string) => (
                     <option key={car} value={car}>
                       {car}
                     </option>
