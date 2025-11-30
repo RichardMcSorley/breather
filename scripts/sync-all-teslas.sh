@@ -8,15 +8,14 @@
 #
 # Environment variables required:
 #   - TESLA_SYNC_ALL_API_KEY: API key for authentication
-#   - NEXT_PUBLIC_API_URL or API_URL: Base URL of your API (defaults to http://localhost:3000)
 #
 # Example cron entry (runs daily at 2 AM):
 #   0 2 * * * /path/to/scripts/sync-all-teslas.sh >> /var/log/tesla-sync.log 2>&1
 
 set -e
 
-# Get API URL from environment or use default
-API_URL="${NEXT_PUBLIC_API_URL:-${API_URL:-http://localhost:3000}}"
+# Production API URL
+API_URL="https://breather-chi.vercel.app"
 
 # Get API key from environment
 API_KEY="${TESLA_SYNC_ALL_API_KEY}"
@@ -28,6 +27,7 @@ fi
 
 # Make the API call
 echo "$(date): Starting Tesla sync for all users..."
+echo "API URL: ${API_URL}/api/tesla/sync-all"
 
 RESPONSE=$(curl -s -w "\n%{http_code}" -X POST \
   -H "Content-Type: application/json" \
