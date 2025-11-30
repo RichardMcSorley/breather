@@ -78,6 +78,8 @@ export default function AddTransactionModal({
   });
   const [customTag, setCustomTag] = useState("");
   const [dataLoaded, setDataLoaded] = useState(false);
+  const [showDateTime, setShowDateTime] = useState(false);
+  const [showIncomeSource, setShowIncomeSource] = useState(false);
   const amountInputRef = useRef<HTMLInputElement | null>(null);
 
   const incomeSourceTags = settingsData?.incomeSourceTags?.length > 0 
@@ -100,6 +102,11 @@ export default function AddTransactionModal({
         isBill: transactionData.isBill || false,
         dueDate: transactionData.dueDate || "",
       });
+      setShowDateTime(true); // Show date/time when editing
+      // Show income source when editing income transaction
+      if (transactionData.type === "income") {
+        setShowIncomeSource(true);
+      }
       setDataLoaded(true);
     } else if (!transactionId) {
       // When opening for new transaction, ensure date is set to today
@@ -114,6 +121,8 @@ export default function AddTransactionModal({
         dueDate: "",
       });
       setCustomTag("");
+      setShowDateTime(false); // Hide date/time for new transactions
+      setShowIncomeSource(false); // Hide income source for new transactions
       setDataLoaded(true);
     }
   }, [transactionId, transactionData, type, initialAmount, initialNotes, initialIsBill]);
@@ -132,10 +141,23 @@ export default function AddTransactionModal({
         dueDate: "",
       });
       setCustomTag("");
+      setShowDateTime(false); // Always hide date/time when modal closes
+      setShowIncomeSource(false); // Always hide income source when modal closes
       setDataLoaded(false);
-      return;
+    } else if (isOpen) {
+      // When modal opens, set showDateTime and showIncomeSource based on whether we're editing
+      if (transactionId) {
+        // Will be set to true when transactionData loads in the first useEffect
+        // But set to false initially to avoid showing before data loads
+        setShowDateTime(false);
+        setShowIncomeSource(false);
+      } else {
+        // Always hide for new transactions
+        setShowDateTime(false);
+        setShowIncomeSource(false);
+      }
     }
-  }, [isOpen, initialAmount, initialNotes, initialIsBill]);
+  }, [isOpen, initialAmount, initialNotes, initialIsBill, transactionId]);
 
   useEffect(() => {
     if (!isOpen || !dataLoaded) return;
@@ -280,59 +302,81 @@ export default function AddTransactionModal({
           placeholder="0.00"
         />
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          <Input
-            label="Date"
-            type="date"
-            required
-            value={formData.date}
-            onChange={(e) => setFormData({ ...formData, date: e.target.value })}
-          />
-          <Input
-            label="Time"
-            type="time"
-            required
-            value={formData.time}
-            onChange={(e) => setFormData({ ...formData, time: e.target.value })}
-          />
-        </div>
-
-        {transactionType === "income" && (
-          <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-              Income Source
-            </label>
-            <div className="flex flex-wrap gap-2 mb-2">
-              {incomeSourceTags.map((tag: string) => (
-                <button
-                  key={tag}
-                  type="button"
-                  onClick={() => {
-                    setFormData({ ...formData, tag });
-                    setCustomTag("");
-                  }}
-                  className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors min-h-[44px] ${
-                    formData.tag === tag && !customTag
-                      ? "bg-green-600 text-white"
-                      : "bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600"
-                  }`}
-                >
-                  {tag}
-                </button>
-              ))}
-            </div>
+        {!showDateTime ? (
+          <button
+            type="button"
+            onClick={() => setShowDateTime(true)}
+            className="w-full px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
+          >
+            Set Date & Time
+          </button>
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <Input
-              placeholder="Or enter custom source"
-              value={customTag}
-              onChange={(e) => {
-                setCustomTag(e.target.value);
-                if (e.target.value) {
-                  setFormData({ ...formData, tag: "" });
-                }
-              }}
-              aria-label="Or enter custom income source"
+              label="Date"
+              type="date"
+              required
+              value={formData.date}
+              onChange={(e) => setFormData({ ...formData, date: e.target.value })}
+            />
+            <Input
+              label="Time"
+              type="time"
+              required
+              value={formData.time}
+              onChange={(e) => setFormData({ ...formData, time: e.target.value })}
             />
           </div>
+        )}
+
+        {transactionType === "income" && (
+          <>
+            {!showIncomeSource ? (
+              <button
+                type="button"
+                onClick={() => setShowIncomeSource(true)}
+                className="w-full px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
+              >
+                Set Income Source
+              </button>
+            ) : (
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  Income Source
+                </label>
+                <div className="flex flex-wrap gap-2 mb-2">
+                  {incomeSourceTags.map((tag: string) => (
+                    <button
+                      key={tag}
+                      type="button"
+                      onClick={() => {
+                        setFormData({ ...formData, tag });
+                        setCustomTag("");
+                      }}
+                      className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors min-h-[44px] ${
+                        formData.tag === tag && !customTag
+                          ? "bg-green-600 text-white"
+                          : "bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600"
+                      }`}
+                    >
+                      {tag}
+                    </button>
+                  ))}
+                </div>
+                <Input
+                  placeholder="Or enter custom source"
+                  value={customTag}
+                  onChange={(e) => {
+                    setCustomTag(e.target.value);
+                    if (e.target.value) {
+                      setFormData({ ...formData, tag: "" });
+                    }
+                  }}
+                  aria-label="Or enter custom income source"
+                />
+              </div>
+            )}
+          </>
         )}
 
         {transactionType === "expense" && (

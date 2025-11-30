@@ -41,6 +41,7 @@ export async function GET(
       odometer: mileageEntry.odometer,
       date: mileageEntry.date ? formatDateAsUTC(new Date(mileageEntry.date)) : "",
       classification: mileageEntry.classification,
+      carId: mileageEntry.carId,
       notes: mileageEntry.notes,
       createdAt: mileageEntry.createdAt.toISOString(),
       updatedAt: mileageEntry.updatedAt.toISOString(),
@@ -70,7 +71,7 @@ export async function PUT(
     }
 
     const body = await request.json();
-    const { odometer, date, notes, classification } = body;
+    const { odometer, date, notes, classification, carId } = body;
 
     const existingEntry = await Mileage.findOne({
       _id: id,
@@ -104,6 +105,7 @@ export async function PUT(
       odometer: number;
       date: Date;
       notes?: string;
+      carId?: string;
       classification: "work" | "personal";
     }> = {};
     
@@ -115,6 +117,9 @@ export async function PUT(
     }
     if (notes !== undefined) {
       updateData.notes = notes;
+    }
+    if (carId !== undefined) {
+      updateData.carId = carId || undefined;
     }
     // Always include classification if provided (required field)
     if (classification !== undefined && classification !== null) {

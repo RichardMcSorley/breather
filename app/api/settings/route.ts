@@ -41,6 +41,11 @@ export async function GET() {
       } else if (!Array.isArray(settings.expenseSourceTags)) {
         settings.expenseSourceTags = [];
       }
+      if (settings.cars === undefined || settings.cars === null) {
+        settings.cars = [];
+      } else if (!Array.isArray(settings.cars)) {
+        settings.cars = [];
+      }
       return NextResponse.json(settings);
     }
   } catch (error) {
@@ -58,7 +63,7 @@ export async function PUT(request: NextRequest) {
     await connectDB();
 
     const body = await request.json();
-    const { irsMileageDeduction, incomeSourceTags, expenseSourceTags } = body;
+    const { irsMileageDeduction, incomeSourceTags, expenseSourceTags, cars } = body;
 
     // Parse irsMileageDeduction - handle both number and string inputs
     let parsedIrsMileage: number = 0.70; // default
@@ -79,6 +84,7 @@ export async function PUT(request: NextRequest) {
         irsMileageDeduction: number;
         incomeSourceTags?: string[];
         expenseSourceTags?: string[];
+        cars?: string[];
       } = {
         userId: session.user.id,
         irsMileageDeduction: parsedIrsMileage,
@@ -90,6 +96,10 @@ export async function PUT(request: NextRequest) {
       
       if (expenseSourceTags !== undefined) {
         newSettingsData.expenseSourceTags = Array.isArray(expenseSourceTags) ? expenseSourceTags : [];
+      }
+      
+      if (cars !== undefined) {
+        newSettingsData.cars = Array.isArray(cars) ? cars : [];
       }
       
       settings = new UserSettings(newSettingsData);
@@ -105,6 +115,10 @@ export async function PUT(request: NextRequest) {
       if (expenseSourceTags !== undefined) {
         settings.expenseSourceTags = Array.isArray(expenseSourceTags) ? expenseSourceTags : [];
       }
+      
+      if (cars !== undefined) {
+        settings.cars = Array.isArray(cars) ? cars : [];
+      }
     }
 
     // Save the document
@@ -119,6 +133,9 @@ export async function PUT(request: NextRequest) {
     }
     if (!Array.isArray(result.expenseSourceTags)) {
       result.expenseSourceTags = [];
+    }
+    if (!Array.isArray(result.cars)) {
+      result.cars = [];
     }
 
     return NextResponse.json(result);

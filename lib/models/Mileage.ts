@@ -5,6 +5,7 @@ export interface IMileage extends Document {
   odometer: number;
   date: Date;
   classification: "work" | "personal";
+  carId?: string;
   notes?: string;
   createdAt: Date;
   updatedAt: Date;
@@ -32,6 +33,9 @@ const MileageSchema: Schema = new Schema(
       enum: ["work", "personal"],
       default: "work",
       required: true,
+    },
+    carId: {
+      type: String,
     },
     notes: {
       type: String,

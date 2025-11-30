@@ -165,6 +165,7 @@ export interface CreateMileageRequest {
   odometer: number;
   date: string;
   classification?: "work" | "personal";
+  carId?: string;
   notes?: string;
 }
 
@@ -172,6 +173,7 @@ export interface UpdateMileageRequest {
   odometer?: number;
   date?: string;
   classification?: "work" | "personal";
+  carId?: string;
   notes?: string;
 }
 

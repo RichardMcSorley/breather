@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from "react";
 import Modal from "./ui/Modal";
 import Input from "./ui/Input";
 import Button from "./ui/Button";
-import { useMileageEntry, useCreateMileageEntry, useUpdateMileageEntry } from "@/hooks/useQueries";
+import { useMileageEntry, useCreateMileageEntry, useUpdateMileageEntry, useSettings, useUpdateSettings } from "@/hooks/useQueries";
 
 interface AddMileageModalProps {
   isOpen: boolean;
@@ -49,18 +49,25 @@ export default function AddMileageModal({
   entryId,
 }: AddMileageModalProps) {
   const { data: entryData } = useMileageEntry(entryId);
+  const { data: settingsData } = useSettings();
   const createMileageEntry = useCreateMileageEntry();
   const updateMileageEntry = useUpdateMileageEntry();
+  const updateSettings = useUpdateSettings();
   
   const [formData, setFormData] = useState({
     odometer: "",
     date: formatLocalDate(new Date()),
     notes: "",
     classification: "work" as "work" | "personal",
+    carId: "",
   });
+  const [newCarName, setNewCarName] = useState("");
+  const [showNewCarInput, setShowNewCarInput] = useState(false);
   const [error, setError] = useState("");
   const [dataLoaded, setDataLoaded] = useState(false);
   const odometerInputRef = useRef<HTMLInputElement | null>(null);
+
+  const cars = settingsData?.cars || [];
 
   // Update form data when entry is loaded
   useEffect(() => {
@@ -70,35 +77,43 @@ export default function AddMileageModal({
         date: formatLocalDate(entryData.date),
         notes: entryData.notes || "",
         classification: entryData.classification === "personal" ? "personal" : "work",
+        carId: entryData.carId || "",
       });
       setDataLoaded(true);
     } else if (!entryId) {
       const now = new Date();
+      // Default to first car if available
+      const defaultCarId = cars.length > 0 ? cars[0] : "";
       setFormData({
         odometer: "",
         date: formatLocalDate(now),
         notes: "",
         classification: "work",
+        carId: defaultCarId,
       });
       setDataLoaded(true);
     }
-  }, [entryId, entryData]);
+  }, [entryId, entryData, cars]);
 
   useEffect(() => {
     if (!isOpen) {
       // Reset form when modal closes
       const now = new Date();
+      const defaultCarId = cars.length > 0 ? cars[0] : "";
       setFormData({
         odometer: "",
         date: formatLocalDate(now),
         notes: "",
         classification: "work",
+        carId: defaultCarId,
       });
+      setNewCarName("");
+      setShowNewCarInput(false);
       setError("");
       setDataLoaded(false);
       return;
     }
-  }, [isOpen]);
+  }, [isOpen, cars]);
 
   useEffect(() => {
     if (!isOpen || !dataLoaded) return;
@@ -114,6 +129,40 @@ export default function AddMileageModal({
     const inputValue = e.target.value;
     const formatted = formatOdometerInput(inputValue);
     setFormData({ ...formData, odometer: formatted });
+  };
+
+  const handleAddNewCar = async () => {
+    if (!newCarName.trim()) {
+      setError("Please enter a car name");
+      return;
+    }
+
+    if (cars.includes(newCarName.trim())) {
+      setError("This car already exists");
+      return;
+    }
+
+    // Add new car to settings
+    const updatedCars = [...cars, newCarName.trim()];
+    updateSettings.mutate(
+      {
+        irsMileageDeduction: settingsData?.irsMileageDeduction || 0.70,
+        incomeSourceTags: settingsData?.incomeSourceTags || [],
+        expenseSourceTags: settingsData?.expenseSourceTags || [],
+        cars: updatedCars,
+      },
+      {
+        onSuccess: () => {
+          setFormData({ ...formData, carId: newCarName.trim() });
+          setNewCarName("");
+          setShowNewCarInput(false);
+          setError("");
+        },
+        onError: (error: Error) => {
+          setError(error.message || "Failed to add car");
+        },
+      }
+    );
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -134,6 +183,7 @@ export default function AddMileageModal({
       date: formData.date,
       notes: formData.notes.trim() || undefined,
       classification: classificationValue,
+      carId: formData.carId || undefined,
     };
 
     if (entryId) {
@@ -188,6 +238,75 @@ export default function AddMileageModal({
           value={formData.date}
           onChange={(e) => setFormData({ ...formData, date: e.target.value })}
         />
+
+        <div>
+          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+            Car
+          </label>
+          {!showNewCarInput ? (
+            <div className="space-y-2">
+              {cars.length > 0 ? (
+                <select
+                  value={formData.carId}
+                  onChange={(e) => setFormData({ ...formData, carId: e.target.value })}
+                  className="w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 dark:focus:ring-green-400 focus:border-transparent min-h-[44px] text-gray-900 dark:text-white bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600"
+                >
+                  {cars.map((car) => (
+                    <option key={car} value={car}>
+                      {car}
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                <div className="text-sm text-gray-500 dark:text-gray-400 mb-2">
+                  No cars added yet. Create your first car below.
+                </div>
+              )}
+              <button
+                type="button"
+                onClick={() => setShowNewCarInput(true)}
+                className="w-full px-4 py-2 text-sm font-medium text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 border border-blue-300 dark:border-blue-600 rounded-lg hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors"
+              >
+                + Add New Car
+              </button>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              <div className="flex gap-2">
+                <Input
+                  placeholder="Enter car name"
+                  value={newCarName}
+                  onChange={(e) => setNewCarName(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      handleAddNewCar();
+                    }
+                  }}
+                />
+                <Button
+                  type="button"
+                  variant="primary"
+                  onClick={handleAddNewCar}
+                  disabled={updateSettings.isPending}
+                >
+                  Add
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => {
+                    setShowNewCarInput(false);
+                    setNewCarName("");
+                    setError("");
+                  }}
+                >
+                  Cancel
+                </Button>
+              </div>
+            </div>
+          )}
+        </div>
 
         <div>
           <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">

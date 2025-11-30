@@ -5,6 +5,7 @@ export interface IUserSettings extends Document {
   irsMileageDeduction: number;
   incomeSourceTags?: string[];
   expenseSourceTags?: string[];
+  cars?: string[];
   createdAt: Date;
   updatedAt: Date;
 }
@@ -28,6 +29,12 @@ const UserSettingsSchema: Schema = new Schema(
       },
     },
     expenseSourceTags: {
+      type: [String],
+      default: function() {
+        return [];
+      },
+    },
+    cars: {
       type: [String],
       default: function() {
         return [];

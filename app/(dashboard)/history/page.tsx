@@ -7,7 +7,10 @@ import Layout from "@/components/Layout";
 import AddTransactionModal from "@/components/AddTransactionModal";
 import EditCustomerEntriesModal from "@/components/EditCustomerEntriesModal";
 import EditDeliveryOrderModal from "@/components/EditDeliveryOrderModal";
-import { useTransactions, useDeleteTransaction } from "@/hooks/useQueries";
+import LinkCustomerModal from "@/components/LinkCustomerModal";
+import LinkOrderModal from "@/components/LinkOrderModal";
+import { useTransactions, useDeleteTransaction, queryKeys } from "@/hooks/useQueries";
+import { useQueryClient } from "@tanstack/react-query";
 
 interface LinkedCustomer {
   id: string;
@@ -64,6 +67,7 @@ const buildLocalDateFromParts = (dateString: string, timeString?: string) => {
 
 export default function HistoryPage() {
   const { data: session } = useSession();
+  const queryClient = useQueryClient();
   const [showAddModal, setShowAddModal] = useState(false);
   const [editingTransaction, setEditingTransaction] = useState<string | null>(null);
   const [transactionType, setTransactionType] = useState<"income" | "expense">("income");
@@ -74,6 +78,8 @@ export default function HistoryPage() {
   const [editingCustomerAddress, setEditingCustomerAddress] = useState<string | null>(null);
   const [editingCustomerEntryId, setEditingCustomerEntryId] = useState<string | null>(null);
   const [editingOrderId, setEditingOrderId] = useState<string | null>(null);
+  const [linkingCustomerTransactionId, setLinkingCustomerTransactionId] = useState<string | null>(null);
+  const [linkingOrderTransactionId, setLinkingOrderTransactionId] = useState<string | null>(null);
   
   // Reset to page 1 when filters change
   useEffect(() => {
@@ -383,15 +389,35 @@ export default function HistoryPage() {
                           {formatCurrency(Math.abs(transaction.amount))}
                         </div>
                         <div className="flex items-center gap-2">
+                        {isIncome && (
+                          <>
+                            <button
+                              onClick={() => setLinkingCustomerTransactionId(transaction._id)}
+                              className="p-2 text-blue-600 dark:text-blue-400 hover:text-blue-900 dark:hover:text-blue-300 min-w-[44px] min-h-[44px] flex items-center justify-center"
+                              title="Link Customer"
+                            >
+                              👤
+                            </button>
+                            <button
+                              onClick={() => setLinkingOrderTransactionId(transaction._id)}
+                              className="p-2 text-purple-600 dark:text-purple-400 hover:text-purple-900 dark:hover:text-purple-300 min-w-[44px] min-h-[44px] flex items-center justify-center"
+                              title="Link Order"
+                            >
+                              📦
+                            </button>
+                          </>
+                        )}
                         <button
                           onClick={() => setEditingTransaction(transaction._id)}
                           className="p-2 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white min-w-[44px] min-h-[44px] flex items-center justify-center"
+                          title="Edit"
                         >
                           ✏️
                         </button>
                         <button
                           onClick={() => handleDelete(transaction._id)}
                           className="p-2 text-red-600 dark:text-red-400 hover:text-red-900 dark:hover:text-red-300 min-w-[44px] min-h-[44px] flex items-center justify-center"
+                          title="Delete"
                         >
                           🗑️
                         </button>
@@ -512,6 +538,30 @@ export default function HistoryPage() {
         userId={session?.user?.id}
         onUpdate={() => {
           // Optionally refresh transactions if needed
+        }}
+      />
+
+      <LinkCustomerModal
+        isOpen={linkingCustomerTransactionId !== null}
+        onClose={() => setLinkingCustomerTransactionId(null)}
+        transactionId={linkingCustomerTransactionId}
+        userId={session?.user?.id}
+        onLink={() => {
+          // Refresh transactions to show updated links
+          queryClient.invalidateQueries({ queryKey: ["transactions"] });
+          setLinkingCustomerTransactionId(null);
+        }}
+      />
+
+      <LinkOrderModal
+        isOpen={linkingOrderTransactionId !== null}
+        onClose={() => setLinkingOrderTransactionId(null)}
+        transactionId={linkingOrderTransactionId}
+        userId={session?.user?.id}
+        onLink={() => {
+          // Refresh transactions to show updated links
+          queryClient.invalidateQueries({ queryKey: ["transactions"] });
+          setLinkingOrderTransactionId(null);
         }}
       />
     </Layout>

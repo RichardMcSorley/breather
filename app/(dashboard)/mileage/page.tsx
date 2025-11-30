@@ -13,6 +13,7 @@ interface MileageEntry {
   odometer: number;
   date: string;
   classification?: "work" | "personal";
+  carId?: string;
   notes?: string;
   createdAt: string;
 }
@@ -249,6 +250,11 @@ export default function MileagePage() {
                       </div>
                       <div className="text-sm text-gray-600 dark:text-gray-400">
                         {formatDate(entry.date)}
+                        {entry.carId && (
+                          <span className="ml-2 px-2 py-0.5 rounded text-xs font-medium bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300">
+                            🚗 {entry.carId}
+                          </span>
+                        )}
                         {entry.classification && (
                           <span className={`ml-2 px-2 py-0.5 rounded text-xs font-medium ${
                             entry.classification === "work"

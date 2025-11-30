@@ -91,7 +91,7 @@ export async function POST(request: NextRequest) {
     await connectDB();
 
     const body = await request.json();
-    const { odometer, date, notes, classification } = body;
+    const { odometer, date, notes, classification, carId } = body;
 
     if (!odometer || !date) {
       return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
@@ -121,6 +121,7 @@ export async function POST(request: NextRequest) {
       odometer: parsedOdometer,
       date: parsedDate,
       classification: finalClassification,
+      carId: carId || undefined,
       notes,
     });
 
