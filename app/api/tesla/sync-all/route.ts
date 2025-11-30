@@ -71,12 +71,13 @@ async function syncUserTesla(connection: any): Promise<SyncResult> {
 
     // Extract odometer reading
     const odometer = getOdometerFromVehicleData(vehicleData);
-    result.odometer = odometer;
 
     if (odometer === null) {
       result.error = "Odometer data not available";
       return result;
     }
+
+    result.odometer = odometer;
 
     // Get the most recent mileage entry for this user
     const lastEntry = await Mileage.findOne({ userId: connection.userId })
