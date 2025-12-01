@@ -18,6 +18,158 @@ interface MileageEntry {
   createdAt: string;
 }
 
+/**
+ * Calculate total mileage from entries, grouping by vehicle (carId).
+ * Only counts differences between consecutive entries for the same vehicle.
+ * The first entry for each vehicle is skipped (no previous reading to compare).
+ */
+function calculateMileageByVehicle(
+  entries: MileageEntry[],
+  filterClassification?: "work" | "personal",
+  allEntries?: MileageEntry[] // Optional: all entries to check for previous entries per vehicle
+): number {
+  if (entries.length === 0) return 0;
+
+  // Filter by classification if specified
+  const filteredEntries = filterClassification
+    ? entries.filter(e => e.classification === filterClassification)
+    : entries;
+
+  if (filteredEntries.length === 0) return 0;
+
+  // Group entries by carId (undefined/null treated as single group)
+  const entriesByVehicle = new Map<string | null, MileageEntry[]>();
+  
+  filteredEntries.forEach(entry => {
+    const vehicleKey = entry.carId || null;
+    if (!entriesByVehicle.has(vehicleKey)) {
+      entriesByVehicle.set(vehicleKey, []);
+    }
+    entriesByVehicle.get(vehicleKey)!.push(entry);
+  });
+
+  // If allEntries is provided, check for previous entries per vehicle
+  const previousByVehicle = new Map<string | null, MileageEntry[]>();
+  if (allEntries) {
+    const allFiltered = filterClassification
+      ? allEntries.filter(e => e.classification === filterClassification)
+      : allEntries;
+    
+    // Find the earliest date in the current entries set
+    const earliestCurrentDate = filteredEntries.length > 0
+      ? Math.min(...filteredEntries.map(e => {
+          if (typeof e.date === 'string' && e.date.match(/^\d{4}-\d{2}-\d{2}$/)) {
+            const [year, month, day] = e.date.split('-').map(Number);
+            return new Date(Date.UTC(year, month - 1, day, 0, 0, 0, 0)).getTime();
+          }
+          return new Date(e.date).getTime();
+        }))
+      : Infinity;
+    
+    allFiltered.forEach(entry => {
+      const vehicleKey = entry.carId || null;
+      // Only include entries that are before the earliest entry in current set
+      let entryDate: number;
+      if (typeof entry.date === 'string' && entry.date.match(/^\d{4}-\d{2}-\d{2}$/)) {
+        const [year, month, day] = entry.date.split('-').map(Number);
+        entryDate = new Date(Date.UTC(year, month - 1, day, 0, 0, 0, 0)).getTime();
+      } else {
+        entryDate = new Date(entry.date).getTime();
+      }
+      
+      if (entryDate < earliestCurrentDate) {
+        if (!previousByVehicle.has(vehicleKey)) {
+          previousByVehicle.set(vehicleKey, []);
+        }
+        previousByVehicle.get(vehicleKey)!.push(entry);
+      }
+    });
+  }
+
+  let totalMiles = 0;
+
+  // Process each vehicle group
+  entriesByVehicle.forEach((vehicleEntries, vehicleKey) => {
+    // Sort entries by date (ascending) for this vehicle
+    const sortedEntries = [...vehicleEntries].sort((a, b) => {
+      // Parse dates as UTC for consistent sorting
+      let dateA: Date;
+      let dateB: Date;
+      
+      if (typeof a.date === 'string' && a.date.match(/^\d{4}-\d{2}-\d{2}$/)) {
+        const [year, month, day] = a.date.split('-').map(Number);
+        dateA = new Date(Date.UTC(year, month - 1, day, 0, 0, 0, 0));
+      } else {
+        dateA = new Date(a.date);
+      }
+      
+      if (typeof b.date === 'string' && b.date.match(/^\d{4}-\d{2}-\d{2}$/)) {
+        const [year, month, day] = b.date.split('-').map(Number);
+        dateB = new Date(Date.UTC(year, month - 1, day, 0, 0, 0, 0));
+      } else {
+        dateB = new Date(b.date);
+      }
+      
+      const timeDiff = dateA.getTime() - dateB.getTime();
+      if (timeDiff !== 0) return timeDiff;
+      // If same date, use odometer as tiebreaker (lower odometer = earlier)
+      return a.odometer - b.odometer;
+    });
+
+    // Check if this vehicle has any previous entries
+    const previousVehicleEntries = previousByVehicle.get(vehicleKey) || [];
+    const hasPreviousEntries = previousVehicleEntries.length > 0;
+
+    // Calculate differences between consecutive entries
+    // Skip the first entry if there are no previous entries for this vehicle
+    const startIndex = hasPreviousEntries ? 0 : 1;
+
+    for (let i = startIndex; i < sortedEntries.length; i++) {
+      const currentEntry = sortedEntries[i];
+      let previousEntry: MileageEntry | undefined;
+
+      if (i === 0 && hasPreviousEntries) {
+        // Use the most recent previous entry for this vehicle
+        const sortedPrevious = [...previousVehicleEntries].sort((a, b) => {
+          let dateA: Date;
+          let dateB: Date;
+          
+          if (typeof a.date === 'string' && a.date.match(/^\d{4}-\d{2}-\d{2}$/)) {
+            const [year, month, day] = a.date.split('-').map(Number);
+            dateA = new Date(Date.UTC(year, month - 1, day, 0, 0, 0, 0));
+          } else {
+            dateA = new Date(a.date);
+          }
+          
+          if (typeof b.date === 'string' && b.date.match(/^\d{4}-\d{2}-\d{2}$/)) {
+            const [year, month, day] = b.date.split('-').map(Number);
+            dateB = new Date(Date.UTC(year, month - 1, day, 0, 0, 0, 0));
+          } else {
+            dateB = new Date(b.date);
+          }
+          
+          const timeDiff = dateB.getTime() - dateA.getTime(); // Descending for most recent
+          if (timeDiff !== 0) return timeDiff;
+          return b.odometer - a.odometer;
+        });
+        previousEntry = sortedPrevious[0];
+      } else if (i > 0) {
+        // Use the previous entry in the current period
+        previousEntry = sortedEntries[i - 1];
+      }
+
+      if (previousEntry) {
+        const miles = currentEntry.odometer - previousEntry.odometer;
+        if (miles > 0) {
+          totalMiles += miles;
+        }
+      }
+    }
+  });
+
+  return totalMiles;
+}
+
 export default function MileagePage() {
   const { data: session } = useSession();
   const [editingEntryId, setEditingEntryId] = useState<string | null>(null);
@@ -130,15 +282,17 @@ export default function MileagePage() {
   }
 
   // Get latest entry from all entries (for display purposes)
+  // Calculate miles driven only if entries are from the same vehicle
   const latestEntry = allEntries[0];
   const previousEntry = allEntries[1];
-  const milesDriven = latestEntry && previousEntry 
-    ? latestEntry.odometer - previousEntry.odometer 
-    : null;
+  let milesDriven: number | null = null;
+  if (latestEntry && previousEntry && latestEntry.carId === previousEntry.carId) {
+    const miles = latestEntry.odometer - previousEntry.odometer;
+    milesDriven = miles > 0 ? miles : null;
+  }
 
   // Calculate current year's work mileage for tax deductions using ALL entries
   const currentYear = new Date().getFullYear();
-  let currentYearMiles = 0;
   
   // Helper function to parse date string as UTC and get year
   const getYearFromDateString = (dateString: string): number => {
@@ -157,35 +311,9 @@ export default function MileagePage() {
     return entryYear === currentYear && entry.classification === "work";
   });
   
-  if (currentYearWorkEntries.length > 0) {
-    // Sum up miles between consecutive work entries in current year
-    // Entries are sorted descending (newest first)
-    for (let i = 0; i < currentYearWorkEntries.length; i++) {
-      const entry = currentYearWorkEntries[i];
-      
-      // Find the previous work entry
-      let previousWorkEntry: MileageEntry | undefined;
-      
-      if (i < currentYearWorkEntries.length - 1) {
-        // There's a next entry in the current year, use that
-        previousWorkEntry = currentYearWorkEntries[i + 1];
-      } else {
-        // This is the oldest entry in current year, find the most recent work entry from before current year
-        // Since entries are sorted descending, find the first one with year < currentYear
-        previousWorkEntry = allEntries.find(e => {
-          const eYear = getYearFromDateString(e.date);
-          return eYear < currentYear && e.classification === "work";
-        });
-      }
-      
-      if (previousWorkEntry) {
-        const miles = entry.odometer - previousWorkEntry.odometer;
-        if (miles > 0) {
-          currentYearMiles += miles;
-        }
-      }
-    }
-  }
+  // Use the helper function to calculate mileage by vehicle
+  // Pass allEntries to check for previous entries before current year
+  const currentYearMiles = calculateMileageByVehicle(currentYearWorkEntries, "work", allEntries);
 
   // Calculate tax deduction (work miles only)
   const taxDeduction = currentYearMiles * irsMileageDeduction;
@@ -261,9 +389,12 @@ export default function MileagePage() {
           <div className="space-y-0">
             {entries.map((entry, index) => {
               const previousEntry = entries[index + 1];
-              const milesDifference = previousEntry 
-                ? entry.odometer - previousEntry.odometer 
-                : null;
+              // Only calculate difference if entries are from the same vehicle
+              let milesDifference: number | null = null;
+              if (previousEntry && entry.carId === previousEntry.carId) {
+                const miles = entry.odometer - previousEntry.odometer;
+                milesDifference = miles > 0 ? miles : null;
+              }
               
               return (
                 <div key={entry._id}>

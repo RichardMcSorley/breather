@@ -13,6 +13,91 @@ import { TransactionQuery } from "@/lib/types";
 
 export const dynamic = 'force-dynamic';
 
+/**
+ * Calculate total mileage from entries, grouping by vehicle (carId).
+ * Only counts differences between consecutive entries for the same vehicle.
+ * The first entry for each vehicle is skipped (no previous reading to compare).
+ */
+function calculateMileageByVehicle(
+  entries: Array<{ odometer: number; date: Date; carId?: string }>,
+  previousEntries?: Array<{ odometer: number; date: Date; carId?: string }>
+): number {
+  if (entries.length === 0) return 0;
+
+  // Group entries by carId (undefined/null treated as single group)
+  const entriesByVehicle = new Map<string | null, typeof entries>();
+  
+  entries.forEach(entry => {
+    const vehicleKey = entry.carId || null;
+    if (!entriesByVehicle.has(vehicleKey)) {
+      entriesByVehicle.set(vehicleKey, []);
+    }
+    entriesByVehicle.get(vehicleKey)!.push(entry);
+  });
+
+  // If we have previous entries, include them for finding the first entry per vehicle
+  const previousByVehicle = new Map<string | null, typeof entries>();
+  if (previousEntries) {
+    previousEntries.forEach(entry => {
+      const vehicleKey = entry.carId || null;
+      if (!previousByVehicle.has(vehicleKey)) {
+        previousByVehicle.set(vehicleKey, []);
+      }
+      previousByVehicle.get(vehicleKey)!.push(entry);
+    });
+  }
+
+  let totalMiles = 0;
+
+  // Process each vehicle group
+  entriesByVehicle.forEach((vehicleEntries, vehicleKey) => {
+    // Sort entries by date (ascending) for this vehicle
+    const sortedEntries = [...vehicleEntries].sort((a, b) => {
+      const dateA = new Date(a.date).getTime();
+      const dateB = new Date(b.date).getTime();
+      if (dateA !== dateB) return dateA - dateB;
+      // If same date, use odometer as tiebreaker (lower odometer = earlier)
+      return a.odometer - b.odometer;
+    });
+
+    // Check if this vehicle has any previous entries
+    const previousVehicleEntries = previousByVehicle.get(vehicleKey) || [];
+    const hasPreviousEntries = previousVehicleEntries.length > 0;
+
+    // Calculate differences between consecutive entries
+    // Skip the first entry if there are no previous entries for this vehicle
+    const startIndex = hasPreviousEntries ? 0 : 1;
+
+    for (let i = startIndex; i < sortedEntries.length; i++) {
+      const currentEntry = sortedEntries[i];
+      let previousEntry: typeof currentEntry | undefined;
+
+      if (i === 0 && hasPreviousEntries) {
+        // Use the most recent previous entry for this vehicle
+        const sortedPrevious = [...previousVehicleEntries].sort((a, b) => {
+          const dateA = new Date(a.date).getTime();
+          const dateB = new Date(b.date).getTime();
+          if (dateA !== dateB) return dateB - dateA; // Descending for most recent
+          return b.odometer - a.odometer;
+        });
+        previousEntry = sortedPrevious[0];
+      } else if (i > 0) {
+        // Use the previous entry in the current period
+        previousEntry = sortedEntries[i - 1];
+      }
+
+      if (previousEntry) {
+        const miles = currentEntry.odometer - previousEntry.odometer;
+        if (miles > 0) {
+          totalMiles += miles;
+        }
+      }
+    }
+  });
+
+  return totalMiles;
+}
+
 export async function GET(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
@@ -179,28 +264,20 @@ export async function GET(request: NextRequest) {
       .sort({ date: 1, createdAt: 1 })
       .lean();
 
-    let mileageMilesLast30 = 0;
-    // Calculate work miles only for tax deductions
-    if (workMileageEntries.length >= 2) {
-      mileageMilesLast30 =
-        workMileageEntries[workMileageEntries.length - 1].odometer -
-        workMileageEntries[0].odometer;
-    } else if (workMileageEntries.length === 1) {
-      const previousWorkEntry = await Mileage.findOne({
-        userId: session.user.id,
-        date: { $lt: thirtyDaysAgo },
-        classification: "work",
-      })
-        .sort({ date: -1, createdAt: -1 })
-        .lean();
+    // Calculate work miles only for tax deductions, grouping by vehicle
+    // Get previous work entries before the period to find first entry per vehicle
+    const previousWorkEntries = await Mileage.find({
+      userId: session.user.id,
+      date: { $lt: mileageStartDate },
+      classification: "work",
+    })
+      .sort({ date: 1, createdAt: 1 })
+      .lean();
 
-      if (previousWorkEntry) {
-        mileageMilesLast30 = Math.max(
-          workMileageEntries[0].odometer - previousWorkEntry.odometer,
-          0
-        );
-      }
-    }
+    const mileageMilesLast30 = calculateMileageByVehicle(
+      workMileageEntries,
+      previousWorkEntries
+    );
 
     const irsMileageRate = settings?.irsMileageDeduction ?? 0.70;
     const mileageSavings = mileageMilesLast30 * irsMileageRate;
@@ -326,7 +403,7 @@ export async function GET(request: NextRequest) {
 
     const todayNet = todayIncome - todayExpenses;
 
-    // Calculate period's work mileage for tax deductions
+    // Calculate period's work mileage for tax deductions, grouping by vehicle
     const periodWorkMileageEntries = await Mileage.find({
       userId: session.user.id,
       date: {
@@ -338,27 +415,19 @@ export async function GET(request: NextRequest) {
       .sort({ date: 1, createdAt: 1 })
       .lean();
 
-    let todayMileageMiles = 0;
-    if (periodWorkMileageEntries.length >= 2) {
-      todayMileageMiles =
-        periodWorkMileageEntries[periodWorkMileageEntries.length - 1].odometer -
-        periodWorkMileageEntries[0].odometer;
-    } else if (periodWorkMileageEntries.length === 1) {
-      const previousWorkEntry = await Mileage.findOne({
-        userId: session.user.id,
-        date: { $lt: todayStart },
-        classification: "work",
-      })
-        .sort({ date: -1, createdAt: -1 })
-        .lean();
+    // Get previous work entries before the period to find first entry per vehicle
+    const previousPeriodWorkEntries = await Mileage.find({
+      userId: session.user.id,
+      date: { $lt: todayStart },
+      classification: "work",
+    })
+      .sort({ date: 1, createdAt: 1 })
+      .lean();
 
-      if (previousWorkEntry) {
-        todayMileageMiles = Math.max(
-          periodWorkMileageEntries[0].odometer - previousWorkEntry.odometer,
-          0
-        );
-      }
-    }
+    const todayMileageMiles = calculateMileageByVehicle(
+      periodWorkMileageEntries,
+      previousPeriodWorkEntries
+    );
 
     const todayMileageSavings = todayMileageMiles * irsMileageRate;
 
