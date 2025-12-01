@@ -70,11 +70,14 @@ export async function POST(request: NextRequest) {
     }
 
     // Extract odometer reading
-    const odometer = getOdometerFromVehicleData(vehicleData);
+    const odometerRaw = getOdometerFromVehicleData(vehicleData);
 
-    if (odometer === null) {
+    if (odometerRaw === null) {
       return NextResponse.json({ error: "Odometer data not available" }, { status: 400 });
     }
+
+    // Round to nearest whole number
+    const odometer = Math.round(odometerRaw);
 
     // Get user's settings to determine default carId (needed before checking last entry)
     const { default: UserSettings } = await import("@/lib/models/UserSettings");
