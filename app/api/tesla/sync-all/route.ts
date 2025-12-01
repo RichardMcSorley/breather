@@ -79,8 +79,26 @@ async function syncUserTesla(connection: any): Promise<SyncResult> {
 
     result.odometer = odometer;
 
-    // Get the most recent mileage entry for this user
-    const lastEntry = await Mileage.findOne({ userId: connection.userId })
+    // Get user's settings to determine default carId (needed before checking last entry)
+    const settings = await UserSettings.findOne({ userId: connection.userId }).lean();
+    const cars = settings?.cars || [];
+    
+    // Try to match Tesla vehicle name to user's carId, or use first car, or vehicle name
+    let carId = connection.vehicleName;
+    if (cars.length > 0) {
+      // Try to find matching car by name
+      const matchingCar = cars.find(car => 
+        car.toLowerCase().includes(connection.vehicleName.toLowerCase()) ||
+        connection.vehicleName.toLowerCase().includes(car.toLowerCase())
+      );
+      carId = matchingCar || cars[0];
+    }
+
+    // Get the most recent mileage entry for this user AND this specific car
+    const lastEntry = await Mileage.findOne({ 
+      userId: connection.userId,
+      carId: carId 
+    })
       .sort({ date: -1, createdAt: -1 })
       .lean();
 
@@ -98,20 +116,6 @@ async function syncUserTesla(connection: any): Promise<SyncResult> {
     result.entryCreated = shouldCreateEntry;
 
     if (shouldCreateEntry) {
-      // Get user's settings to determine default carId
-      const settings = await UserSettings.findOne({ userId: connection.userId }).lean();
-      const cars = settings?.cars || [];
-      
-      // Try to match Tesla vehicle name to user's carId, or use first car, or vehicle name
-      let carId = connection.vehicleName;
-      if (cars.length > 0) {
-        // Try to find matching car by name
-        const matchingCar = cars.find(car => 
-          car.toLowerCase().includes(connection.vehicleName.toLowerCase()) ||
-          connection.vehicleName.toLowerCase().includes(car.toLowerCase())
-        );
-        carId = matchingCar || cars[0];
-      }
 
       // Create mileage entry with today's date
       const today = new Date();
