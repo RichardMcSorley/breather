@@ -70,13 +70,15 @@ async function syncUserTesla(connection: any): Promise<SyncResult> {
     }
 
     // Extract odometer reading
-    const odometer = getOdometerFromVehicleData(vehicleData);
+    const odometerRaw = getOdometerFromVehicleData(vehicleData);
 
-    if (odometer === null) {
+    if (odometerRaw === null) {
       result.error = "Odometer data not available";
       return result;
     }
 
+    // Round to nearest whole number
+    const odometer = Math.round(odometerRaw);
     result.odometer = odometer;
 
     // Get user's settings to determine default carId (needed before checking last entry)
