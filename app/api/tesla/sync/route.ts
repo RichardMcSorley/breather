@@ -76,8 +76,27 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Odometer data not available" }, { status: 400 });
     }
 
-    // Get the most recent mileage entry for this user
-    const lastEntry = await Mileage.findOne({ userId: session.user.id })
+    // Get user's settings to determine default carId (needed before checking last entry)
+    const { default: UserSettings } = await import("@/lib/models/UserSettings");
+    const settings = await UserSettings.findOne({ userId: session.user.id }).lean();
+    const cars = settings?.cars || [];
+    
+    // Try to match Tesla vehicle name to user's carId, or use first car, or vehicle name
+    let carId = connection.vehicleName;
+    if (cars.length > 0) {
+      // Try to find matching car by name
+      const matchingCar = cars.find(car => 
+        car.toLowerCase().includes(connection.vehicleName.toLowerCase()) ||
+        connection.vehicleName.toLowerCase().includes(car.toLowerCase())
+      );
+      carId = matchingCar || cars[0];
+    }
+
+    // Get the most recent mileage entry for this user AND this specific car
+    const lastEntry = await Mileage.findOne({ 
+      userId: session.user.id,
+      carId: carId 
+    })
       .sort({ date: -1, createdAt: -1 })
       .lean();
 
@@ -94,21 +113,6 @@ export async function POST(request: NextRequest) {
 
     let mileageEntry = null;
     if (shouldCreateEntry) {
-      // Get user's settings to determine default carId
-      const { default: UserSettings } = await import("@/lib/models/UserSettings");
-      const settings = await UserSettings.findOne({ userId: session.user.id }).lean();
-      const cars = settings?.cars || [];
-      
-      // Try to match Tesla vehicle name to user's carId, or use first car, or vehicle name
-      let carId = connection.vehicleName;
-      if (cars.length > 0) {
-        // Try to find matching car by name
-        const matchingCar = cars.find(car => 
-          car.toLowerCase().includes(connection.vehicleName.toLowerCase()) ||
-          connection.vehicleName.toLowerCase().includes(car.toLowerCase())
-        );
-        carId = matchingCar || cars[0];
-      }
 
       // Create mileage entry with today's date
       const today = new Date();
