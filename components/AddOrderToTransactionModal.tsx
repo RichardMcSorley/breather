@@ -117,9 +117,19 @@ export default function AddOrderToTransactionModal({
     enabled: isOpen && !!session?.user?.id,
   });
 
-  const orders = (deliveryOrdersData?.orders || []).filter(
-    (order: DeliveryOrder) => !order.linkedTransactions || order.linkedTransactions.length === 0
-  );
+  // Filter orders to only show those from the last 24 hours and not linked to transactions
+  const orders = (deliveryOrdersData?.orders || []).filter((order: DeliveryOrder) => {
+    // Filter out orders already linked to transactions
+    if (order.linkedTransactions && order.linkedTransactions.length > 0) {
+      return false;
+    }
+    
+    // Filter to only show orders from the last 24 hours
+    const orderDate = new Date(order.processedAt);
+    const now = new Date();
+    const hoursDiff = (now.getTime() - orderDate.getTime()) / (1000 * 60 * 60);
+    return hoursDiff <= 24;
+  });
 
   const handleOrderClick = (order: DeliveryOrder) => {
     onSelectOrder(order);
