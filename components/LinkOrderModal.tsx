@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import Modal from "./ui/Modal";
+import { format } from "date-fns";
 
 interface DeliveryOrder {
   id: string;
@@ -38,6 +39,7 @@ export default function LinkOrderModal({
   const [linkingId, setLinkingId] = useState<string | null>(null);
   const [filtersActive, setFiltersActive] = useState(false);
   const [activeFilters, setActiveFilters] = useState<{ amount?: number; appName?: string }>({});
+  const [transactionTime, setTransactionTime] = useState<string | null>(null);
 
   useEffect(() => {
     if (isOpen && userId) {
@@ -71,6 +73,20 @@ export default function LinkOrderModal({
         if (transactionResponse.ok) {
           const transactionData = await transactionResponse.json();
           
+          // Store transaction time for display
+          if (transactionData.date && transactionData.time) {
+            try {
+              // Parse date as YYYY-MM-DD (local date, not UTC)
+              const [year, month, day] = transactionData.date.split("-").map(Number);
+              const [hours, minutes] = transactionData.time.split(":").map(Number);
+              // Create date in local timezone
+              const date = new Date(year, month - 1, day, hours, minutes, 0, 0);
+              setTransactionTime(format(date, "MMM d, yyyy 'at' h:mm a"));
+            } catch {
+              setTransactionTime(`${transactionData.date} at ${transactionData.time}`);
+            }
+          }
+          
           // Add filtering parameters
           if (transactionData.amount) {
             params.append("filterAmount", transactionData.amount.toString());
@@ -81,6 +97,8 @@ export default function LinkOrderModal({
             filters.appName = transactionData.tag;
           }
         }
+      } else {
+        setTransactionTime(null);
       }
 
       setFiltersActive(!skipFilters && (filters.amount !== undefined || filters.appName !== undefined));
@@ -161,23 +179,38 @@ export default function LinkOrderModal({
   return (
     <Modal isOpen={isOpen} onClose={onClose} title="Link Delivery Order">
       {filtersActive && (
-        <div className="mb-4 p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg flex items-center justify-between">
-          <div className="flex-1">
-            <div className="text-sm font-medium text-blue-900 dark:text-blue-300 mb-1">
-              Filters Active
+        <div className="mb-4 p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
+          <div className="flex items-center justify-between mb-2">
+            <div className="flex-1">
+              <div className="text-sm font-medium text-blue-900 dark:text-blue-300 mb-1">
+                Filters Active
+              </div>
+              <div className="text-xs text-blue-700 dark:text-blue-400">
+                {activeFilters.amount !== undefined && `Amount: $${activeFilters.amount.toFixed(2)}`}
+                {activeFilters.amount !== undefined && activeFilters.appName && " • "}
+                {activeFilters.appName && `App: ${activeFilters.appName}`}
+              </div>
             </div>
-            <div className="text-xs text-blue-700 dark:text-blue-400">
-              {activeFilters.amount !== undefined && `Amount: $${activeFilters.amount.toFixed(2)}`}
-              {activeFilters.amount !== undefined && activeFilters.appName && " • "}
-              {activeFilters.appName && `App: ${activeFilters.appName}`}
-            </div>
+            <button
+              onClick={handleClearFilters}
+              className="ml-4 px-3 py-1 text-xs rounded bg-blue-600 text-white hover:bg-blue-700 transition-colors"
+            >
+              Clear Filters
+            </button>
           </div>
-          <button
-            onClick={handleClearFilters}
-            className="ml-4 px-3 py-1 text-xs rounded bg-blue-600 text-white hover:bg-blue-700 transition-colors"
-          >
-            Clear Filters
-          </button>
+          {transactionTime && (
+            <div className="text-xs text-blue-600 dark:text-blue-400 mt-2 pt-2 border-t border-blue-200 dark:border-blue-800">
+              Transaction: {transactionTime}
+            </div>
+          )}
+        </div>
+      )}
+      
+      {!filtersActive && transactionTime && (
+        <div className="mb-4 p-3 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg">
+          <div className="text-xs text-gray-600 dark:text-gray-400">
+            Transaction: {transactionTime}
+          </div>
         </div>
       )}
 
@@ -228,7 +261,10 @@ export default function LinkOrderModal({
                   </span>
                 </div>
                 <div className="text-sm text-gray-600 dark:text-gray-400 mt-1">
-                  {formatDate(order.processedAt)} • {order.miles.toFixed(1)} mi • {formatCurrency(order.money)}
+                  {formatDate(order.processedAt)}
+                  {order.time && ` at ${order.time}`}
+                  {" • "}
+                  {order.miles.toFixed(1)} mi • {formatCurrency(order.money)}
                 </div>
                 <div className="text-xs text-gray-500 dark:text-gray-500 mt-1">
                   Ratio: ${order.milesToMoneyRatio.toFixed(2)}/mi

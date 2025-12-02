@@ -64,6 +64,7 @@ export async function POST(request: NextRequest) {
         customerName: processed.customerName,
         customerAddress: processed.customerAddress,
         rawResponse: processed.rawResponse,
+        metadata: processed.metadata,
         lat: geocodeData?.lat,
         lon: geocodeData?.lon,
         geocodeDisplayName: geocodeData?.displayName,

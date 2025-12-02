@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import Modal from "./ui/Modal";
 import { format } from "date-fns";
+import MetadataViewer from "./MetadataViewer";
 
 interface LinkedTransaction {
   _id: string;
@@ -23,6 +24,7 @@ interface DeliveryOrder {
   restaurantName: string;
   time: string;
   screenshot?: string;
+  metadata?: Record<string, any>;
   processedAt: string;
   createdAt: string;
   linkedTransactions?: LinkedTransaction[];
@@ -189,6 +191,8 @@ export default function EditDeliveryOrderModal({
               </div>
             </div>
           )}
+
+          <MetadataViewer metadata={order.metadata} title="Extracted Metadata" />
 
           <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">

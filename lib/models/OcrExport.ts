@@ -8,6 +8,7 @@ export interface IOcrExport extends Document {
   customerAddress: string;
   screenshot?: string;
   rawResponse?: string;
+  metadata?: Record<string, any>;
   lat?: number;
   lon?: number;
   geocodeDisplayName?: string;
@@ -45,6 +46,9 @@ const OcrExportSchema: Schema = new Schema(
     },
     rawResponse: {
       type: String,
+    },
+    metadata: {
+      type: Schema.Types.Mixed,
     },
     lat: {
       type: Number,

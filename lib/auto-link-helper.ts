@@ -197,15 +197,18 @@ export async function attemptAutoLinkOrderToTransaction(
 
 /**
  * Attempts to auto-link a customer (OcrExport) to a matching income transaction.
- * Only links if there is exactly one match and the customer is not already linked.
+ * Links to the latest unlinked transaction if app name matches.
+ * Optionally matches by amount if provided.
  * 
  * @param customer - The customer (OcrExport) to link
  * @param userId - The user ID for filtering
+ * @param amount - Optional amount to match (within $0.01 tolerance)
  * @returns The linked transaction ID if successful, null otherwise
  */
 export async function attemptAutoLinkCustomerToTransaction(
   customer: any,
-  userId: string
+  userId: string,
+  amount?: number
 ): Promise<string | null> {
   // Skip if customer is already linked to any transaction
   if (customer.linkedTransactionIds && customer.linkedTransactionIds.length > 0) {
@@ -222,23 +225,34 @@ export async function attemptAutoLinkCustomerToTransaction(
     return null;
   }
 
-  // Find income transactions with matching tag (appName)
+  // Find income transactions with matching tag (appName), sorted by date (latest first)
   const matchingTransactions = await Transaction.find({
     userId,
     type: "income",
     tag: { $regex: new RegExp(`^${customerAppName}$`, "i") },
-  }).lean();
+  })
+    .sort({ date: -1, createdAt: -1 }) // Latest first
+    .lean();
 
   // Filter to only transactions that are not already linked
-  const unlinkedTransactions = matchingTransactions.filter((transaction) => {
+  let unlinkedTransactions = matchingTransactions.filter((transaction) => {
     return !transaction.linkedOcrExportIds || transaction.linkedOcrExportIds.length === 0;
   });
+
+  // If amount is provided, filter by amount match (within $0.01 tolerance)
+  if (amount !== undefined && amount !== null) {
+    unlinkedTransactions = unlinkedTransactions.filter((transaction) => {
+      const amountDiff = Math.abs(transaction.amount - amount);
+      return amountDiff < 0.01;
+    });
+  }
 
   // Only auto-link if there is exactly one match
   if (unlinkedTransactions.length !== 1) {
     return null;
   }
 
+  // Get the latest transaction (first in sorted array)
   const transaction = unlinkedTransactions[0];
 
   // Perform the bidirectional link

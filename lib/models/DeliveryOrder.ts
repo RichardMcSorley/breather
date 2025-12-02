@@ -11,6 +11,7 @@ export interface IDeliveryOrder extends Document {
   time?: string;
   screenshot?: string;
   rawResponse?: string;
+  metadata?: Record<string, any>;
   linkedTransactionIds?: mongoose.Types.ObjectId[];
   linkedOcrExportIds?: mongoose.Types.ObjectId[];
   processedAt: Date;
@@ -58,6 +59,9 @@ const DeliveryOrderSchema: Schema = new Schema(
     },
     rawResponse: {
       type: String,
+    },
+    metadata: {
+      type: Schema.Types.Mixed,
     },
     processedAt: {
       type: Date,

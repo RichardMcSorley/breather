@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import Modal from "./ui/Modal";
 import { format } from "date-fns";
+import MetadataViewer from "./MetadataViewer";
 
 interface Visit {
   _id: string;
@@ -11,6 +12,7 @@ interface Visit {
   customerAddress: string;
   appName?: string;
   screenshot?: string;
+  metadata?: Record<string, any>;
   processedAt: string;
   createdAt: string;
   lat?: number;
@@ -313,6 +315,7 @@ export default function EditCustomerEntriesModal({
                         </div>
                       </div>
                     )}
+                    <MetadataViewer metadata={visit.metadata} title="Extracted Metadata" />
                     <div className="flex gap-2 mt-3">
                       <button
                         onClick={() => startEditing(visit)}

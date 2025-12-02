@@ -155,7 +155,7 @@ export default function CustomerDetailsModal({
     }
     data.visits.forEach((visit) => {
       const date = new Date(visit.processedAt || visit.createdAt);
-      const hour = date.getUTCHours();
+      const hour = date.getHours(); // Use local time, not UTC
       hourCounts[hour] = (hourCounts[hour] || 0) + 1;
     });
 

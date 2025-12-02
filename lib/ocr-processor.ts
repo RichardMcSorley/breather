@@ -129,20 +129,106 @@ async function requestYamlRow(
   throw new Error(`Failed to obtain valid YAML response after ${maxAttempts} attempts: ${lastError}`);
 }
 
+const JSON_METADATA_PROMPT = `return everything as JSON`;
+
+async function extractJsonMetadata(
+  imageBase64: string,
+  maxAttempts: number = 3
+): Promise<Record<string, any>> {
+  if (!MOONDREAM_API_KEY) {
+    throw new Error("MOONDREAM_API_KEY environment variable is not set");
+  }
+
+  let lastError: string | null = null;
+  let currentPrompt = JSON_METADATA_PROMPT;
+
+  // Ensure the image is in data URL format
+  let imageUrl = imageBase64;
+  if (!imageUrl.startsWith("data:image")) {
+    // If it's just base64, add the data URL prefix
+    imageUrl = `data:image/png;base64,${imageUrl}`;
+  }
+
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    if (attempt > 0) {
+      currentPrompt = `${JSON_METADATA_PROMPT}\n\nThe previous response was invalid because ${lastError || "it could not be parsed"}. Please return valid JSON only, no markdown code blocks or additional text.`;
+    }
+
+    try {
+      const response = await fetch(MOONDREAM_API_URL, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Moondream-Auth": MOONDREAM_API_KEY,
+        },
+        body: JSON.stringify({
+          image_url: imageUrl,
+          question: currentPrompt,
+        }),
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`Moondream API error: ${response.status} - ${errorText}`);
+      }
+
+      const data = await response.json();
+      const rawResponse = (data.answer || "").trim();
+
+      // Try to extract JSON from the response (might have markdown code blocks or other text)
+      let jsonText = rawResponse;
+      const jsonMatch = rawResponse.match(/```(?:json)?\s*([\s\S]*?)\s*```/) || rawResponse.match(/([\s\S]+)/);
+      if (jsonMatch) {
+        jsonText = jsonMatch[1].trim();
+      }
+
+      try {
+        const metadata = JSON.parse(jsonText);
+        if (typeof metadata === "object" && metadata !== null) {
+          console.log("✅ Extracted JSON metadata:", JSON.stringify(metadata, null, 2));
+          return metadata;
+        }
+        lastError = "response is not a JSON object";
+      } catch (parseError) {
+        lastError = `JSON parse error: ${parseError instanceof Error ? parseError.message : "unknown error"}`;
+        console.error("❌ JSON parse error:", parseError);
+      }
+    } catch (error) {
+      lastError = error instanceof Error ? error.message : "unknown error";
+    }
+  }
+
+  // If we can't get valid JSON after all attempts, return empty object rather than throwing
+  // This allows the YAML extraction to still work
+  console.warn(`⚠️ Failed to extract JSON metadata after ${maxAttempts} attempts: ${lastError}`);
+  return {};
+}
+
 export async function processOcrScreenshot(screenshot: string): Promise<{
   customerName: string;
   customerAddress: string;
   rawResponse: string;
+  metadata: Record<string, any>;
 }> {
   if (!MOONDREAM_API_KEY) {
     throw new Error("MOONDREAM_API_KEY environment variable is not set");
   }
 
-  const { row, rawResponse } = await requestYamlRow(screenshot);
+  // Call both YAML extraction (existing) and JSON metadata extraction (new)
+  const [yamlResult, metadata] = await Promise.all([
+    requestYamlRow(screenshot),
+    extractJsonMetadata(screenshot).catch((error) => {
+      console.error("Error extracting JSON metadata:", error);
+      return {};
+    }),
+  ]);
+
+  const { row, rawResponse } = yamlResult;
 
   return {
     customerName: row["Customer Name"],
     customerAddress: row["Customer Address"],
     rawResponse,
+    metadata,
   };
 }

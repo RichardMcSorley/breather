@@ -59,29 +59,15 @@ export async function GET(
       });
     }
 
-    // Filter entries that match the address
-    // Strategy 1: Exact match (case-insensitive, trimmed)
+    // Filter entries that match the address using the same fuzzy matching logic as groupByAddress
+    // This ensures consistency with the customer frequency list
     let matchingEntries = allEntries.filter((entry) => {
-      const entryAddress = (entry.customerAddress || "").trim();
-      const searchAddress = decodedAddress.trim();
-      return entryAddress.toLowerCase() === searchAddress.toLowerCase();
+      if (!entry.customerAddress || entry.customerAddress.trim() === "") {
+        return false;
+      }
+      // Use isSameAddress for fuzzy matching (same as groupByAddress uses)
+      return isSameAddress(entry.customerAddress, decodedAddress);
     });
-
-    // Strategy 2: Fuzzy address matching
-    if (matchingEntries.length === 0) {
-      matchingEntries = allEntries.filter((entry) =>
-        isSameAddress(entry.customerAddress || "", decodedAddress)
-      );
-    }
-
-    // Strategy 3: Case-insensitive contains match (fallback)
-    if (matchingEntries.length === 0) {
-      const searchAddressLower = decodedAddress.trim().toLowerCase();
-      matchingEntries = allEntries.filter((entry) => {
-        const entryAddress = (entry.customerAddress || "").trim().toLowerCase();
-        return entryAddress.includes(searchAddressLower) || searchAddressLower.includes(entryAddress);
-      });
-    }
 
     // Sort by date (most recent first)
     matchingEntries.sort(
@@ -129,19 +115,47 @@ export async function GET(
     const entryIds = matchingEntries.map((e) => e._id);
     const linkedTransactions = await Transaction.find({
       userId: userId || undefined,
-      linkedOcrExportId: { $in: entryIds },
+      linkedOcrExportIds: { $in: entryIds },
       type: "income",
     })
       .sort({ date: -1 })
       .lean();
 
     // Get all linked delivery orders for these entries
-    const linkedOrders = await DeliveryOrder.find({
+    // 1. Directly linked orders (linkedOcrExportIds contains customer entry)
+    const directlyLinkedOrders = await DeliveryOrder.find({
       userId: userId || undefined,
       linkedOcrExportIds: { $in: entryIds },
     })
       .sort({ processedAt: -1 })
       .lean();
+
+    // 2. Indirectly linked orders (linked through transactions)
+    const transactionIds = linkedTransactions.map((t) => t._id);
+    const indirectlyLinkedOrders = transactionIds.length > 0
+      ? await DeliveryOrder.find({
+          userId: userId || undefined,
+          linkedTransactionIds: { $in: transactionIds },
+        })
+          .sort({ processedAt: -1 })
+          .lean()
+      : [];
+
+    // Combine and deduplicate by _id, then sort by processedAt
+    const allOrders = [...directlyLinkedOrders, ...indirectlyLinkedOrders];
+    const uniqueOrderIds = new Set<string>();
+    const linkedOrders = allOrders
+      .filter((order) => {
+        const orderId = order._id.toString();
+        if (uniqueOrderIds.has(orderId)) {
+          return false;
+        }
+        uniqueOrderIds.add(orderId);
+        return true;
+      })
+      .sort((a, b) => 
+        new Date(b.processedAt).getTime() - new Date(a.processedAt).getTime()
+      );
 
     return NextResponse.json({
       address: canonicalAddress,
@@ -165,6 +179,7 @@ export async function GET(
         customerAddress: entry.customerAddress,
         appName: entry.appName,
         screenshot: entry.screenshot,
+        metadata: entry.metadata,
         processedAt: entry.processedAt,
         createdAt: entry.createdAt,
         lat: entry.lat,

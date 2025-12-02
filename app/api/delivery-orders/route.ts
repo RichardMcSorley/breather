@@ -54,6 +54,7 @@ export async function POST(request: NextRequest) {
         restaurantName: processed.restaurantName,
         time: "", // Time not extracted from screenshot, can be updated later
         rawResponse: processed.rawResponse,
+        metadata: processed.metadata,
         processedAt: new Date(),
       });
 
@@ -189,6 +190,8 @@ export async function GET(request: NextRequest) {
         milesToMoneyRatio: order.milesToMoneyRatio,
         restaurantName: order.restaurantName,
         time: order.time,
+        screenshot: order.screenshot,
+        metadata: order.metadata,
         processedAt: order.processedAt.toISOString(),
         createdAt: order.createdAt.toISOString(),
         linkedTransactions: transactionsByOrderId.get(order._id.toString()) || [],
