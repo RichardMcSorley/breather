@@ -21,6 +21,7 @@ export const queryKeys = {
   heatmap: (localDate: string, viewMode: string, days?: number) => ["heatmap", localDate, viewMode, days] as const,
   appHeatmap: (localDate: string, viewMode: string) => ["appHeatmap", localDate, viewMode] as const,
   teslaConnection: () => ["teslaConnection"] as const,
+  deliveryOrders: (userId?: string, limit?: number) => ["deliveryOrders", userId, limit] as const,
 };
 
 // Query Hooks
@@ -174,6 +175,28 @@ export function useSettings() {
       }
       return res.json();
     },
+  });
+}
+
+export function useDeliveryOrders(userId?: string, limit: number = 20) {
+  return useQuery({
+    queryKey: queryKeys.deliveryOrders(userId, limit),
+    queryFn: async () => {
+      if (!userId) {
+        return { orders: [] };
+      }
+      const params = new URLSearchParams({
+        userId,
+        limit: limit.toString(),
+      });
+      const res = await fetch(`/api/delivery-orders?${params.toString()}`);
+      if (!res.ok) {
+        throw new Error("Failed to fetch delivery orders");
+      }
+      const data = await res.json();
+      return { orders: data.orders || [] };
+    },
+    enabled: !!userId,
   });
 }
 
