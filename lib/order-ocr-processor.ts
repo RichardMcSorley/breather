@@ -9,10 +9,7 @@ interface ParsedOrder {
   "Restaurant/Pickup Name": string;
 }
 
-const YAML_PROMPT = `Extract the delivery order information from this image. Return in YAML format with the following keys:
-- "Miles": The number of miles for this delivery (as a number, e.g., 2.5)
-- "Money": The payment amount for this delivery (as a number, e.g., 8.50)
-- "Restaurant/Pickup Name": The name of the restaurant or pickup location`;
+const YAML_PROMPT = `Extract the delivery order information from this image. Return in YAML format with the following keys: Miles, Money, "Restaurant/Pickup Name".`
 
 function parseYamlResponse(rawText: string): { order: ParsedOrder | null; error: string | null } {
   rawText = rawText.trim();
