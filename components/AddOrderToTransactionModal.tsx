@@ -117,7 +117,9 @@ export default function AddOrderToTransactionModal({
     enabled: isOpen && !!session?.user?.id,
   });
 
-  const orders = deliveryOrdersData?.orders || [];
+  const orders = (deliveryOrdersData?.orders || []).filter(
+    (order: DeliveryOrder) => !order.linkedTransactions || order.linkedTransactions.length === 0
+  );
 
   const handleOrderClick = (order: DeliveryOrder) => {
     onSelectOrder(order);
