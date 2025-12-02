@@ -129,7 +129,7 @@ async function requestYamlRow(
   throw new Error(`Failed to obtain valid YAML response after ${maxAttempts} attempts: ${lastError}`);
 }
 
-const JSON_METADATA_PROMPT = `return metadata as JSON`;
+const JSON_METADATA_PROMPT = `return everythign as JSON, all text`;
 
 async function extractJsonMetadata(
   imageBase64: string,
