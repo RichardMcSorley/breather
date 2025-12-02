@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useRef } from "react";
 import { useSession } from "next-auth/react";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQueryClient, useQuery } from "@tanstack/react-query";
 import Modal from "./ui/Modal";
 import Input from "./ui/Input";
 import Button from "./ui/Button";
@@ -12,7 +12,7 @@ import ScreenshotModal from "./ScreenshotModal";
 import EditCustomerEntriesModal from "./EditCustomerEntriesModal";
 import EditDeliveryOrderModal from "./EditDeliveryOrderModal";
 import TransactionLinkedInfo from "./TransactionLinkedInfo";
-import { useTransaction, useSettings, useCreateTransaction, useUpdateTransaction, useUpdateSettings, queryKeys } from "@/hooks/useQueries";
+import { useTransaction, useSettings, useCreateTransaction, useUpdateTransaction, useUpdateSettings, useDeliveryOrders, queryKeys } from "@/hooks/useQueries";
 
 interface AddTransactionModalProps {
   isOpen: boolean;
@@ -67,6 +67,29 @@ export default function AddTransactionModal({
   const [editingOrderId, setEditingOrderId] = useState<string | null>(null);
   
   const [transactionType, setTransactionType] = useState<"income" | "expense">(initialType || type);
+  const [selectedOrderId, setSelectedOrderId] = useState<string>("");
+  
+  // Fetch delivery orders when modal is open, creating new income transaction
+  const shouldFetchOrders = isOpen && !transactionId && transactionType === "income";
+  const { data: deliveryOrdersData } = useQuery({
+    queryKey: queryKeys.deliveryOrders(session?.user?.id, 20),
+    queryFn: async () => {
+      if (!session?.user?.id) {
+        return { orders: [] };
+      }
+      const params = new URLSearchParams({
+        userId: session.user.id,
+        limit: "20",
+      });
+      const res = await fetch(`/api/delivery-orders?${params.toString()}`);
+      if (!res.ok) {
+        throw new Error("Failed to fetch delivery orders");
+      }
+      const data = await res.json();
+      return { orders: data.orders || [] };
+    },
+    enabled: shouldFetchOrders && !!session?.user?.id,
+  });
   const [formData, setFormData] = useState({
     amount: initialAmount?.toString() || "",
     date: formatLocalDate(new Date()),
@@ -133,9 +156,15 @@ export default function AddTransactionModal({
         dueDate: "",
       });
       setCustomTag("");
+      setSelectedOrderId("");
       setDataLoaded(false);
     }
   }, [isOpen, initialAmount, initialNotes, initialIsBill, transactionId]);
+
+  // Reset order selection when transaction type changes
+  useEffect(() => {
+    setSelectedOrderId("");
+  }, [transactionType]);
 
   useEffect(() => {
     if (!isOpen || !dataLoaded) return;
@@ -146,6 +175,43 @@ export default function AddTransactionModal({
     }, 100);
     return () => clearTimeout(timeoutId);
   }, [isOpen, dataLoaded]);
+
+  // Handle order selection
+  const handleOrderSelect = (orderId: string) => {
+    if (!orderId || !deliveryOrdersData?.orders) return;
+    
+    const selectedOrder = deliveryOrdersData.orders.find((order: any) => order.id === orderId);
+    if (!selectedOrder) return;
+
+    // Format date from processedAt
+    const orderDate = new Date(selectedOrder.processedAt);
+    const formattedDate = formatLocalDate(orderDate);
+    
+    // Use order time if available, otherwise use processedAt time
+    let orderTime = selectedOrder.time || "";
+    if (!orderTime) {
+      orderTime = orderDate.toTimeString().slice(0, 5);
+    }
+
+    // Build notes with restaurant name and miles info
+    const notesParts = [selectedOrder.restaurantName];
+    if (selectedOrder.miles > 0) {
+      notesParts.push(`${selectedOrder.miles.toFixed(1)} mi`);
+    }
+    const notes = notesParts.join(" - ");
+
+    // Populate form fields
+    setFormData({
+      ...formData,
+      amount: selectedOrder.money.toString(),
+      date: formattedDate,
+      time: orderTime,
+      notes: notes,
+      tag: selectedOrder.appName,
+    });
+    setCustomTag("");
+    setSelectedOrderId(""); // Clear selection after populating
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -265,6 +331,38 @@ export default function AddTransactionModal({
                 Expense
               </button>
             </div>
+          </div>
+        )}
+
+        {/* Order Selection - Only show when creating new income transaction */}
+        {!transactionId && transactionType === "income" && deliveryOrdersData?.orders && deliveryOrdersData.orders.length > 0 && (
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+              Select Recent Order (optional)
+            </label>
+            <select
+              value={selectedOrderId}
+              onChange={(e) => {
+                setSelectedOrderId(e.target.value);
+                handleOrderSelect(e.target.value);
+              }}
+              className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm min-h-[44px] focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            >
+              <option value="">-- Select an order to fill info --</option>
+              {deliveryOrdersData.orders.map((order: any) => {
+                const orderDate = new Date(order.processedAt);
+                const formattedDate = formatLocalDate(orderDate);
+                const formattedAmount = new Intl.NumberFormat("en-US", {
+                  style: "currency",
+                  currency: "USD",
+                }).format(order.money);
+                return (
+                  <option key={order.id} value={order.id}>
+                    {order.restaurantName} - {formattedAmount} ({order.appName}) - {formattedDate}
+                  </option>
+                );
+              })}
+            </select>
           </div>
         )}
 
