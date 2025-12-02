@@ -127,12 +127,45 @@ export default function AddTransactionModal({
     } else if (!transactionId) {
       // When opening for new transaction, check if we have a selected order
       if (selectedOrder) {
-        const orderDate = new Date(selectedOrder.processedAt);
-        const formattedDate = formatLocalDate(orderDate);
+        // Convert UTC processedAt to EST date/time (like quick transaction API does)
+        const utcDate = new Date(selectedOrder.processedAt);
+        const estYear = utcDate.getUTCFullYear();
+        const estMonth = utcDate.getUTCMonth();
+        const estDay = utcDate.getUTCDate();
+        const utcHour = utcDate.getUTCHours();
+        const utcMinute = utcDate.getUTCMinutes();
+        
+        // Convert UTC to EST (subtract 5 hours)
+        const EST_OFFSET_HOURS = 5;
+        let estHour = utcHour - EST_OFFSET_HOURS;
+        let estDayAdjusted = estDay;
+        let estMonthAdjusted = estMonth;
+        let estYearAdjusted = estYear;
+        
+        // Handle day/hour rollover when subtracting hours
+        if (estHour < 0) {
+          estHour += 24;
+          estDayAdjusted -= 1;
+          if (estDayAdjusted < 1) {
+            estMonthAdjusted -= 1;
+            if (estMonthAdjusted < 0) {
+              estMonthAdjusted = 11;
+              estYearAdjusted -= 1;
+            }
+            const daysInPrevMonth = new Date(estYearAdjusted, estMonthAdjusted + 1, 0).getDate();
+            estDayAdjusted = daysInPrevMonth;
+          }
+        }
+        
+        // Format EST date as YYYY-MM-DD
+        const formattedDate = `${estYearAdjusted}-${String(estMonthAdjusted + 1).padStart(2, '0')}-${String(estDayAdjusted).padStart(2, '0')}`;
+        
+        // Use order's time if available, otherwise use EST time from processedAt
         let orderTime = selectedOrder.time || "";
         if (!orderTime) {
-          orderTime = orderDate.toTimeString().slice(0, 5);
+          orderTime = `${String(estHour).padStart(2, '0')}:${String(utcMinute).padStart(2, '0')}`;
         }
+        
         setFormData({
           amount: selectedOrder.money.toString(),
           date: formattedDate,
