@@ -193,24 +193,17 @@ export default function AddTransactionModal({
       orderTime = orderDate.toTimeString().slice(0, 5);
     }
 
-    // Build notes with restaurant name and miles info
-    const notesParts = [selectedOrder.restaurantName];
-    if (selectedOrder.miles > 0) {
-      notesParts.push(`${selectedOrder.miles.toFixed(1)} mi`);
-    }
-    const notes = notesParts.join(" - ");
-
-    // Populate form fields
+    // Populate form fields (but NOT notes)
     setFormData({
       ...formData,
       amount: selectedOrder.money.toString(),
       date: formattedDate,
       time: orderTime,
-      notes: notes,
+      notes: "", // Don't fill notes
       tag: selectedOrder.appName,
     });
     setCustomTag("");
-    setSelectedOrderId(""); // Clear selection after populating
+    // Keep selectedOrderId stored so we can link it after transaction creation
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -278,7 +271,7 @@ export default function AddTransactionModal({
       );
     } else {
       createTransaction.mutate(requestBody, {
-        onSuccess: () => {
+        onSuccess: async (data) => {
           const finalTag = customTag || formData.tag;
           if (finalTag && finalTag.trim()) {
             const currentTags = transactionType === "income" ? incomeSourceTags : expenseSourceTags;
@@ -287,6 +280,34 @@ export default function AddTransactionModal({
               saveCustomTag(finalTag.trim());
             }
           }
+          
+          // Link the order if one was selected
+          if (selectedOrderId && data?._id) {
+            try {
+              const linkResponse = await fetch("/api/link", {
+                method: "POST",
+                headers: {
+                  "Content-Type": "application/json",
+                },
+                body: JSON.stringify({
+                  transactionId: data._id,
+                  deliveryOrderId: selectedOrderId,
+                  action: "link",
+                }),
+              });
+              
+              if (!linkResponse.ok) {
+                console.error("Failed to link order:", await linkResponse.text());
+              } else {
+                // Invalidate transaction queries to refresh linked order data
+                queryClient.invalidateQueries({ queryKey: ["transactions"] });
+                queryClient.invalidateQueries({ queryKey: queryKeys.transaction(data._id) });
+              }
+            } catch (error) {
+              console.error("Error linking order:", error);
+            }
+          }
+          
           onSuccess();
           onClose();
         },
