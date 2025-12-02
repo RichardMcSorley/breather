@@ -12,7 +12,7 @@ import ScreenshotModal from "./ScreenshotModal";
 import EditCustomerEntriesModal from "./EditCustomerEntriesModal";
 import EditDeliveryOrderModal from "./EditDeliveryOrderModal";
 import TransactionLinkedInfo from "./TransactionLinkedInfo";
-import { useTransaction, useSettings, useCreateTransaction, useUpdateTransaction, useUpdateSettings } from "@/hooks/useQueries";
+import { useTransaction, useSettings, useCreateTransaction, useUpdateTransaction, useUpdateSettings, queryKeys } from "@/hooks/useQueries";
 
 interface DeliveryOrder {
   id: string;
