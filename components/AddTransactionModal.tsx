@@ -12,7 +12,19 @@ import ScreenshotModal from "./ScreenshotModal";
 import EditCustomerEntriesModal from "./EditCustomerEntriesModal";
 import EditDeliveryOrderModal from "./EditDeliveryOrderModal";
 import TransactionLinkedInfo from "./TransactionLinkedInfo";
-import { useTransaction, useSettings, useCreateTransaction, useUpdateTransaction, useUpdateSettings, useDeliveryOrders, queryKeys } from "@/hooks/useQueries";
+import { useTransaction, useSettings, useCreateTransaction, useUpdateTransaction, useUpdateSettings, queryKeys } from "@/hooks/useQueries";
+
+interface DeliveryOrder {
+  id: string;
+  entryId: string;
+  appName: string;
+  miles: number;
+  money: number;
+  milesToMoneyRatio: number;
+  restaurantName: string;
+  time: string;
+  processedAt: string;
+}
 
 interface AddTransactionModalProps {
   isOpen: boolean;
@@ -24,6 +36,7 @@ interface AddTransactionModalProps {
   initialNotes?: string;
   initialIsBill?: boolean;
   initialType?: "income" | "expense";
+  selectedOrder?: DeliveryOrder | null;
 }
 
 const DEFAULT_INCOME_SOURCE_TAGS = ["Uber Driver", "Dasher", "GH Drivers", "Shopper", "Roadie", "ProxyPics"];
@@ -40,6 +53,13 @@ const formatLocalDate = (value: Date | string) => {
   return `${year}-${month}-${day}`;
 };
 
+const formatCurrency = (amount: number) => {
+  return new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: "USD",
+  }).format(amount);
+};
+
 export default function AddTransactionModal({
   isOpen,
   onClose,
@@ -50,6 +70,7 @@ export default function AddTransactionModal({
   initialNotes,
   initialIsBill,
   initialType,
+  selectedOrder,
 }: AddTransactionModalProps) {
   const { data: session } = useSession();
   const queryClient = useQueryClient();
@@ -68,28 +89,6 @@ export default function AddTransactionModal({
   
   const [transactionType, setTransactionType] = useState<"income" | "expense">(initialType || type);
   const [selectedOrderId, setSelectedOrderId] = useState<string>("");
-  
-  // Fetch delivery orders when modal is open, creating new income transaction
-  const shouldFetchOrders = isOpen && !transactionId && transactionType === "income";
-  const { data: deliveryOrdersData } = useQuery({
-    queryKey: queryKeys.deliveryOrders(session?.user?.id, 20),
-    queryFn: async () => {
-      if (!session?.user?.id) {
-        return { orders: [] };
-      }
-      const params = new URLSearchParams({
-        userId: session.user.id,
-        limit: "20",
-      });
-      const res = await fetch(`/api/delivery-orders?${params.toString()}`);
-      if (!res.ok) {
-        throw new Error("Failed to fetch delivery orders");
-      }
-      const data = await res.json();
-      return { orders: data.orders || [] };
-    },
-    enabled: shouldFetchOrders && !!session?.user?.id,
-  });
   const [formData, setFormData] = useState({
     amount: initialAmount?.toString() || "",
     date: formatLocalDate(new Date()),
@@ -126,21 +125,76 @@ export default function AddTransactionModal({
       // Only show date/time and income source after data is loaded
       setDataLoaded(true);
     } else if (!transactionId) {
-      // When opening for new transaction, ensure date is set to today
-      const now = new Date();
-      setFormData({
-        amount: initialAmount?.toString() || "",
-        date: formatLocalDate(now),
-        time: now.toTimeString().slice(0, 5),
-        notes: initialNotes || "",
-        tag: "",
-        isBill: initialIsBill || false,
-        dueDate: "",
-      });
-      setCustomTag("");
-      setDataLoaded(true);
+      // When opening for new transaction, check if we have a selected order
+      if (selectedOrder) {
+        // Convert UTC processedAt to EST date/time (like quick transaction API does)
+        const utcDate = new Date(selectedOrder.processedAt);
+        const estYear = utcDate.getUTCFullYear();
+        const estMonth = utcDate.getUTCMonth();
+        const estDay = utcDate.getUTCDate();
+        const utcHour = utcDate.getUTCHours();
+        const utcMinute = utcDate.getUTCMinutes();
+        
+        // Convert UTC to EST (subtract 5 hours)
+        const EST_OFFSET_HOURS = 5;
+        let estHour = utcHour - EST_OFFSET_HOURS;
+        let estDayAdjusted = estDay;
+        let estMonthAdjusted = estMonth;
+        let estYearAdjusted = estYear;
+        
+        // Handle day/hour rollover when subtracting hours
+        if (estHour < 0) {
+          estHour += 24;
+          estDayAdjusted -= 1;
+          if (estDayAdjusted < 1) {
+            estMonthAdjusted -= 1;
+            if (estMonthAdjusted < 0) {
+              estMonthAdjusted = 11;
+              estYearAdjusted -= 1;
+            }
+            const daysInPrevMonth = new Date(estYearAdjusted, estMonthAdjusted + 1, 0).getDate();
+            estDayAdjusted = daysInPrevMonth;
+          }
+        }
+        
+        // Format EST date as YYYY-MM-DD
+        const formattedDate = `${estYearAdjusted}-${String(estMonthAdjusted + 1).padStart(2, '0')}-${String(estDayAdjusted).padStart(2, '0')}`;
+        
+        // Use order's time if available, otherwise use EST time from processedAt
+        let orderTime = selectedOrder.time || "";
+        if (!orderTime) {
+          orderTime = `${String(estHour).padStart(2, '0')}:${String(utcMinute).padStart(2, '0')}`;
+        }
+        
+        setFormData({
+          amount: selectedOrder.money.toString(),
+          date: formattedDate,
+          time: orderTime,
+          notes: "",
+          tag: selectedOrder.appName,
+          isBill: false,
+          dueDate: "",
+        });
+        setSelectedOrderId(selectedOrder.id);
+        setCustomTag("");
+        setDataLoaded(true);
+      } else {
+        // When opening for new transaction, ensure date is set to today
+        const now = new Date();
+        setFormData({
+          amount: initialAmount?.toString() || "",
+          date: formatLocalDate(now),
+          time: now.toTimeString().slice(0, 5),
+          notes: initialNotes || "",
+          tag: "",
+          isBill: initialIsBill || false,
+          dueDate: "",
+        });
+        setCustomTag("");
+        setDataLoaded(true);
+      }
     }
-  }, [transactionId, transactionData, type, initialAmount, initialNotes, initialIsBill]);
+  }, [transactionId, transactionData, type, initialAmount, initialNotes, initialIsBill, selectedOrder]);
 
   useEffect(() => {
     if (!isOpen) {
@@ -159,11 +213,13 @@ export default function AddTransactionModal({
       setSelectedOrderId("");
       setDataLoaded(false);
     }
-  }, [isOpen, initialAmount, initialNotes, initialIsBill, transactionId]);
+  }, [isOpen, initialAmount, initialNotes, initialIsBill, transactionId, selectedOrder]);
 
   // Reset order selection when transaction type changes
   useEffect(() => {
-    setSelectedOrderId("");
+    if (transactionType !== "income") {
+      setSelectedOrderId("");
+    }
   }, [transactionType]);
 
   useEffect(() => {
@@ -176,35 +232,6 @@ export default function AddTransactionModal({
     return () => clearTimeout(timeoutId);
   }, [isOpen, dataLoaded]);
 
-  // Handle order selection
-  const handleOrderSelect = (orderId: string) => {
-    if (!orderId || !deliveryOrdersData?.orders) return;
-    
-    const selectedOrder = deliveryOrdersData.orders.find((order: any) => order.id === orderId);
-    if (!selectedOrder) return;
-
-    // Format date from processedAt
-    const orderDate = new Date(selectedOrder.processedAt);
-    const formattedDate = formatLocalDate(orderDate);
-    
-    // Use order time if available, otherwise use processedAt time
-    let orderTime = selectedOrder.time || "";
-    if (!orderTime) {
-      orderTime = orderDate.toTimeString().slice(0, 5);
-    }
-
-    // Populate form fields (but NOT notes)
-    setFormData({
-      ...formData,
-      amount: selectedOrder.money.toString(),
-      date: formattedDate,
-      time: orderTime,
-      notes: "", // Don't fill notes
-      tag: selectedOrder.appName,
-    });
-    setCustomTag("");
-    // Keep selectedOrderId stored so we can link it after transaction creation
-  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -355,35 +382,14 @@ export default function AddTransactionModal({
           </div>
         )}
 
-        {/* Order Selection - Only show when creating new income transaction */}
-        {!transactionId && transactionType === "income" && deliveryOrdersData?.orders && deliveryOrdersData.orders.length > 0 && (
-          <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-              Select Recent Order (optional)
-            </label>
-            <select
-              value={selectedOrderId}
-              onChange={(e) => {
-                setSelectedOrderId(e.target.value);
-                handleOrderSelect(e.target.value);
-              }}
-              className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm min-h-[44px] focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            >
-              <option value="">-- Select an order to fill info --</option>
-              {deliveryOrdersData.orders.map((order: any) => {
-                const orderDate = new Date(order.processedAt);
-                const formattedDate = formatLocalDate(orderDate);
-                const formattedAmount = new Intl.NumberFormat("en-US", {
-                  style: "currency",
-                  currency: "USD",
-                }).format(order.money);
-                return (
-                  <option key={order.id} value={order.id}>
-                    {order.restaurantName} - {formattedAmount} ({order.appName}) - {formattedDate}
-                  </option>
-                );
-              })}
-            </select>
+        {selectedOrder && !transactionId && (
+          <div className="p-3 bg-purple-50 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-800 rounded-lg mb-4">
+            <div className="text-sm font-medium text-purple-900 dark:text-purple-300 mb-1">
+              Order Selected
+            </div>
+            <div className="text-xs text-purple-700 dark:text-purple-400">
+              {selectedOrder.restaurantName} • {selectedOrder.appName} • {formatCurrency(selectedOrder.money)} • {selectedOrder.miles.toFixed(1)} mi
+            </div>
           </div>
         )}
 

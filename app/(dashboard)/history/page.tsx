@@ -5,6 +5,7 @@ import { useSession } from "next-auth/react";
 import { format, isToday, isYesterday } from "date-fns";
 import Layout from "@/components/Layout";
 import AddTransactionModal from "@/components/AddTransactionModal";
+import AddOrderToTransactionModal from "@/components/AddOrderToTransactionModal";
 import EditCustomerEntriesModal from "@/components/EditCustomerEntriesModal";
 import EditDeliveryOrderModal from "@/components/EditDeliveryOrderModal";
 import LinkCustomerModal from "@/components/LinkCustomerModal";
@@ -44,6 +45,18 @@ interface Transaction {
   linkedDeliveryOrders?: LinkedOrder[];
 }
 
+interface SelectedDeliveryOrder {
+  id: string;
+  entryId: string;
+  appName: string;
+  miles: number;
+  money: number;
+  milesToMoneyRatio: number;
+  restaurantName: string;
+  time: string;
+  processedAt: string;
+}
+
 /**
  * Parses a date string (YYYY-MM-DD) and time string (HH:MM) as LOCAL time.
  * The time string represents the user's local time, not UTC.
@@ -80,6 +93,8 @@ export default function HistoryPage() {
   const [editingOrderId, setEditingOrderId] = useState<string | null>(null);
   const [linkingCustomerTransactionId, setLinkingCustomerTransactionId] = useState<string | null>(null);
   const [linkingOrderTransactionId, setLinkingOrderTransactionId] = useState<string | null>(null);
+  const [showAddOrderModal, setShowAddOrderModal] = useState(false);
+  const [selectedOrderForTransaction, setSelectedOrderForTransaction] = useState<SelectedDeliveryOrder | null>(null);
   
   // Reset to page 1 when filters change
   useEffect(() => {
@@ -194,7 +209,16 @@ export default function HistoryPage() {
           <div className="flex gap-2">
             <button
               onClick={() => {
+                setShowAddOrderModal(true);
+              }}
+              className="px-4 py-2 rounded-lg text-sm font-medium bg-purple-600 text-white hover:bg-purple-700 min-h-[44px]"
+            >
+              + Add from Order
+            </button>
+            <button
+              onClick={() => {
                 setEditingTransaction(null);
+                setSelectedOrderForTransaction(null);
                 setShowAddModal(true);
                 setTransactionType("income");
               }}
@@ -205,6 +229,7 @@ export default function HistoryPage() {
             <button
               onClick={() => {
                 setEditingTransaction(null);
+                setSelectedOrderForTransaction(null);
                 setShowAddModal(true);
                 setTransactionType("expense");
               }}
@@ -501,19 +526,33 @@ export default function HistoryPage() {
         </div>
       )}
 
+      <AddOrderToTransactionModal
+        isOpen={showAddOrderModal}
+        onClose={() => setShowAddOrderModal(false)}
+        onSelectOrder={(order) => {
+          setSelectedOrderForTransaction(order);
+          setShowAddOrderModal(false);
+          setShowAddModal(true);
+          setTransactionType("income");
+        }}
+      />
+
       {(showAddModal || editingTransaction) && (
         <AddTransactionModal
           isOpen={showAddModal || !!editingTransaction}
           onClose={() => {
             setShowAddModal(false);
             setEditingTransaction(null);
+            setSelectedOrderForTransaction(null);
           }}
           type={editingTransaction ? (transactions.find((t: Transaction) => t._id === editingTransaction)?.type || "income") : transactionType}
           onSuccess={() => {
             setShowAddModal(false);
             setEditingTransaction(null);
+            setSelectedOrderForTransaction(null);
           }}
           transactionId={editingTransaction || undefined}
+          selectedOrder={selectedOrderForTransaction}
         />
       )}
 
