@@ -213,7 +213,7 @@ export default function HistoryPage() {
               }}
               className="px-4 py-2 rounded-lg text-sm font-medium bg-purple-600 text-white hover:bg-purple-700 min-h-[44px]"
             >
-              + Add from Order
+              + order
             </button>
             <button
               onClick={() => {
