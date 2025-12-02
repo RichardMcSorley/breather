@@ -140,7 +140,7 @@ export default function AddOrderToTransactionModal({
 
       {orders.length > 0 && (
         <div className="space-y-2 max-h-[500px] overflow-y-auto">
-          {orders.map((order) => {
+          {orders.map((order: DeliveryOrder) => {
             const appColor = getAppTagColor(order.appName);
             const isLinked = order.linkedTransactions && order.linkedTransactions.length > 0;
             const orderDate = formatDate(order.processedAt);
