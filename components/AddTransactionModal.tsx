@@ -128,42 +128,31 @@ export default function AddTransactionModal({
       // When opening for new transaction, check if we have a selected order
       if (selectedOrder) {
         // Convert UTC processedAt to EST date/time (like quick transaction API does)
+        // Create a date object from the UTC timestamp, then convert to EST
         const utcDate = new Date(selectedOrder.processedAt);
-        const estYear = utcDate.getUTCFullYear();
-        const estMonth = utcDate.getUTCMonth();
-        const estDay = utcDate.getUTCDate();
-        const utcHour = utcDate.getUTCHours();
-        const utcMinute = utcDate.getUTCMinutes();
+        const utcTimestamp = utcDate.getTime();
         
-        // Convert UTC to EST (subtract 5 hours)
-        const EST_OFFSET_HOURS = 5;
-        let estHour = utcHour - EST_OFFSET_HOURS;
-        let estDayAdjusted = estDay;
-        let estMonthAdjusted = estMonth;
-        let estYearAdjusted = estYear;
+        // EST is UTC-5, so subtract 5 hours in milliseconds
+        const EST_OFFSET_MS = 5 * 60 * 60 * 1000;
+        const estTimestamp = utcTimestamp - EST_OFFSET_MS;
+        const estDate = new Date(estTimestamp);
         
-        // Handle day/hour rollover when subtracting hours
-        if (estHour < 0) {
-          estHour += 24;
-          estDayAdjusted -= 1;
-          if (estDayAdjusted < 1) {
-            estMonthAdjusted -= 1;
-            if (estMonthAdjusted < 0) {
-              estMonthAdjusted = 11;
-              estYearAdjusted -= 1;
-            }
-            const daysInPrevMonth = new Date(estYearAdjusted, estMonthAdjusted + 1, 0).getDate();
-            estDayAdjusted = daysInPrevMonth;
-          }
-        }
+        // Extract EST date components from the adjusted timestamp
+        // Note: getUTCFullYear/getUTCMonth/getUTCDate are used because estTimestamp
+        // is still a UTC timestamp, just shifted by 5 hours
+        const estYear = estDate.getUTCFullYear();
+        const estMonth = estDate.getUTCMonth();
+        const estDay = estDate.getUTCDate();
+        const estHour = estDate.getUTCHours();
+        const estMinute = estDate.getUTCMinutes();
         
         // Format EST date as YYYY-MM-DD
-        const formattedDate = `${estYearAdjusted}-${String(estMonthAdjusted + 1).padStart(2, '0')}-${String(estDayAdjusted).padStart(2, '0')}`;
+        const formattedDate = `${estYear}-${String(estMonth + 1).padStart(2, '0')}-${String(estDay).padStart(2, '0')}`;
         
         // Use order's time if available, otherwise use EST time from processedAt
         let orderTime = selectedOrder.time || "";
         if (!orderTime) {
-          orderTime = `${String(estHour).padStart(2, '0')}:${String(utcMinute).padStart(2, '0')}`;
+          orderTime = `${String(estHour).padStart(2, '0')}:${String(estMinute).padStart(2, '0')}`;
         }
         
         setFormData({
