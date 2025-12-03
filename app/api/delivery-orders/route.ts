@@ -13,7 +13,7 @@ export async function POST(request: NextRequest) {
     await connectDB();
 
     const body = await request.json();
-    const { userId, screenshot, appName, ocrText } = body;
+    const { userId, screenshot, appName, ocrText, lat, lon, alt, address } = body;
 
     // Validate required fields
     if (!userId) {
@@ -60,6 +60,10 @@ export async function POST(request: NextRequest) {
         rawResponse: processed.rawResponse,
         metadata: processed.metadata,
         processedAt: processedAtDate,
+        ...(lat !== undefined && lat !== null && { userLatitude: lat }),
+        ...(lon !== undefined && lon !== null && { userLongitude: lon }),
+        ...(alt !== undefined && alt !== null && { userAltitude: alt }),
+        ...(address !== undefined && address !== null && { userAddress: address }),
       });
 
       // Attempt auto-linking to matching transaction
