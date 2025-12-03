@@ -9,7 +9,7 @@ import {
   refreshAccessToken,
 } from "@/lib/tesla-api";
 import { decryptToken, encryptToken } from "@/lib/tesla-encryption";
-import { formatDateAsUTC, parseDateOnlyAsUTC } from "@/lib/date-utils";
+import { formatDateAsUTC, parseDateOnlyAsEST, getCurrentESTAsUTC } from "@/lib/date-utils";
 import UserSettings from "@/lib/models/UserSettings";
 
 export const dynamic = 'force-dynamic';
@@ -119,14 +119,14 @@ async function syncUserTesla(connection: any): Promise<SyncResult> {
 
     if (shouldCreateEntry) {
 
-      // Create mileage entry with today's date
-      const today = new Date();
-      const todayUTC = parseDateOnlyAsUTC(formatDateAsUTC(today));
+      // Create mileage entry with today's date (using EST timezone to match transaction logs)
+      const { estDateString } = getCurrentESTAsUTC();
+      const todayEST = parseDateOnlyAsEST(estDateString);
 
       await Mileage.create({
         userId: connection.userId,
         odometer: odometer,
-        date: todayUTC,
+        date: todayEST,
         classification: "work", // Default to work, user can change later
         carId: carId,
         notes: `Synced from Tesla (${connection.vehicleName})`,
