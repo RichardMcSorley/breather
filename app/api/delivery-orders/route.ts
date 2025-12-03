@@ -13,7 +13,7 @@ export async function POST(request: NextRequest) {
     await connectDB();
 
     const body = await request.json();
-    const { userId, screenshot, appName } = body;
+    const { userId, screenshot, appName, ocrText } = body;
 
     // Validate required fields
     if (!userId) {
@@ -39,7 +39,7 @@ export async function POST(request: NextRequest) {
 
     // Process screenshot immediately with Moondream
     try {
-      const processed = await processOrderScreenshot(screenshot);
+      const processed = await processOrderScreenshot(screenshot, ocrText);
 
       // Calculate miles to money ratio
       const milesToMoneyRatio = processed.money / processed.miles;

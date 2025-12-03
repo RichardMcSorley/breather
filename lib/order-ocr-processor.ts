@@ -87,14 +87,19 @@ function parseYamlResponse(rawText: string): { order: ParsedOrder | null; error:
 
 async function requestYamlOrder(
   imageBase64: string,
-  maxAttempts: number = 3
+  maxAttempts: number = 3,
+  ocrText?: string
 ): Promise<{ order: ParsedOrder; rawResponse: string }> {
   if (!MOONDREAM_API_KEY) {
     throw new Error("MOONDREAM_API_KEY environment variable is not set");
   }
 
   let lastError: string | null = null;
-  let currentPrompt = YAML_PROMPT;
+  let basePrompt = YAML_PROMPT;
+  if (ocrText) {
+    basePrompt = `${YAML_PROMPT}\n\nEXTRACTED TEXT:\n${ocrText}`;
+  }
+  let currentPrompt = basePrompt;
 
   // Ensure the image is in data URL format
   let imageUrl = imageBase64;
@@ -105,7 +110,10 @@ async function requestYamlOrder(
 
   for (let attempt = 0; attempt < maxAttempts; attempt++) {
     if (attempt > 0) {
-      currentPrompt = `${YAML_PROMPT}\n\nThe previous response was invalid because ${lastError || "it could not be parsed"}. Please return valid YAML with exactly "Miles" (number), "Money" (number), "Restaurant/Pickup Name" (string), and "Time" (string) fields.`;
+      const retryPrompt = `${YAML_PROMPT}\n\nThe previous response was invalid because ${lastError || "it could not be parsed"}. Please return valid YAML with exactly "Miles" (number), "Money" (number), "Restaurant/Pickup Name" (string), and "Time" (string) fields.`;
+      currentPrompt = ocrText ? `${retryPrompt}\n\nEXTRACTED TEXT:\n${ocrText}` : retryPrompt;
+    } else {
+      currentPrompt = basePrompt;
     }
 
     try {
@@ -146,14 +154,19 @@ const JSON_METADATA_PROMPT = `Extract all text visible in this screenshot and re
 
 async function extractJsonMetadata(
   imageBase64: string,
-  maxAttempts: number = 3
+  maxAttempts: number = 3,
+  ocrText?: string
 ): Promise<Record<string, any>> {
   if (!MOONDREAM_API_KEY) {
     throw new Error("MOONDREAM_API_KEY environment variable is not set");
   }
 
   let lastError: string | null = null;
-  let currentPrompt = JSON_METADATA_PROMPT;
+  let basePrompt = JSON_METADATA_PROMPT;
+  if (ocrText) {
+    basePrompt = `${JSON_METADATA_PROMPT}\n\nEXTRACTED TEXT:\n${ocrText}`;
+  }
+  let currentPrompt = basePrompt;
 
   // Ensure the image is in data URL format
   let imageUrl = imageBase64;
@@ -164,7 +177,10 @@ async function extractJsonMetadata(
 
   for (let attempt = 0; attempt < maxAttempts; attempt++) {
     if (attempt > 0) {
-      currentPrompt = `${JSON_METADATA_PROMPT}\n\nThe previous response was invalid because ${lastError || "it could not be parsed"}. Please return valid JSON only, no markdown code blocks or additional text.`;
+      const retryPrompt = `${JSON_METADATA_PROMPT}\n\nThe previous response was invalid because ${lastError || "it could not be parsed"}. Please return valid JSON only, no markdown code blocks or additional text.`;
+      currentPrompt = ocrText ? `${retryPrompt}\n\nEXTRACTED TEXT:\n${ocrText}` : retryPrompt;
+    } else {
+      currentPrompt = basePrompt;
     }
 
     try {
@@ -217,7 +233,10 @@ async function extractJsonMetadata(
   return {};
 }
 
-export async function processOrderScreenshot(screenshot: string): Promise<{
+export async function processOrderScreenshot(
+  screenshot: string,
+  ocrText?: string
+): Promise<{
   miles: number;
   money: number;
   restaurantName: string;
@@ -230,8 +249,8 @@ export async function processOrderScreenshot(screenshot: string): Promise<{
 
   // Call both YAML extraction (existing) and JSON metadata extraction (new)
   const [yamlResult, metadata] = await Promise.all([
-    requestYamlOrder(screenshot),
-    extractJsonMetadata(screenshot).catch((error) => {
+    requestYamlOrder(screenshot, 3, ocrText),
+    extractJsonMetadata(screenshot, 3, ocrText).catch((error) => {
       console.error("Error extracting JSON metadata:", error);
       return {};
     }),
