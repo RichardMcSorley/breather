@@ -4,7 +4,7 @@ import { authOptions } from "../../auth/[...nextauth]/config";
 import connectDB from "@/lib/mongodb";
 import Mileage from "@/lib/models/Mileage";
 import { handleApiError } from "@/lib/api-error-handler";
-import { parseDateOnlyAsUTC, formatDateAsUTC } from "@/lib/date-utils";
+import { parseDateOnlyAsUTC, parseDateOnlyAsEST, formatDateAsUTC } from "@/lib/date-utils";
 import { isValidObjectId, parseFloatSafe, isValidEnum, MILEAGE_CLASSIFICATIONS } from "@/lib/validation";
 import { MileageResponse } from "@/lib/types";
 
@@ -91,11 +91,12 @@ export async function PUT(
       parsedOdometer = parsed;
     }
 
-    // Parse date as UTC date
+    // Parse date as EST date and convert to UTC
+    // This matches the timezone logic used for transaction logs
     let parsedDate: Date | undefined;
     if (date) {
       try {
-        parsedDate = parseDateOnlyAsUTC(date);
+        parsedDate = parseDateOnlyAsEST(date);
       } catch (error) {
         return NextResponse.json({ error: "Invalid date format" }, { status: 400 });
       }

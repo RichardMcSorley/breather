@@ -4,7 +4,7 @@ import { authOptions } from "../auth/[...nextauth]/config";
 import connectDB from "@/lib/mongodb";
 import Mileage from "@/lib/models/Mileage";
 import { handleApiError } from "@/lib/api-error-handler";
-import { parseDateOnlyAsUTC, formatDateAsUTC } from "@/lib/date-utils";
+import { parseDateOnlyAsUTC, parseDateOnlyAsEST, parseESTAsUTC, formatDateAsUTC } from "@/lib/date-utils";
 import { parseFloatSafe, validatePagination, isValidEnum, MILEAGE_CLASSIFICATIONS } from "@/lib/validation";
 import { MileageQuery, FormattedMileageEntry, MileageListResponse } from "@/lib/types";
 
@@ -39,11 +39,15 @@ export async function GET(request: NextRequest) {
 
     if (startDate || endDate) {
       query.date = {};
-      if (startDate) query.date.$gte = parseDateOnlyAsUTC(startDate);
+      if (startDate) {
+        // Parse start date as EST and convert to UTC (matches storage logic)
+        query.date.$gte = parseDateOnlyAsEST(startDate);
+      }
       if (endDate) {
-        // For end date, include the entire day (end of day in UTC)
-        const endDateUTC = parseDateOnlyAsUTC(endDate);
-        endDateUTC.setUTCHours(23, 59, 59, 999);
+        // Parse end date as EST at 23:59 and convert to UTC (end of EST day)
+        // This ensures we include all entries for the EST day
+        const endDateUTC = parseESTAsUTC(endDate, "23:59");
+        endDateUTC.setUTCSeconds(59, 999);
         query.date.$lte = endDateUTC;
       }
     }
@@ -107,11 +111,12 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Invalid classification value" }, { status: 400 });
     }
 
-    // Parse date as UTC date
-    // date is in YYYY-MM-DD format
+    // Parse date as EST date and convert to UTC
+    // This matches the timezone logic used for transaction logs
+    // date is in YYYY-MM-DD format, treated as EST date
     let parsedDate: Date;
     try {
-      parsedDate = parseDateOnlyAsUTC(date);
+      parsedDate = parseDateOnlyAsEST(date);
     } catch (error) {
       return NextResponse.json({ error: "Invalid date format" }, { status: 400 });
     }
