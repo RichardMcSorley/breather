@@ -86,7 +86,7 @@ export async function POST(request: NextRequest) {
         restaurantName: deliveryOrder.restaurantName,
         time: deliveryOrder.time,
         appName: deliveryOrder.appName,
-        displayText: `${deliveryOrder.miles} miles for ${deliveryOrder.money} at ${deliveryOrder.restaurantName} (${deliveryOrder.milesToMoneyRatio.toFixed(2)}/mi)`,
+        displayText: `$${deliveryOrder.milesToMoneyRatio.toFixed(2)}/mi - ${deliveryOrder.miles} mi for $${deliveryOrder.money} at ${deliveryOrder.restaurantName}`,
         editLink: `https://breather-chi.vercel.app/delivery-orders?orderId=${deliveryOrder._id.toString()}`,
       };
 
