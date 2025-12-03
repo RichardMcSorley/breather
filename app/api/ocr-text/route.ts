@@ -10,6 +10,7 @@ import { geocodeAddress } from "@/lib/geocode-helper";
 import { isSameAddress } from "@/lib/ocr-analytics";
 import { randomBytes } from "crypto";
 import { attemptAutoLinkCustomerToTransaction } from "@/lib/auto-link-helper";
+import { getCurrentESTAsUTC } from "@/lib/date-utils";
 
 export async function POST(request: NextRequest) {
   try {
@@ -56,6 +57,9 @@ export async function POST(request: NextRequest) {
         geocodeData = await geocodeAddress(processed.customerAddress);
       }
 
+      // Get current EST time and convert to UTC (matches transaction log timezone logic)
+      const { date: processedAtDate } = getCurrentESTAsUTC();
+
       // Save to ocrexports collection
       const exportEntry = await OcrExport.create({
         entryId,
@@ -68,7 +72,7 @@ export async function POST(request: NextRequest) {
         lat: geocodeData?.lat,
         lon: geocodeData?.lon,
         geocodeDisplayName: geocodeData?.displayName,
-        processedAt: new Date(),
+        processedAt: processedAtDate,
       });
 
       // Attempt auto-linking to matching transaction

@@ -59,6 +59,20 @@ export function parseDateOnlyAsUTC(date: string): Date {
 }
 
 /**
+ * Parses a date string (YYYY-MM-DD) as EST at midnight and converts to UTC
+ * This ensures mileage entries follow the same timezone logic as transaction logs
+ * EST is UTC-5, so midnight EST becomes 5am UTC the same day
+ */
+export function parseDateOnlyAsEST(date: string): Date {
+  if (!date) {
+    throw new Error("Missing date");
+  }
+  
+  // Use parseESTAsUTC with midnight time to convert EST date to UTC
+  return parseESTAsUTC(date, "00:00");
+}
+
+/**
  * Converts EST date/time to UTC
  * EST is UTC-5, EDT (daylight saving) is UTC-4
  * For simplicity, we'll use UTC-5 (EST) - adjust if EDT is needed

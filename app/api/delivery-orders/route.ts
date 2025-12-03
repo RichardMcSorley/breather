@@ -6,6 +6,7 @@ import { handleApiError } from "@/lib/api-error-handler";
 import { processOrderScreenshot } from "@/lib/order-ocr-processor";
 import { randomBytes } from "crypto";
 import { attemptAutoLinkOrderToTransaction } from "@/lib/auto-link-helper";
+import { getCurrentESTAsUTC } from "@/lib/date-utils";
 
 export async function POST(request: NextRequest) {
   try {
@@ -43,6 +44,9 @@ export async function POST(request: NextRequest) {
       // Calculate miles to money ratio
       const milesToMoneyRatio = processed.money / processed.miles;
 
+      // Get current EST time and convert to UTC (matches transaction log timezone logic)
+      const { date: processedAtDate } = getCurrentESTAsUTC();
+
       // Save to delivery orders collection
       const deliveryOrder = await DeliveryOrder.create({
         entryId,
@@ -55,7 +59,7 @@ export async function POST(request: NextRequest) {
         time: "", // Time not extracted from screenshot, can be updated later
         rawResponse: processed.rawResponse,
         metadata: processed.metadata,
-        processedAt: new Date(),
+        processedAt: processedAtDate,
       });
 
       // Attempt auto-linking to matching transaction
