@@ -17,7 +17,7 @@ export async function POST(request: NextRequest) {
     await connectDB();
 
     const body = await request.json();
-    const { userId, screenshot, appName } = body;
+    const { userId, screenshot, appName, ocrText } = body;
 
     // Validate required fields
     if (!userId) {
@@ -36,7 +36,7 @@ export async function POST(request: NextRequest) {
 
     // Process screenshot immediately with Moondream
     try {
-      const processed = await processOcrScreenshot(screenshot);
+      const processed = await processOcrScreenshot(screenshot, ocrText);
 
       // Check for existing geocode data with exact address match
       let geocodeData: { lat: number; lon: number; displayName?: string } | null = null;
