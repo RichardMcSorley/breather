@@ -13,6 +13,7 @@ import EditCustomerEntriesModal from "./EditCustomerEntriesModal";
 import EditDeliveryOrderModal from "./EditDeliveryOrderModal";
 import TransactionLinkedInfo from "./TransactionLinkedInfo";
 import { useTransaction, useSettings, useCreateTransaction, useUpdateTransaction, useUpdateSettings, queryKeys } from "@/hooks/useQueries";
+import { getCurrentESTAsUTC } from "@/lib/date-utils";
 
 interface DeliveryOrder {
   id: string;
@@ -89,14 +90,19 @@ export default function AddTransactionModal({
   
   const [transactionType, setTransactionType] = useState<"income" | "expense">(initialType || type);
   const [selectedOrderId, setSelectedOrderId] = useState<string>("");
-  const [formData, setFormData] = useState({
-    amount: initialAmount?.toString() || "",
-    date: formatLocalDate(new Date()),
-    time: new Date().toTimeString().slice(0, 5),
-    notes: initialNotes || "",
-    tag: "",
-    isBill: initialIsBill || false,
-    dueDate: "",
+  // Initialize with EST date/time to match API expectations
+  // Use function initializer to call getCurrentESTAsUTC only once on mount
+  const [formData, setFormData] = useState(() => {
+    const estNow = getCurrentESTAsUTC();
+    return {
+      amount: initialAmount?.toString() || "",
+      date: estNow.estDateString,
+      time: estNow.timeString,
+      notes: initialNotes || "",
+      tag: "",
+      isBill: initialIsBill || false,
+      dueDate: "",
+    };
   });
   const [customTag, setCustomTag] = useState("");
   const [dataLoaded, setDataLoaded] = useState(false);
@@ -168,12 +174,12 @@ export default function AddTransactionModal({
         setCustomTag("");
         setDataLoaded(true);
       } else {
-        // When opening for new transaction, ensure date is set to today
-        const now = new Date();
+        // When opening for new transaction, ensure date is set to today in EST
+        const estNow = getCurrentESTAsUTC();
         setFormData({
           amount: initialAmount?.toString() || "",
-          date: formatLocalDate(now),
-          time: now.toTimeString().slice(0, 5),
+          date: estNow.estDateString,
+          time: estNow.timeString,
           notes: initialNotes || "",
           tag: "",
           isBill: initialIsBill || false,
@@ -187,12 +193,12 @@ export default function AddTransactionModal({
 
   useEffect(() => {
     if (!isOpen) {
-      // Reset form when modal closes
-      const now = new Date();
+      // Reset form when modal closes - use EST date/time
+      const estNow = getCurrentESTAsUTC();
       setFormData({
         amount: initialAmount?.toString() || "",
-        date: formatLocalDate(now),
-        time: now.toTimeString().slice(0, 5),
+        date: estNow.estDateString,
+        time: estNow.timeString,
         notes: initialNotes || "",
         tag: "",
         isBill: initialIsBill || false,
