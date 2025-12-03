@@ -25,6 +25,9 @@ interface DeliveryOrder {
   time: string;
   screenshot?: string;
   metadata?: Record<string, any>;
+  userLatitude?: number | null;
+  userLongitude?: number | null;
+  userAltitude?: number | null;
   processedAt: string;
   createdAt: string;
   linkedTransactions?: LinkedTransaction[];
@@ -192,7 +195,13 @@ export default function EditDeliveryOrderModal({
             </div>
           )}
 
-          <MetadataViewer metadata={order.metadata} title="Extracted Metadata" />
+          <MetadataViewer 
+            metadata={order.metadata} 
+            title="Extracted Metadata"
+            userLatitude={order.userLatitude}
+            userLongitude={order.userLongitude}
+            userAltitude={order.userAltitude}
+          />
 
           <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">

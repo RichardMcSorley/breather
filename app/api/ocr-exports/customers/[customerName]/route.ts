@@ -185,6 +185,9 @@ export async function GET(
         lat: entry.lat,
         lon: entry.lon,
         geocodeDisplayName: entry.geocodeDisplayName,
+        userLatitude: entry.userLatitude,
+        userLongitude: entry.userLongitude,
+        userAltitude: entry.userAltitude,
       })),
       linkedTransactions: linkedTransactions.map((t) => ({
         _id: t._id.toString(),
