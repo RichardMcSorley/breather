@@ -7,7 +7,7 @@ import Transaction from "@/lib/models/Transaction";
 import DeliveryOrder from "@/lib/models/DeliveryOrder";
 import OcrExport from "@/lib/models/OcrExport";
 import { handleApiError } from "@/lib/api-error-handler";
-import { parseDateAsUTC, parseDateOnlyAsUTC, formatDateAsUTC, parseESTAsUTC } from "@/lib/date-utils";
+import { parseDateAsUTC, parseDateOnlyAsUTC, formatDateAsUTC } from "@/lib/date-utils";
 import { parseFloatSafe, validatePagination, isValidEnum, TRANSACTION_TYPES } from "@/lib/validation";
 import { TransactionQuery, FormattedTransaction, TransactionListResponse } from "@/lib/types";
 import { attemptAutoLinkTransactionToCustomer, attemptAutoLinkTransactionToOrder } from "@/lib/auto-link-helper";
@@ -161,11 +161,11 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Invalid transaction type" }, { status: 400 });
     }
 
-    // Use EST parsing (like quick transaction API) to ensure consistent date/time handling
-    // This treats the incoming date/time as EST and converts to UTC for storage
+    // Parse date/time as UTC to match edit transaction behavior
+    // This treats the incoming date/time as UTC for consistent storage
     let transactionDate: Date;
     try {
-      transactionDate = parseESTAsUTC(date, time);
+      transactionDate = parseDateAsUTC(date, time);
     } catch (error) {
       return NextResponse.json({ error: "Invalid date or time format" }, { status: 400 });
     }
