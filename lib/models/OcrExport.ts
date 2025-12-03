@@ -7,6 +7,10 @@ export interface IOcrExport extends Document {
   customerName: string;
   customerAddress: string;
   screenshot?: string;
+  userLatitude?: number;
+  userLongitude?: number;
+  userAltitude?: number;
+  userAddress?: string;
   rawResponse?: string;
   metadata?: Record<string, any>;
   lat?: number;
@@ -42,6 +46,18 @@ const OcrExportSchema: Schema = new Schema(
       required: true,
     },
     screenshot: {
+      type: String,
+    },
+    userLatitude: {
+      type: Number,
+    },
+    userLongitude: {
+      type: Number,
+    },
+    userAltitude: {
+      type: Number,
+    },
+    userAddress: {
       type: String,
     },
     rawResponse: {

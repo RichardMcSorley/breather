@@ -10,6 +10,10 @@ export interface IDeliveryOrder extends Document {
   restaurantName: string;
   time?: string;
   screenshot?: string;
+  userLatitude?: number;
+  userLongitude?: number;
+  userAltitude?: number;
+  userAddress?: string;
   rawResponse?: string;
   metadata?: Record<string, any>;
   linkedTransactionIds?: mongoose.Types.ObjectId[];
@@ -55,6 +59,18 @@ const DeliveryOrderSchema: Schema = new Schema(
       required: false,
     },
     screenshot: {
+      type: String,
+    },
+    userLatitude: {
+      type: Number,
+    },
+    userLongitude: {
+      type: Number,
+    },
+    userAltitude: {
+      type: Number,
+    },
+    userAddress: {
       type: String,
     },
     rawResponse: {

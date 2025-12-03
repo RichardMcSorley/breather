@@ -17,7 +17,7 @@ export async function POST(request: NextRequest) {
     await connectDB();
 
     const body = await request.json();
-    const { userId, screenshot, appName, ocrText } = body;
+    const { userId, screenshot, appName, ocrText, lat: userLat, lon: userLon, alt: userAlt, address: userAddr } = body;
 
     // Validate required fields
     if (!userId) {
@@ -73,6 +73,10 @@ export async function POST(request: NextRequest) {
         lon: geocodeData?.lon,
         geocodeDisplayName: geocodeData?.displayName,
         processedAt: processedAtDate,
+        ...(userLat !== undefined && userLat !== null && { userLatitude: userLat }),
+        ...(userLon !== undefined && userLon !== null && { userLongitude: userLon }),
+        ...(userAlt !== undefined && userAlt !== null && { userAltitude: userAlt }),
+        ...(userAddr !== undefined && userAddr !== null && { userAddress: userAddr }),
       });
 
       // Attempt auto-linking to matching transaction
