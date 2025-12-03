@@ -5,12 +5,26 @@ import { useState } from "react";
 interface MetadataViewerProps {
   metadata: Record<string, any> | null | undefined;
   title?: string;
+  userLatitude?: number | null;
+  userLongitude?: number | null;
+  userAltitude?: number | null;
 }
 
-export default function MetadataViewer({ metadata, title = "Metadata" }: MetadataViewerProps) {
+export default function MetadataViewer({ 
+  metadata, 
+  title = "Metadata",
+  userLatitude,
+  userLongitude,
+  userAltitude,
+}: MetadataViewerProps) {
   const [isExpanded, setIsExpanded] = useState(false);
 
-  if (!metadata || typeof metadata !== "object" || Object.keys(metadata).length === 0) {
+  const hasMetadata = metadata && typeof metadata === "object" && Object.keys(metadata).length > 0;
+  const hasUserLocation = userLatitude !== undefined && userLatitude !== null || 
+                          userLongitude !== undefined && userLongitude !== null || 
+                          userAltitude !== undefined && userAltitude !== null;
+
+  if (!hasMetadata && !hasUserLocation) {
     return null;
   }
 
@@ -27,9 +41,32 @@ export default function MetadataViewer({ metadata, title = "Metadata" }: Metadat
       </button>
       {isExpanded && (
         <div className="rounded-lg border border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-900 overflow-hidden">
-          <pre className="p-3 text-xs overflow-x-auto max-h-[400px] overflow-y-auto text-gray-800 dark:text-gray-200">
-            {JSON.stringify(metadata, null, 2)}
-          </pre>
+          <div className="p-3 text-xs overflow-x-auto max-h-[400px] overflow-y-auto text-gray-800 dark:text-gray-200">
+            {hasUserLocation && (
+              <div className="mb-3 space-y-1">
+                {userLatitude !== undefined && userLatitude !== null && (
+                  <div>
+                    <span className="font-medium">userLatitude:</span> {userLatitude}
+                  </div>
+                )}
+                {userLongitude !== undefined && userLongitude !== null && (
+                  <div>
+                    <span className="font-medium">userLongitude:</span> {userLongitude}
+                  </div>
+                )}
+                {userAltitude !== undefined && userAltitude !== null && (
+                  <div>
+                    <span className="font-medium">userAltitude:</span> {userAltitude}
+                  </div>
+                )}
+              </div>
+            )}
+            {hasMetadata && (
+              <pre className={hasUserLocation ? "mt-3 pt-3 border-t border-gray-300 dark:border-gray-600" : ""}>
+                {JSON.stringify(metadata, null, 2)}
+              </pre>
+            )}
+          </div>
         </div>
       )}
     </div>

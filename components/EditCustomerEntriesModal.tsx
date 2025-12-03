@@ -18,6 +18,9 @@ interface Visit {
   lat?: number;
   lon?: number;
   geocodeDisplayName?: string;
+  userLatitude?: number | null;
+  userLongitude?: number | null;
+  userAltitude?: number | null;
 }
 
 interface CustomerDetails {
@@ -315,7 +318,13 @@ export default function EditCustomerEntriesModal({
                         </div>
                       </div>
                     )}
-                    <MetadataViewer metadata={visit.metadata} title="Extracted Metadata" />
+                    <MetadataViewer 
+                      metadata={visit.metadata} 
+                      title="Extracted Metadata"
+                      userLatitude={visit.userLatitude}
+                      userLongitude={visit.userLongitude}
+                      userAltitude={visit.userAltitude}
+                    />
                     <div className="flex gap-2 mt-3">
                       <button
                         onClick={() => startEditing(visit)}
