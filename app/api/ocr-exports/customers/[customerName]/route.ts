@@ -188,6 +188,7 @@ export async function GET(
         userLatitude: entry.userLatitude,
         userLongitude: entry.userLongitude,
         userAltitude: entry.userAltitude,
+        userAddress: entry.userAddress,
       })),
       linkedTransactions: linkedTransactions.map((t) => ({
         _id: t._id.toString(),

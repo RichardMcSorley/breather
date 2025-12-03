@@ -204,6 +204,7 @@ export async function GET(request: NextRequest) {
         userLatitude: order.userLatitude,
         userLongitude: order.userLongitude,
         userAltitude: order.userAltitude,
+        userAddress: order.userAddress,
         processedAt: order.processedAt.toISOString(),
         createdAt: order.createdAt.toISOString(),
         linkedTransactions: transactionsByOrderId.get(order._id.toString()) || [],

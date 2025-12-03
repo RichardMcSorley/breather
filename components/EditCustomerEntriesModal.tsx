@@ -21,6 +21,7 @@ interface Visit {
   userLatitude?: number | null;
   userLongitude?: number | null;
   userAltitude?: number | null;
+  userAddress?: string | null;
 }
 
 interface CustomerDetails {
@@ -324,6 +325,7 @@ export default function EditCustomerEntriesModal({
                       userLatitude={visit.userLatitude}
                       userLongitude={visit.userLongitude}
                       userAltitude={visit.userAltitude}
+                      userAddress={visit.userAddress}
                     />
                     <div className="flex gap-2 mt-3">
                       <button

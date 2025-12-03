@@ -28,6 +28,7 @@ interface DeliveryOrder {
   userLatitude?: number | null;
   userLongitude?: number | null;
   userAltitude?: number | null;
+  userAddress?: string | null;
   processedAt: string;
   createdAt: string;
   linkedTransactions?: LinkedTransaction[];
@@ -201,6 +202,7 @@ export default function EditDeliveryOrderModal({
             userLatitude={order.userLatitude}
             userLongitude={order.userLongitude}
             userAltitude={order.userAltitude}
+            userAddress={order.userAddress}
           />
 
           <div>
