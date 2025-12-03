@@ -8,6 +8,7 @@ interface MetadataViewerProps {
   userLatitude?: number | null;
   userLongitude?: number | null;
   userAltitude?: number | null;
+  userAddress?: string | null;
 }
 
 export default function MetadataViewer({ 
@@ -16,13 +17,15 @@ export default function MetadataViewer({
   userLatitude,
   userLongitude,
   userAltitude,
+  userAddress,
 }: MetadataViewerProps) {
   const [isExpanded, setIsExpanded] = useState(false);
 
   const hasMetadata = metadata && typeof metadata === "object" && Object.keys(metadata).length > 0;
   const hasUserLocation = userLatitude !== undefined && userLatitude !== null || 
                           userLongitude !== undefined && userLongitude !== null || 
-                          userAltitude !== undefined && userAltitude !== null;
+                          userAltitude !== undefined && userAltitude !== null ||
+                          userAddress !== undefined && userAddress !== null;
 
   if (!hasMetadata && !hasUserLocation) {
     return null;
@@ -57,6 +60,11 @@ export default function MetadataViewer({
                 {userAltitude !== undefined && userAltitude !== null && (
                   <div>
                     <span className="font-medium">userAltitude:</span> {userAltitude}
+                  </div>
+                )}
+                {userAddress !== undefined && userAddress !== null && (
+                  <div>
+                    <span className="font-medium">userAddress:</span> {userAddress}
                   </div>
                 )}
               </div>
