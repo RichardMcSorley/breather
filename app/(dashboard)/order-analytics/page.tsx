@@ -217,6 +217,28 @@ export default function OrderAnalyticsPage() {
     }).format(amount);
   };
 
+  /**
+   * Parses a date string (YYYY-MM-DD) and time string (HH:MM) as LOCAL time.
+   * The time string represents the user's local time, not UTC.
+   * This matches the timezone logic used in the logs screen for transactions.
+   */
+  const buildLocalDateFromParts = (dateString: string, timeString?: string) => {
+    if (!dateString) return new Date();
+    const baseDate = dateString.split("T")[0] || dateString;
+    const [year, month, day] = baseDate.split("-").map(Number);
+    if ([year, month, day].some((value) => Number.isNaN(value))) {
+      const fallback = new Date(dateString);
+      return Number.isNaN(fallback.getTime()) ? new Date() : fallback;
+    }
+    const [hour, minute] = (timeString?.split(":").map(Number) ?? [0, 0]).map((value) =>
+      Number.isNaN(value) ? 0 : value
+    );
+    
+    // Parse as LOCAL date/time - the time string is already in the user's local timezone
+    // Create a local Date object directly without UTC conversion
+    return new Date(year, month - 1, day, hour, minute);
+  };
+
   const formatPercent = (value: number) => {
     return `${value.toFixed(1)}%`;
   };
@@ -527,9 +549,8 @@ export default function OrderAnalyticsPage() {
             {analytics.bestOrdersByDay && analytics.bestOrdersByDay.length > 0 ? (
               <div className="flex gap-2 border-b border-gray-200 dark:border-gray-700 mb-4 overflow-x-auto">
                 {analytics.bestOrdersByDay.map((dayData, index) => {
-                  // Parse date string (YYYY-MM-DD) directly to avoid timezone issues
-                  const [year, month, day] = dayData.date.split("-").map(Number);
-                  const date = new Date(year, month - 1, day); // Use local date components
+                  // Parse date string (YYYY-MM-DD) as LOCAL time to match logs screen timezone logic
+                  const date = buildLocalDateFromParts(dayData.date);
                   const isToday = index === 6; // Today is always the last index (rightmost)
                   const dateLabel = isToday
                     ? "Today"
