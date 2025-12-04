@@ -177,6 +177,9 @@ export default function OrderAnalyticsPage() {
       if (selectedDayOfWeek !== null) {
         params.append("dayOfWeek", selectedDayOfWeek.toString());
       }
+      // Detect user's timezone and send to API
+      const userTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+      params.append("timezone", userTimezone);
       const response = await fetch(`/api/delivery-orders/analytics?${params.toString()}`);
       if (!response.ok) {
         throw new Error("Failed to fetch analytics");
