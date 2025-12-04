@@ -416,7 +416,7 @@ export async function GET(request: NextRequest) {
       }
     });
 
-    const hotZones = Array.from(locationMap.values())
+    const allZones = Array.from(locationMap.values())
       .map((loc) => ({
         latitude: loc.latitude,
         longitude: loc.longitude,
@@ -424,8 +424,16 @@ export async function GET(request: NextRequest) {
         acceptedCount: loc.acceptedCount,
         earnings: loc.earnings,
         earningsPerMile: loc.totalMiles > 0 ? loc.earnings / loc.totalMiles : 0,
-      }))
+      }));
+
+    // Top earnings zones (sorted by earnings)
+    const topEarningsZones = [...allZones]
       .sort((a, b) => b.earnings - a.earnings)
+      .slice(0, 10);
+
+    // Top volume zones (sorted by totalOffers)
+    const topVolumeZones = [...allZones]
+      .sort((a, b) => b.totalOffers - a.totalOffers)
       .slice(0, 10);
 
     // Calculate overall route efficiency (earnings per mile)
@@ -744,7 +752,8 @@ export async function GET(request: NextRequest) {
         byTime: {},
         byRatioRange,
         locationInsights: {
-          hotZones,
+          topEarningsZones,
+          topVolumeZones,
           routeEfficiency: Math.round(routeEfficiency * 100) / 100,
         },
       },

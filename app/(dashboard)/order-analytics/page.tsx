@@ -102,7 +102,15 @@ interface AnalyticsData {
   }>;
   byTime: {};
   locationInsights?: {
-    hotZones: Array<{
+    topEarningsZones: Array<{
+      latitude: number;
+      longitude: number;
+      totalOffers: number;
+      acceptedCount: number;
+      earnings: number;
+      earningsPerMile: number;
+    }>;
+    topVolumeZones: Array<{
       latitude: number;
       longitude: number;
       totalOffers: number;
@@ -126,6 +134,7 @@ export default function OrderAnalyticsPage() {
   const [showWorstCaseOrders, setShowWorstCaseOrders] = useState<boolean>(false);
   const [viewingOrderId, setViewingOrderId] = useState<string | null>(null);
   const [selectedZone, setSelectedZone] = useState<{ latitude: number; longitude: number; index: number } | null>(null);
+  const [locationTab, setLocationTab] = useState<"earnings" | "volume">("earnings");
   const filterRef = useRef<HTMLDivElement>(null);
 
   const userId = session?.user?.id;
@@ -679,23 +688,37 @@ export default function OrderAnalyticsPage() {
       )}
 
       {/* Location Insights */}
-      {analytics.locationInsights && analytics.locationInsights.hotZones.length > 0 && (
+      {analytics.locationInsights && 
+       (analytics.locationInsights.topEarningsZones.length > 0 || analytics.locationInsights.topVolumeZones.length > 0) && (
         <Card className="p-6 mb-6">
           <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
             Location Insights
           </h3>
           <div className="mb-4">
-            <div className="text-sm text-gray-700 dark:text-gray-300">
-              Route Efficiency:{" "}
-              <span className="font-semibold text-green-600 dark:text-green-400">
-                {formatCurrency(analytics.locationInsights.routeEfficiency)}/mi
-              </span>
+            <div className="flex gap-2 border-b border-gray-200 dark:border-gray-700">
+              <button
+                onClick={() => setLocationTab("earnings")}
+                className={`px-4 py-2 text-sm font-medium transition-colors border-b-2 ${
+                  locationTab === "earnings"
+                    ? "border-blue-500 text-blue-600 dark:text-blue-400"
+                    : "border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300"
+                }`}
+              >
+                Top Earnings
+              </button>
+              <button
+                onClick={() => setLocationTab("volume")}
+                className={`px-4 py-2 text-sm font-medium transition-colors border-b-2 ${
+                  locationTab === "volume"
+                    ? "border-blue-500 text-blue-600 dark:text-blue-400"
+                    : "border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300"
+                }`}
+              >
+                Highest Volume
+              </button>
             </div>
           </div>
           <div>
-            <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
-              Hot Zones (Top Earning Locations)
-            </h4>
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead className="bg-gray-50 dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700">
@@ -718,7 +741,10 @@ export default function OrderAnalyticsPage() {
                   </tr>
                 </thead>
                 <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
-                  {analytics.locationInsights.hotZones.map((zone, index) => (
+                  {(locationTab === "earnings" 
+                    ? analytics.locationInsights.topEarningsZones 
+                    : analytics.locationInsights.topVolumeZones
+                  ).map((zone, index) => (
                     <tr
                       key={`${zone.latitude}-${zone.longitude}`}
                       onClick={() => setSelectedZone({ latitude: zone.latitude, longitude: zone.longitude, index })}
