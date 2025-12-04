@@ -69,25 +69,25 @@ export default function ShareOrderModal({
 
     try {
       let nominatimUrl: string;
-      const zipCode = "41101"; // Hardcoded zip code for filtering
+      const location = "Ashland Kentucky 41101"; // City, state, and zip code for filtering
       
       // Use location-based search if we have coordinates
       if (userLatitude !== undefined && userLongitude !== undefined) {
-        // Search for restaurants near the user's location with zip code filter
+        // Search for restaurants near the user's location with location filter
         // Nominatim nearby search: search for restaurants within ~5km radius
         // Using lat/lon parameters centers the search on these coordinates
-        // Include zip code in search query to limit results to local area
+        // Include city, state, and zip code in search query to limit results to local area
         const searchQuery = restaurantName.trim() 
-          ? encodeURIComponent(`${restaurantName.trim()} ${zipCode}`)
-          : encodeURIComponent(`restaurant ${zipCode}`);
+          ? encodeURIComponent(`${restaurantName.trim()} ${location}`)
+          : encodeURIComponent(`restaurant ${location}`);
         nominatimUrl = `https://nominatim.openstreetmap.org/search?format=json&q=${searchQuery}&lat=${userLatitude}&lon=${userLongitude}&radius=5000&limit=20&addressdetails=1`;
       } else if (userAddress) {
-        // Fallback to address-based search with zip code
-        const searchQuery = encodeURIComponent(`${restaurantName.trim()} ${zipCode} ${userAddress}`);
+        // Fallback to address-based search with location
+        const searchQuery = encodeURIComponent(`${restaurantName.trim()} ${location} ${userAddress}`);
         nominatimUrl = `https://nominatim.openstreetmap.org/search?format=json&q=${searchQuery}&limit=20&addressdetails=1`;
       } else if (restaurantName.trim()) {
-        // Last resort: just search by restaurant name with zip code
-        const searchQuery = encodeURIComponent(`${restaurantName.trim()} ${zipCode}`);
+        // Last resort: just search by restaurant name with location
+        const searchQuery = encodeURIComponent(`${restaurantName.trim()} ${location}`);
         nominatimUrl = `https://nominatim.openstreetmap.org/search?format=json&q=${searchQuery}&limit=20&addressdetails=1`;
       } else {
         setSearchError("No location or restaurant name available");
@@ -115,7 +115,7 @@ export default function ShareOrderModal({
         return;
       }
 
-      // Filter for restaurant/amenity types (API should already filter by zip code)
+      // Filter for restaurant/amenity types (API should already filter by location)
       const restaurantTypes = ['restaurant', 'cafe', 'fast_food', 'food_court', 'bar', 'pub'];
       const filteredResults = data
         .filter((result: any) => {
@@ -132,7 +132,7 @@ export default function ShareOrderModal({
         .slice(0, 10); // Limit to 10 results
 
       if (filteredResults.length === 0) {
-        // If no restaurant-specific results, show all results (should already be filtered by zip code from API)
+        // If no restaurant-specific results, show all results (should already be filtered by location from API)
         setAddresses(data.slice(0, 10));
       } else {
         setAddresses(filteredResults);
