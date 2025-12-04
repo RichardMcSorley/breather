@@ -10,6 +10,7 @@ import EditCustomerEntriesModal from "@/components/EditCustomerEntriesModal";
 import EditDeliveryOrderModal from "@/components/EditDeliveryOrderModal";
 import LinkCustomerModal from "@/components/LinkCustomerModal";
 import LinkOrderModal from "@/components/LinkOrderModal";
+import ShareOrderModal from "@/components/ShareOrderModal";
 import { useTransactions, useDeleteTransaction, queryKeys } from "@/hooks/useQueries";
 import { useQueryClient } from "@tanstack/react-query";
 
@@ -95,6 +96,7 @@ export default function HistoryPage() {
   const [linkingOrderTransactionId, setLinkingOrderTransactionId] = useState<string | null>(null);
   const [showAddOrderModal, setShowAddOrderModal] = useState(false);
   const [selectedOrderForTransaction, setSelectedOrderForTransaction] = useState<SelectedDeliveryOrder | null>(null);
+  const [sharingOrder, setSharingOrder] = useState<{ restaurantName: string; orderDetails?: { miles?: number; money?: number; milesToMoneyRatio?: number; appName?: string } } | null>(null);
   
   // Reset to page 1 when filters change
   useEffect(() => {
@@ -160,25 +162,17 @@ export default function HistoryPage() {
     }
   };
 
-  const handleShareRestaurant = async (restaurantName: string) => {
-    if (navigator.share) {
-      try {
-        await navigator.share({
-          text: restaurantName,
-        });
-      } catch (err) {
-        // User cancelled or error occurred - silently fail
-        console.log("Share cancelled or failed:", err);
-      }
-    } else {
-      // Fallback: copy to clipboard
-      try {
-        await navigator.clipboard.writeText(restaurantName);
-        alert("Restaurant name copied to clipboard");
-      } catch (err) {
-        console.error("Failed to copy restaurant name:", err);
-      }
-    }
+  const handleShareRestaurant = (order: LinkedOrder) => {
+    const ratio = order.miles > 0 ? order.money / order.miles : undefined;
+    setSharingOrder({
+      restaurantName: order.restaurantName,
+      orderDetails: {
+        miles: order.miles,
+        money: order.money,
+        milesToMoneyRatio: ratio,
+        appName: order.appName,
+      },
+    });
   };
 
   // App name to color mapping
@@ -432,7 +426,7 @@ export default function HistoryPage() {
                                   <button
                                     onClick={(e) => {
                                       e.stopPropagation();
-                                      handleShareRestaurant(order.restaurantName);
+                                      handleShareRestaurant(order);
                                     }}
                                     className="p-1 text-purple-600 dark:text-purple-400 hover:text-purple-800 dark:hover:text-purple-300 min-w-[44px] min-h-[44px] flex items-center justify-center"
                                     title="Share Restaurant"
@@ -668,6 +662,13 @@ export default function HistoryPage() {
           queryClient.invalidateQueries({ queryKey: ["transactions"] });
           setLinkingOrderTransactionId(null);
         }}
+      />
+
+      <ShareOrderModal
+        isOpen={sharingOrder !== null}
+        onClose={() => setSharingOrder(null)}
+        restaurantName={sharingOrder?.restaurantName || ""}
+        orderDetails={sharingOrder?.orderDetails}
       />
     </Layout>
   );
