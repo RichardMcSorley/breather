@@ -212,26 +212,6 @@ export default function DeliveryOrdersList({
     }).format(amount);
   };
 
-  const handleShareRestaurant = async (restaurantName: string) => {
-    if (navigator.share) {
-      try {
-        await navigator.share({
-          text: restaurantName,
-        });
-      } catch (err) {
-        // User cancelled or error occurred - silently fail
-        console.log("Share cancelled or failed:", err);
-      }
-    } else {
-      // Fallback: copy to clipboard
-      try {
-        await navigator.clipboard.writeText(restaurantName);
-        alert("Restaurant name copied to clipboard");
-      } catch (err) {
-        console.error("Failed to copy restaurant name:", err);
-      }
-    }
-  };
 
   if (loading && orders.length === 0) {
     return (
@@ -445,20 +425,8 @@ export default function DeliveryOrdersList({
                       )}
                     </td>
                     <td className="px-4 py-3">
-                      <div className="flex items-center gap-2">
-                        <div className="text-sm font-medium text-gray-900 dark:text-white">
-                          {order.restaurantName}
-                        </div>
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleShareRestaurant(order.restaurantName);
-                          }}
-                          className="p-1 text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 min-w-[44px] min-h-[44px] flex items-center justify-center"
-                          title="Share Restaurant"
-                        >
-                          📤
-                        </button>
+                      <div className="text-sm font-medium text-gray-900 dark:text-white">
+                        {order.restaurantName}
                       </div>
                     </td>
                     <td className="px-4 py-3">

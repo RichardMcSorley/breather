@@ -160,6 +160,27 @@ export default function HistoryPage() {
     }
   };
 
+  const handleShareRestaurant = async (restaurantName: string) => {
+    if (navigator.share) {
+      try {
+        await navigator.share({
+          text: restaurantName,
+        });
+      } catch (err) {
+        // User cancelled or error occurred - silently fail
+        console.log("Share cancelled or failed:", err);
+      }
+    } else {
+      // Fallback: copy to clipboard
+      try {
+        await navigator.clipboard.writeText(restaurantName);
+        alert("Restaurant name copied to clipboard");
+      } catch (err) {
+        console.error("Failed to copy restaurant name:", err);
+      }
+    }
+  };
+
   // App name to color mapping
   const getAppTagColor = (appName: string) => {
     const appColors: Record<string, { bg: string; text: string }> = {
@@ -399,15 +420,26 @@ export default function HistoryPage() {
                           {isIncome && ((transaction.linkedOcrExports && transaction.linkedOcrExports.length > 0) || (transaction.linkedDeliveryOrders && transaction.linkedDeliveryOrders.length > 0)) && (
                             <div className="mt-2 flex flex-col sm:flex-row sm:items-center gap-2 flex-wrap">
                               {transaction.linkedDeliveryOrders?.map((order) => (
-                                <button
-                                  key={order.id}
-                                  onClick={() => {
-                                    setEditingOrderId(order.id);
-                                  }}
-                                  className="text-xs text-purple-600 dark:text-purple-400 hover:text-purple-800 dark:hover:text-purple-300 hover:underline flex items-center gap-1 text-left"
-                                >
-                                  📦 {order.restaurantName} - ${order.money.toFixed(2)} / {order.miles.toFixed(1)}mi {order.miles > 0 && `($${(order.money / order.miles).toFixed(2)}/mi)`}
-                                </button>
+                                <div key={order.id} className="flex items-center gap-1">
+                                  <button
+                                    onClick={() => {
+                                      setEditingOrderId(order.id);
+                                    }}
+                                    className="text-xs text-purple-600 dark:text-purple-400 hover:text-purple-800 dark:hover:text-purple-300 hover:underline flex items-center gap-1 text-left"
+                                  >
+                                    📦 {order.restaurantName} - ${order.money.toFixed(2)} / {order.miles.toFixed(1)}mi {order.miles > 0 && `($${(order.money / order.miles).toFixed(2)}/mi)`}
+                                  </button>
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleShareRestaurant(order.restaurantName);
+                                    }}
+                                    className="p-1 text-purple-600 dark:text-purple-400 hover:text-purple-800 dark:hover:text-purple-300 min-w-[44px] min-h-[44px] flex items-center justify-center"
+                                    title="Share Restaurant"
+                                  >
+                                    📤
+                                  </button>
+                                </div>
                               ))}
                               {transaction.linkedOcrExports?.map((customer) => (
                                 <div key={customer.id} className="flex items-center gap-1">
