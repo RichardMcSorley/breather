@@ -7,6 +7,7 @@ interface ShareOrderModalProps {
   isOpen: boolean;
   onClose: () => void;
   restaurantName: string;
+  orderId?: string;
   orderDetails?: {
     miles?: number;
     money?: number;
@@ -16,6 +17,7 @@ interface ShareOrderModalProps {
   userLatitude?: number;
   userLongitude?: number;
   userAddress?: string;
+  onAddressSaved?: () => void;
 }
 
 interface AddressResult {
@@ -29,10 +31,12 @@ export default function ShareOrderModal({
   isOpen,
   onClose,
   restaurantName,
+  orderId,
   orderDetails,
   userLatitude,
   userLongitude,
   userAddress,
+  onAddressSaved,
 }: ShareOrderModalProps) {
   const [searching, setSearching] = useState(false);
   const [addresses, setAddresses] = useState<AddressResult[]>([]);
@@ -157,7 +161,35 @@ export default function ShareOrderModal({
     }
   }, [isOpen, searchAddresses]);
 
-  const handleShareAddress = (address: string) => {
+  const handleShareAddress = async (address: string) => {
+    // Save address to order if orderId is provided
+    if (orderId) {
+      try {
+        const response = await fetch("/api/delivery-orders", {
+          method: "PATCH",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            id: orderId,
+            restaurantAddress: address,
+          }),
+        });
+
+        if (!response.ok) {
+          console.error("Failed to save restaurant address");
+        } else {
+          // Notify parent that address was saved
+          if (onAddressSaved) {
+            onAddressSaved();
+          }
+        }
+      } catch (err) {
+        console.error("Error saving restaurant address:", err);
+      }
+    }
+
+    // Share the address
     handleShare(address);
   };
 

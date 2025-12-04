@@ -154,6 +154,7 @@ export async function GET(request: NextRequest) {
           money: order.money,
           milesToMoneyRatio: order.milesToMoneyRatio,
           restaurantName: order.restaurantName,
+          restaurantAddress: order.restaurantAddress,
           time: order.time,
           screenshot: order.screenshot,
           metadata: order.metadata,
@@ -251,6 +252,7 @@ export async function GET(request: NextRequest) {
         money: order.money,
         milesToMoneyRatio: order.milesToMoneyRatio,
         restaurantName: order.restaurantName,
+        restaurantAddress: order.restaurantAddress,
         time: order.time,
         screenshot: order.screenshot,
         metadata: order.metadata,
@@ -302,7 +304,7 @@ export async function PATCH(request: NextRequest) {
     await connectDB();
 
     const body = await request.json();
-    const { id, appName, miles, money, restaurantName, time } = body;
+    const { id, appName, miles, money, restaurantName, restaurantAddress, time } = body;
 
     if (!id) {
       return NextResponse.json({ error: "Missing id" }, { status: 400 });
@@ -327,6 +329,9 @@ export async function PATCH(request: NextRequest) {
     }
     if (typeof restaurantName === "string") {
       updateSet.restaurantName = restaurantName;
+    }
+    if (typeof restaurantAddress === "string") {
+      updateSet.restaurantAddress = restaurantAddress;
     }
     if (typeof time === "string") {
       updateSet.time = time;
@@ -366,6 +371,7 @@ export async function PATCH(request: NextRequest) {
         money: result.money,
         milesToMoneyRatio: result.milesToMoneyRatio,
         restaurantName: result.restaurantName,
+        restaurantAddress: result.restaurantAddress,
         time: result.time,
         processedAt: result.processedAt.toISOString(),
         createdAt: result.createdAt.toISOString(),

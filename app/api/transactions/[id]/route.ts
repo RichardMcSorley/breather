@@ -31,7 +31,7 @@ export async function GET(
       userId: session.user.id,
     })
       .populate("linkedOcrExportIds", "customerName customerAddress appName entryId")
-      .populate("linkedDeliveryOrderIds", "restaurantName appName miles money entryId userLatitude userLongitude userAddress")
+      .populate("linkedDeliveryOrderIds", "restaurantName restaurantAddress appName miles money entryId userLatitude userLongitude userAddress")
       .lean();
 
     if (!transaction) {
@@ -75,6 +75,7 @@ export async function GET(
         .map((order: any) => ({
           id: String(order._id),
           restaurantName: order.restaurantName,
+          restaurantAddress: order.restaurantAddress,
           appName: order.appName,
           miles: order.miles,
           money: order.money,

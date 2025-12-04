@@ -25,6 +25,7 @@ interface LinkedCustomer {
 interface LinkedOrder {
   id: string;
   restaurantName: string;
+  restaurantAddress?: string;
   appName: string;
   miles: number;
   money: number;
@@ -99,7 +100,7 @@ export default function HistoryPage() {
   const [linkingOrderTransactionId, setLinkingOrderTransactionId] = useState<string | null>(null);
   const [showAddOrderModal, setShowAddOrderModal] = useState(false);
   const [selectedOrderForTransaction, setSelectedOrderForTransaction] = useState<SelectedDeliveryOrder | null>(null);
-  const [sharingOrder, setSharingOrder] = useState<{ restaurantName: string; orderDetails?: { miles?: number; money?: number; milesToMoneyRatio?: number; appName?: string }; userLatitude?: number; userLongitude?: number; userAddress?: string } | null>(null);
+  const [sharingOrder, setSharingOrder] = useState<{ orderId?: string; restaurantName: string; orderDetails?: { miles?: number; money?: number; milesToMoneyRatio?: number; appName?: string }; userLatitude?: number; userLongitude?: number; userAddress?: string } | null>(null);
   
   // Reset to page 1 when filters change
   useEffect(() => {
@@ -168,6 +169,7 @@ export default function HistoryPage() {
   const handleShareRestaurant = (order: LinkedOrder) => {
     const ratio = order.miles > 0 ? order.money / order.miles : undefined;
     setSharingOrder({
+      orderId: order.id,
       restaurantName: order.restaurantName,
       orderDetails: {
         miles: order.miles,
@@ -179,6 +181,27 @@ export default function HistoryPage() {
       userLongitude: order.userLongitude,
       userAddress: order.userAddress,
     });
+  };
+
+  const handleShareRestaurantAddress = async (address: string) => {
+    if (navigator.share) {
+      try {
+        await navigator.share({
+          text: address,
+        });
+      } catch (err) {
+        // User cancelled or error occurred - silently fail
+        console.log("Share cancelled or failed:", err);
+      }
+    } else {
+      // Fallback: copy to clipboard
+      try {
+        await navigator.clipboard.writeText(address);
+        alert("Address copied to clipboard");
+      } catch (err) {
+        console.error("Failed to copy address:", err);
+      }
+    }
   };
 
   // App name to color mapping
@@ -429,16 +452,29 @@ export default function HistoryPage() {
                                   >
                                     📦 {order.restaurantName} - ${order.money.toFixed(2)} / {order.miles.toFixed(1)}mi {order.miles > 0 && `($${(order.money / order.miles).toFixed(2)}/mi)`}
                                   </button>
-                                  <button
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      handleShareRestaurant(order);
-                                    }}
-                                    className="p-1 text-purple-600 dark:text-purple-400 hover:text-purple-800 dark:hover:text-purple-300 min-w-[44px] min-h-[44px] flex items-center justify-center"
-                                    title="Share Restaurant"
-                                  >
-                                    📤
-                                  </button>
+                                  {order.restaurantAddress ? (
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleShareRestaurantAddress(order.restaurantAddress!);
+                                      }}
+                                      className="p-1 text-purple-600 dark:text-purple-400 hover:text-purple-800 dark:hover:text-purple-300 min-w-[44px] min-h-[44px] flex items-center justify-center"
+                                      title="Share Restaurant Address"
+                                    >
+                                      📤
+                                    </button>
+                                  ) : (
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleShareRestaurant(order);
+                                      }}
+                                      className="p-1 text-purple-600 dark:text-purple-400 hover:text-purple-800 dark:hover:text-purple-300 min-w-[44px] min-h-[44px] flex items-center justify-center"
+                                      title="Search Restaurant Address"
+                                    >
+                                      🔍
+                                    </button>
+                                  )}
                                 </div>
                               ))}
                               {transaction.linkedOcrExports?.map((customer) => (
@@ -674,10 +710,15 @@ export default function HistoryPage() {
         isOpen={sharingOrder !== null}
         onClose={() => setSharingOrder(null)}
         restaurantName={sharingOrder?.restaurantName || ""}
+        orderId={sharingOrder?.orderId}
         orderDetails={sharingOrder?.orderDetails}
         userLatitude={sharingOrder?.userLatitude}
         userLongitude={sharingOrder?.userLongitude}
         userAddress={sharingOrder?.userAddress}
+        onAddressSaved={() => {
+          // Refresh transactions to show updated restaurant address
+          queryClient.invalidateQueries({ queryKey: ["transactions"] });
+        }}
       />
     </Layout>
   );
