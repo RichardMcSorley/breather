@@ -452,7 +452,17 @@ export default function HistoryPage() {
                                   >
                                     📦 {order.restaurantName} - ${order.money.toFixed(2)} / {order.miles.toFixed(1)}mi {order.miles > 0 && `($${(order.money / order.miles).toFixed(2)}/mi)`}
                                   </button>
-                                  {order.restaurantAddress ? (
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleShareRestaurant(order);
+                                    }}
+                                    className="p-1 text-purple-600 dark:text-purple-400 hover:text-purple-800 dark:hover:text-purple-300 min-w-[44px] min-h-[44px] flex items-center justify-center"
+                                    title="Search Restaurant Address"
+                                  >
+                                    🔍
+                                  </button>
+                                  {order.restaurantAddress && (
                                     <button
                                       onClick={(e) => {
                                         e.stopPropagation();
@@ -462,17 +472,6 @@ export default function HistoryPage() {
                                       title="Share Restaurant Address"
                                     >
                                       📤
-                                    </button>
-                                  ) : (
-                                    <button
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        handleShareRestaurant(order);
-                                      }}
-                                      className="p-1 text-purple-600 dark:text-purple-400 hover:text-purple-800 dark:hover:text-purple-300 min-w-[44px] min-h-[44px] flex items-center justify-center"
-                                      title="Search Restaurant Address"
-                                    >
-                                      🔍
                                     </button>
                                   )}
                                 </div>

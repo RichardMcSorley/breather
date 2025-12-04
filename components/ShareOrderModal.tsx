@@ -73,21 +73,42 @@ export default function ShareOrderModal({
 
     try {
       let nominatimUrl: string;
-      const location = "Ashland Kentucky 41101"; // City, state, and zip code for filtering
+      // Extract city, state, and zip code from userAddress
+      // Format: "2017 Belmont St\nAshland KY 41101\nUnited States"
+      let location = "Ashland Kentucky 41101"; // Fallback city, state, and zip code for filtering
+      
+      if (userAddress) {
+        // Split address by newlines and find the line with city, state, and zip code
+        const addressLines = userAddress.split('\n').map(line => line.trim()).filter(line => line);
+        // Look for line matching pattern: "City State ZipCode" (e.g., "Ashland KY 41101")
+        const cityStateZipLine = addressLines.find(line => {
+          // Match pattern: word(s) + state abbreviation (2 letters) + 5-digit zip code
+          return /\w+.*\s+[A-Z]{2}\s+\d{5}/.test(line);
+        });
+        
+        if (cityStateZipLine) {
+          location = cityStateZipLine;
+        } else {
+          // Fallback: use the full address if pattern not found
+          location = userAddress.replace(/\n/g, " ").trim();
+        }
+      }
       
       // Use location-based search if we have coordinates
       if (userLatitude !== undefined && userLongitude !== undefined) {
         // Search for restaurants near the user's location with location filter
         // Nominatim nearby search: search for restaurants within ~5km radius
         // Using lat/lon parameters centers the search on these coordinates
-        // Include city, state, and zip code in search query to limit results to local area
+        // Include address with zipcode in search query to limit results to local area
         const searchQuery = restaurantName.trim() 
           ? encodeURIComponent(`${restaurantName.trim()} ${location}`)
           : encodeURIComponent(`restaurant ${location}`);
         nominatimUrl = `https://nominatim.openstreetmap.org/search?format=json&q=${searchQuery}&lat=${userLatitude}&lon=${userLongitude}&radius=5000&limit=20&addressdetails=1`;
       } else if (userAddress) {
-        // Fallback to address-based search with location
-        const searchQuery = encodeURIComponent(`${restaurantName.trim()} ${location} ${userAddress}`);
+        // Use userAddress (with zipcode) for address-based search
+        const searchQuery = restaurantName.trim() 
+          ? encodeURIComponent(`${restaurantName.trim()} ${location}`)
+          : encodeURIComponent(`restaurant ${location}`);
         nominatimUrl = `https://nominatim.openstreetmap.org/search?format=json&q=${searchQuery}&limit=20&addressdetails=1`;
       } else if (restaurantName.trim()) {
         // Last resort: just search by restaurant name with location
