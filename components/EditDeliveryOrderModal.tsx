@@ -22,6 +22,7 @@ interface DeliveryOrder {
   money: number;
   milesToMoneyRatio: number;
   restaurantName: string;
+  restaurantAddress?: string | null;
   time: string;
   screenshot?: string;
   metadata?: Record<string, any>;
@@ -58,6 +59,7 @@ export default function EditDeliveryOrderModal({
     miles: "",
     money: "",
     restaurantName: "",
+    restaurantAddress: "",
     time: "",
   });
 
@@ -99,6 +101,7 @@ export default function EditDeliveryOrderModal({
         miles: foundOrder.miles.toString(),
         money: foundOrder.money.toString(),
         restaurantName: foundOrder.restaurantName,
+        restaurantAddress: foundOrder.restaurantAddress || "",
         time: foundOrder.time,
       });
     } catch (err) {
@@ -136,6 +139,7 @@ export default function EditDeliveryOrderModal({
           miles,
           money,
           restaurantName: formValues.restaurantName,
+          restaurantAddress: formValues.restaurantAddress || null,
           time: formValues.time,
         }),
       });
@@ -239,6 +243,24 @@ export default function EditDeliveryOrderModal({
                 }))
               }
               className="w-full rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 px-3 py-2 text-sm text-gray-900 dark:text-white"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+              Restaurant Address
+            </label>
+            <input
+              type="text"
+              value={formValues.restaurantAddress}
+              onChange={(e) =>
+                setFormValues((prev) => ({
+                  ...prev,
+                  restaurantAddress: e.target.value,
+                }))
+              }
+              className="w-full rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 px-3 py-2 text-sm text-gray-900 dark:text-white"
+              placeholder="e.g., 123 Main St, City, State"
             />
           </div>
 
