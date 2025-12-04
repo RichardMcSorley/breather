@@ -31,7 +31,7 @@ export async function GET(
       userId: session.user.id,
     })
       .populate("linkedOcrExportIds", "customerName customerAddress appName entryId")
-      .populate("linkedDeliveryOrderIds", "restaurantName appName miles money entryId")
+      .populate("linkedDeliveryOrderIds", "restaurantName appName miles money entryId userLatitude userLongitude userAddress")
       .lean();
 
     if (!transaction) {
@@ -79,6 +79,9 @@ export async function GET(
           miles: order.miles,
           money: order.money,
           entryId: order.entryId,
+          userLatitude: order.userLatitude,
+          userLongitude: order.userLongitude,
+          userAddress: order.userAddress,
         }));
     }
 

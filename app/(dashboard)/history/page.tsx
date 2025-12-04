@@ -29,6 +29,9 @@ interface LinkedOrder {
   miles: number;
   money: number;
   entryId: string;
+  userLatitude?: number;
+  userLongitude?: number;
+  userAddress?: string;
 }
 
 interface Transaction {
@@ -96,7 +99,7 @@ export default function HistoryPage() {
   const [linkingOrderTransactionId, setLinkingOrderTransactionId] = useState<string | null>(null);
   const [showAddOrderModal, setShowAddOrderModal] = useState(false);
   const [selectedOrderForTransaction, setSelectedOrderForTransaction] = useState<SelectedDeliveryOrder | null>(null);
-  const [sharingOrder, setSharingOrder] = useState<{ restaurantName: string; orderDetails?: { miles?: number; money?: number; milesToMoneyRatio?: number; appName?: string } } | null>(null);
+  const [sharingOrder, setSharingOrder] = useState<{ restaurantName: string; orderDetails?: { miles?: number; money?: number; milesToMoneyRatio?: number; appName?: string }; userLatitude?: number; userLongitude?: number; userAddress?: string } | null>(null);
   
   // Reset to page 1 when filters change
   useEffect(() => {
@@ -172,6 +175,9 @@ export default function HistoryPage() {
         milesToMoneyRatio: ratio,
         appName: order.appName,
       },
+      userLatitude: order.userLatitude,
+      userLongitude: order.userLongitude,
+      userAddress: order.userAddress,
     });
   };
 
@@ -669,6 +675,9 @@ export default function HistoryPage() {
         onClose={() => setSharingOrder(null)}
         restaurantName={sharingOrder?.restaurantName || ""}
         orderDetails={sharingOrder?.orderDetails}
+        userLatitude={sharingOrder?.userLatitude}
+        userLongitude={sharingOrder?.userLongitude}
+        userAddress={sharingOrder?.userAddress}
       />
     </Layout>
   );

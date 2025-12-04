@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
 import Modal from "./ui/Modal";
 
 interface ShareOrderModalProps {
@@ -13,6 +13,9 @@ interface ShareOrderModalProps {
     milesToMoneyRatio?: number;
     appName?: string;
   };
+  userLatitude?: number;
+  userLongitude?: number;
+  userAddress?: string;
 }
 
 interface AddressResult {
@@ -27,6 +30,9 @@ export default function ShareOrderModal({
   onClose,
   restaurantName,
   orderDetails,
+  userLatitude,
+  userLongitude,
+  userAddress,
 }: ShareOrderModalProps) {
   const [searching, setSearching] = useState(false);
   const [addresses, setAddresses] = useState<AddressResult[]>([]);
@@ -56,42 +62,33 @@ export default function ShareOrderModal({
     }
   };
 
-  const handleShareRestaurantName = () => {
-    handleShare(restaurantName);
-  };
-
-  const handleShareOrderDetails = () => {
-    if (!orderDetails) {
-      handleShareRestaurantName();
-      return;
-    }
-    const details = [
-      restaurantName,
-      orderDetails.miles !== undefined && `Miles: ${orderDetails.miles.toFixed(1)}`,
-      orderDetails.money !== undefined && `Money: $${orderDetails.money.toFixed(2)}`,
-      orderDetails.milesToMoneyRatio !== undefined && `Ratio: $${orderDetails.milesToMoneyRatio.toFixed(2)}/mi`,
-      orderDetails.appName && `App: ${orderDetails.appName}`,
-    ]
-      .filter(Boolean)
-      .join("\n");
-    handleShare(details);
-  };
-
-  const searchAddresses = async () => {
-    if (!restaurantName.trim()) {
-      setSearchError("Restaurant name is required");
-      return;
-    }
-
+  const searchAddresses = useCallback(async () => {
     setSearching(true);
     setSearchError(null);
     setAddresses([]);
 
     try {
-      // Use Nominatim API to search for places matching restaurant name
-      // Nominatim requires: max 1 request per second, User-Agent header
-      const searchQuery = encodeURIComponent(restaurantName.trim());
-      const nominatimUrl = `https://nominatim.openstreetmap.org/search?format=json&q=${searchQuery}&limit=10&addressdetails=1`;
+      let nominatimUrl: string;
+      
+      // Use location-based search if we have coordinates
+      if (userLatitude !== undefined && userLongitude !== undefined) {
+        // Search for restaurants near the user's location
+        // Nominatim nearby search: search for restaurants within ~5km radius
+        const searchQuery = encodeURIComponent(restaurantName.trim());
+        nominatimUrl = `https://nominatim.openstreetmap.org/search?format=json&q=${searchQuery}&lat=${userLatitude}&lon=${userLongitude}&radius=5000&limit=10&addressdetails=1`;
+      } else if (userAddress) {
+        // Fallback to address-based search
+        const searchQuery = encodeURIComponent(`${restaurantName.trim()} ${userAddress}`);
+        nominatimUrl = `https://nominatim.openstreetmap.org/search?format=json&q=${searchQuery}&limit=10&addressdetails=1`;
+      } else if (restaurantName.trim()) {
+        // Last resort: just search by restaurant name
+        const searchQuery = encodeURIComponent(restaurantName.trim());
+        nominatimUrl = `https://nominatim.openstreetmap.org/search?format=json&q=${searchQuery}&limit=10&addressdetails=1`;
+      } else {
+        setSearchError("No location or restaurant name available");
+        setSearching(false);
+        return;
+      }
       
       // Add small delay to respect rate limit (1 request per second)
       await new Promise((resolve) => setTimeout(resolve, 1100));
@@ -109,7 +106,7 @@ export default function ShareOrderModal({
       const data = await response.json();
       
       if (!data || data.length === 0) {
-        setSearchError("No addresses found for this restaurant name");
+        setSearchError("No restaurants found near this location");
         return;
       }
 
@@ -119,9 +116,11 @@ export default function ShareOrderModal({
         .filter((result: any) => {
           const type = result.type || '';
           const category = result.category || '';
+          const classType = result.class || '';
           return restaurantTypes.some(rt => 
             type.toLowerCase().includes(rt) || 
             category.toLowerCase().includes(rt) ||
+            classType.toLowerCase().includes(rt) ||
             result.display_name.toLowerCase().includes(restaurantName.toLowerCase())
           );
         })
@@ -139,14 +138,26 @@ export default function ShareOrderModal({
     } finally {
       setSearching(false);
     }
-  };
+  }, [restaurantName, userLatitude, userLongitude, userAddress]);
+
+  // Auto-search when modal opens
+  useEffect(() => {
+    if (isOpen) {
+      searchAddresses();
+    } else {
+      // Reset state when modal closes
+      setAddresses([]);
+      setSearchError(null);
+      setSearching(false);
+    }
+  }, [isOpen, searchAddresses]);
 
   const handleShareAddress = (address: string) => {
     handleShare(address);
   };
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title="Share Order">
+    <Modal isOpen={isOpen} onClose={onClose} title="Share Restaurant Address">
       <div className="space-y-4">
         <div>
           <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
@@ -154,50 +165,26 @@ export default function ShareOrderModal({
           </h3>
         </div>
 
-        {/* Share Options */}
-        <div className="space-y-2">
-          <button
-            onClick={handleShareRestaurantName}
-            className="w-full px-4 py-3 rounded-lg bg-purple-600 text-white hover:bg-purple-700 text-left min-h-[44px] flex items-center justify-between"
-          >
-            <span>Share Restaurant Name</span>
-            <span>📤</span>
-          </button>
-
-          {orderDetails && (
-            <button
-              onClick={handleShareOrderDetails}
-              className="w-full px-4 py-3 rounded-lg bg-purple-600 text-white hover:bg-purple-700 text-left min-h-[44px] flex items-center justify-between"
-            >
-              <span>Share Order Details</span>
-              <span>📤</span>
-            </button>
-          )}
-        </div>
-
-        {/* Address Search Section */}
-        <div className="pt-4 border-t border-gray-200 dark:border-gray-700">
-          <div className="flex items-center justify-between mb-2">
-            <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300">
-              Find Addresses
-            </h3>
-            <button
-              onClick={searchAddresses}
-              disabled={searching}
-              className="px-3 py-1 text-sm rounded bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed min-h-[44px]"
-            >
-              {searching ? "Searching..." : "Search"}
-            </button>
-          </div>
-
+        {/* Address Search Results */}
+        <div>
           {searchError && (
             <div className="p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg mb-2">
               <div className="text-sm text-red-600 dark:text-red-400">{searchError}</div>
             </div>
           )}
 
-          {addresses.length > 0 && (
-            <div className="space-y-2 max-h-[300px] overflow-y-auto">
+          {searching && (
+            <div className="flex items-center justify-center py-4">
+              <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-gray-900 dark:border-white"></div>
+              <span className="ml-2 text-sm text-gray-600 dark:text-gray-400">Searching nearby restaurants...</span>
+            </div>
+          )}
+
+          {!searching && addresses.length > 0 && (
+            <div className="space-y-2 max-h-[400px] overflow-y-auto">
+              <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                Found Restaurants:
+              </h3>
               {addresses.map((address, index) => (
                 <div
                   key={index}
@@ -222,9 +209,9 @@ export default function ShareOrderModal({
             </div>
           )}
 
-          {searching && (
-            <div className="flex items-center justify-center py-4">
-              <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-gray-900 dark:border-white"></div>
+          {!searching && addresses.length === 0 && !searchError && (
+            <div className="text-center py-4 text-gray-500 dark:text-gray-400">
+              No restaurants found. Try again later.
             </div>
           )}
         </div>
