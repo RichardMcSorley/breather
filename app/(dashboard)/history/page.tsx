@@ -137,6 +137,29 @@ export default function HistoryPage() {
     return format(date, "h:mm a");
   };
 
+  const handleShareAddress = async (address: string, customerName?: string) => {
+    const shareText = customerName ? `${customerName}, ${address}` : address;
+    
+    if (navigator.share) {
+      try {
+        await navigator.share({
+          text: shareText,
+        });
+      } catch (err) {
+        // User cancelled or error occurred - silently fail
+        console.log("Share cancelled or failed:", err);
+      }
+    } else {
+      // Fallback: copy to clipboard
+      try {
+        await navigator.clipboard.writeText(shareText);
+        alert("Address copied to clipboard");
+      } catch (err) {
+        console.error("Failed to copy address:", err);
+      }
+    }
+  };
+
   // App name to color mapping
   const getAppTagColor = (appName: string) => {
     const appColors: Record<string, { bg: string; text: string }> = {
@@ -387,16 +410,27 @@ export default function HistoryPage() {
                                 </button>
                               ))}
                               {transaction.linkedOcrExports?.map((customer) => (
-                                <button
-                                  key={customer.id}
-                                  onClick={() => {
-                                    setEditingCustomerAddress(customer.customerAddress);
-                                    setEditingCustomerEntryId(customer.entryId || null);
-                                  }}
-                                  className="text-xs text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 hover:underline flex items-center gap-1 text-left"
-                                >
-                                  👤 {customer.customerName} {customer.customerAddress}
-                                </button>
+                                <div key={customer.id} className="flex items-center gap-1">
+                                  <button
+                                    onClick={() => {
+                                      setEditingCustomerAddress(customer.customerAddress);
+                                      setEditingCustomerEntryId(customer.entryId || null);
+                                    }}
+                                    className="text-xs text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 hover:underline flex items-center gap-1 text-left"
+                                  >
+                                    👤 {customer.customerName} {customer.customerAddress}
+                                  </button>
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleShareAddress(customer.customerAddress, customer.customerName);
+                                    }}
+                                    className="p-1 text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 min-w-[44px] min-h-[44px] flex items-center justify-center"
+                                    title="Share Address"
+                                  >
+                                    📤
+                                  </button>
+                                </div>
                               ))}
                             </div>
                           )}
