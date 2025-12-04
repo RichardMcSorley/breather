@@ -40,12 +40,11 @@ export async function clearSyncQueue() {
 
 export async function syncQueue() {
   if (!navigator.onLine) {
-    return { success: false, message: "Offline", syncedOperations: [] };
+    return { success: false, message: "Offline" };
   }
 
   const queue = await getSyncQueue();
   const results = [];
-  const syncedOperations: SyncOperation[] = [];
 
   for (const operation of queue) {
     try {
@@ -60,7 +59,6 @@ export async function syncQueue() {
       if (response.ok) {
         await removeFromSyncQueue(operation.id);
         results.push({ id: operation.id, success: true });
-        syncedOperations.push(operation);
       } else {
         results.push({ id: operation.id, success: false, error: await response.text() });
       }
@@ -70,7 +68,7 @@ export async function syncQueue() {
     }
   }
 
-  return { success: true, results, syncedOperations };
+  return { success: true, results };
 }
 
 export async function cacheData(key: string, data: any) {
