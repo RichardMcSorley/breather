@@ -143,13 +143,11 @@ export default function HistoryPage() {
     return format(date, "h:mm a");
   };
 
-  const handleShareAddress = async (address: string, customerName?: string) => {
-    const shareText = customerName ? `${customerName}, ${address}` : address;
-    
+  const handleShareAddress = async (address: string) => {
     if (navigator.share) {
       try {
         await navigator.share({
-          text: shareText,
+          text: address,
         });
       } catch (err) {
         // User cancelled or error occurred - silently fail
@@ -158,7 +156,7 @@ export default function HistoryPage() {
     } else {
       // Fallback: copy to clipboard
       try {
-        await navigator.clipboard.writeText(shareText);
+        await navigator.clipboard.writeText(address);
         alert("Address copied to clipboard");
       } catch (err) {
         console.error("Failed to copy address:", err);
@@ -490,7 +488,7 @@ export default function HistoryPage() {
                                   <button
                                     onClick={(e) => {
                                       e.stopPropagation();
-                                      handleShareAddress(customer.customerAddress, customer.customerName);
+                                      handleShareAddress(customer.customerAddress);
                                     }}
                                     className="p-1 text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 min-w-[44px] min-h-[44px] flex items-center justify-center"
                                     title="Share Address"
