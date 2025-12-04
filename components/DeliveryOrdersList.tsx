@@ -30,10 +30,15 @@ export default function DeliveryOrdersList({
 }: DeliveryOrdersListProps) {
   const [orders, setOrders] = useState<DeliveryOrder[]>([]);
   const [allOrders, setAllOrders] = useState<DeliveryOrder[]>([]);
+  const [searchResults, setSearchResults] = useState<DeliveryOrder[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
+  const [selectedApp, setSelectedApp] = useState<string>("");
+  const [searchQuery, setSearchQuery] = useState<string>("");
+  const [isSearching, setIsSearching] = useState(false);
+  const [searchLoading, setSearchLoading] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
 
@@ -41,7 +46,87 @@ export default function DeliveryOrdersList({
 
   useEffect(() => {
     fetchOrders();
-  }, [userId, page]);
+  }, [userId]);
+
+  const performSearch = async () => {
+    if (!userId || searchQuery.trim() === "") {
+      return;
+    }
+
+    try {
+      setSearchLoading(true);
+      setError(null);
+      setIsSearching(true);
+      setPage(1);
+
+      const params = new URLSearchParams();
+      params.append("userId", userId);
+      params.append("query", searchQuery.trim());
+      if (selectedApp) {
+        params.append("filterAppName", selectedApp);
+      }
+
+      const response = await fetch(`/api/delivery-orders/search?${params.toString()}`);
+      if (!response.ok) {
+        throw new Error("Failed to search delivery orders");
+      }
+
+      const data = await response.json();
+      setSearchResults(data.orders || []);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "An error occurred");
+      setSearchResults([]);
+    } finally {
+      setSearchLoading(false);
+    }
+  };
+
+  // Handle search
+  useEffect(() => {
+    if (searchQuery.trim() === "") {
+      setIsSearching(false);
+      setSearchResults([]);
+      setPage(1);
+      return;
+    }
+
+    // Debounce search
+    const timeoutId = setTimeout(() => {
+      performSearch();
+    }, 300);
+
+    return () => clearTimeout(timeoutId);
+  }, [searchQuery, selectedApp, userId]);
+
+  // Filter orders by app name (for non-search view)
+  useEffect(() => {
+    if (!isSearching) {
+      let filtered = allOrders;
+
+      // Filter by app name if selected
+      if (selectedApp !== "") {
+        filtered = filtered.filter(
+          (order) => order.appName.toLowerCase() === selectedApp.toLowerCase()
+        );
+      }
+
+      // Update paginated orders
+      const startIndex = (page - 1) * ITEMS_PER_PAGE;
+      const endIndex = startIndex + ITEMS_PER_PAGE;
+      setOrders(filtered.slice(startIndex, endIndex));
+      setTotalPages(Math.ceil(filtered.length / ITEMS_PER_PAGE));
+    }
+  }, [selectedApp, allOrders, page, isSearching]);
+
+  // Update paginated orders when search results or page changes
+  useEffect(() => {
+    if (isSearching) {
+      const startIndex = (page - 1) * ITEMS_PER_PAGE;
+      const endIndex = startIndex + ITEMS_PER_PAGE;
+      setOrders(searchResults.slice(startIndex, endIndex));
+      setTotalPages(Math.ceil(searchResults.length / ITEMS_PER_PAGE));
+    }
+  }, [searchResults, page, isSearching]);
 
   const fetchOrders = async () => {
     try {
@@ -50,7 +135,7 @@ export default function DeliveryOrdersList({
 
       const params = new URLSearchParams();
       if (userId) params.append("userId", userId);
-      params.append("limit", "100"); // Fetch all, we'll paginate client-side
+      params.append("limit", "100"); // Keep original limit for regular view
 
       const response = await fetch(`/api/delivery-orders?${params.toString()}`);
       if (!response.ok) {
@@ -60,12 +145,6 @@ export default function DeliveryOrdersList({
       const data = await response.json();
       const fetchedOrders = data.orders || [];
       setAllOrders(fetchedOrders);
-      
-      // Client-side pagination
-      const startIndex = (page - 1) * ITEMS_PER_PAGE;
-      const endIndex = startIndex + ITEMS_PER_PAGE;
-      setOrders(fetchedOrders.slice(startIndex, endIndex));
-      setTotalPages(Math.ceil(fetchedOrders.length / ITEMS_PER_PAGE));
     } catch (err) {
       setError(err instanceof Error ? err.message : "An error occurred");
     } finally {
@@ -93,8 +172,14 @@ export default function DeliveryOrdersList({
         throw new Error(errorData.error || "Failed to delete order");
       }
 
-      // Refresh the list
-      await fetchOrders();
+      // Refresh the list or search results based on current state
+      if (isSearching && searchQuery.trim() !== "") {
+        // Re-run search to refresh results
+        await performSearch();
+      } else {
+        // Refresh regular list
+        await fetchOrders();
+      }
       setConfirmDeleteId(null);
       setDeletingId(null);
       
@@ -145,36 +230,104 @@ export default function DeliveryOrdersList({
     );
   }
 
-  // Calculate statistics from all orders (not just paginated ones)
-  const avgMiles = allOrders.length > 0 
-    ? allOrders.reduce((sum, order) => sum + order.miles, 0) / allOrders.length 
+  // Get unique app names for filter dropdown
+  const uniqueAppNames = Array.from(
+    new Set(allOrders.map((order) => order.appName).filter(Boolean))
+  ).sort();
+
+  // Calculate statistics from current view (search results or filtered orders)
+  const currentOrders = isSearching ? searchResults : allOrders.filter(
+    (order) => selectedApp === "" || order.appName.toLowerCase() === selectedApp.toLowerCase()
+  );
+
+  const avgMiles = currentOrders.length > 0
+    ? currentOrders.reduce((sum, order) => sum + order.miles, 0) / currentOrders.length 
     : 0;
-  const avgRatio = allOrders.length > 0
-    ? allOrders.reduce((sum, order) => sum + order.milesToMoneyRatio, 0) / allOrders.length
+  const avgRatio = currentOrders.length > 0
+    ? currentOrders.reduce((sum, order) => sum + order.milesToMoneyRatio, 0) / currentOrders.length
     : 0;
-  const highestMiles = allOrders.length > 0
-    ? Math.max(...allOrders.map(order => order.miles))
+  const highestMiles = currentOrders.length > 0
+    ? Math.max(...currentOrders.map(order => order.miles))
     : 0;
-  const highestEarnings = allOrders.length > 0
-    ? Math.max(...allOrders.map(order => order.money))
+  const highestEarnings = currentOrders.length > 0
+    ? Math.max(...currentOrders.map(order => order.money))
     : 0;
-  const lowestEarnings = allOrders.length > 0
-    ? Math.min(...allOrders.map(order => order.money))
+  const lowestEarnings = currentOrders.length > 0
+    ? Math.min(...currentOrders.map(order => order.money))
     : 0;
 
   return (
     <Card className="overflow-hidden">
       <div className="p-6 border-b border-gray-200 dark:border-gray-700">
-        <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
-          Delivery Orders
-        </h3>
-        <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-          Orders sorted by most recent
-        </p>
+        <div className="flex flex-col gap-4">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+            <div>
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                Delivery Orders
+              </h3>
+            <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+              {isSearching
+                ? `Search results (${searchResults.length} matches)`
+                : "Orders sorted by most recent"}
+            </p>
+          </div>
+            {uniqueAppNames.length > 0 && (
+              <div className="flex items-center gap-2">
+                <label
+                  htmlFor="app-filter"
+                  className="text-sm font-medium text-gray-700 dark:text-gray-300"
+                >
+                  Filter by App:
+                </label>
+                <select
+                  id="app-filter"
+                  value={selectedApp}
+                  onChange={(e) => setSelectedApp(e.target.value)}
+                  className="px-3 py-2 text-sm rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-white min-h-[44px] focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="">All Apps</option>
+                  {uniqueAppNames.map((appName) => (
+                    <option key={appName} value={appName}>
+                      {appName}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+          </div>
+          <div className="flex items-center gap-2">
+            <label
+              htmlFor="search-orders"
+              className="text-sm font-medium text-gray-700 dark:text-gray-300"
+            >
+              Search:
+            </label>
+            <input
+              id="search-orders"
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Search by app name or restaurant..."
+              className="flex-1 px-3 py-2 text-sm rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-white min-h-[44px] focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+            {searchLoading && (
+              <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-gray-900 dark:border-white"></div>
+            )}
+            {searchQuery && (
+              <button
+                onClick={() => setSearchQuery("")}
+                className="px-3 py-2 text-sm text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white min-h-[44px]"
+                aria-label="Clear search"
+              >
+                ✕
+              </button>
+            )}
+          </div>
+        </div>
       </div>
 
       {/* Statistics */}
-      {allOrders.length > 0 && (
+      {currentOrders.length > 0 && (
         <div className="p-6 bg-gray-50 dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700">
           <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
             <div>

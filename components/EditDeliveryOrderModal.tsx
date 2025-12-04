@@ -77,14 +77,17 @@ export default function EditDeliveryOrderModal({
       setLoading(true);
       setError(null);
 
-      // Fetch all orders and find the one we need
-      const response = await fetch(`/api/delivery-orders?userId=${userId}&limit=100`);
+      // Fetch the specific order by ID
+      const response = await fetch(`/api/delivery-orders?userId=${userId}&id=${orderId}`);
       if (!response.ok) {
+        if (response.status === 404) {
+          throw new Error("Order not found");
+        }
         throw new Error("Failed to fetch order");
       }
 
       const data = await response.json();
-      const foundOrder = data.orders.find((o: DeliveryOrder) => o.id === orderId);
+      const foundOrder = data.order;
       
       if (!foundOrder) {
         throw new Error("Order not found");
@@ -316,7 +319,7 @@ export default function EditDeliveryOrderModal({
                     key={transaction._id}
                     className="p-3 bg-gray-50 dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-700 flex items-center justify-between"
                   >
-                    <div>
+                    <div className="flex-1">
                       <div className="font-semibold text-gray-900 dark:text-white">
                         ${transaction.amount.toFixed(2)}
                       </div>
@@ -324,11 +327,48 @@ export default function EditDeliveryOrderModal({
                         {format(new Date(transaction.date), "MMM d, yyyy")} at {transaction.time}
                       </div>
                     </div>
-                    {transaction.tag && (
-                      <span className="text-xs px-2 py-0.5 rounded bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400">
-                        {transaction.tag}
-                      </span>
-                    )}
+                    <div className="flex items-center gap-2">
+                      {transaction.tag && (
+                        <span className="text-xs px-2 py-0.5 rounded bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400">
+                          {transaction.tag}
+                        </span>
+                      )}
+                      <button
+                        onClick={async () => {
+                          if (!orderId) return;
+                          try {
+                            setSaving(true);
+                            setError(null);
+                            const response = await fetch("/api/link", {
+                              method: "POST",
+                              headers: {
+                                "Content-Type": "application/json",
+                              },
+                              body: JSON.stringify({
+                                transactionId: transaction._id,
+                                deliveryOrderId: orderId,
+                                action: "unlink",
+                              }),
+                            });
+                            if (!response.ok) {
+                              const errorData = await response.json();
+                              throw new Error(errorData.error || "Failed to unlink transaction");
+                            }
+                            // Refresh the order data
+                            await fetchOrder();
+                            onUpdate?.();
+                          } catch (err) {
+                            setError(err instanceof Error ? err.message : "Failed to unlink transaction");
+                          } finally {
+                            setSaving(false);
+                          }
+                        }}
+                        disabled={saving}
+                        className="px-3 py-1 text-xs rounded bg-red-600 text-white hover:bg-red-700 disabled:opacity-50"
+                      >
+                        Unlink
+                      </button>
+                    </div>
                   </div>
                 ))}
               </div>

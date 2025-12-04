@@ -164,12 +164,56 @@ export async function attemptAutoLinkOrderToTransaction(
     tag: { $regex: new RegExp(`^${orderAppName}$`, "i") },
   }).lean();
 
-  // Filter by amount match (within $0.01) and ensure transaction is not already linked
+  // Get order's processedAt date and hour for matching
+  // processedAt is stored in UTC, but we need to compare with transaction time which is in EST
+  const orderProcessedAt = order.processedAt instanceof Date ? order.processedAt : new Date(order.processedAt);
+  
+  // Convert UTC to EST for date comparison (EST is UTC-5)
+  const EST_OFFSET_HOURS = 5;
+  const estTimestamp = orderProcessedAt.getTime() - (EST_OFFSET_HOURS * 60 * 60 * 1000);
+  const estDate = new Date(estTimestamp);
+  
+  // Get EST date components
+  const orderDate = new Date(Date.UTC(
+    estDate.getUTCFullYear(),
+    estDate.getUTCMonth(),
+    estDate.getUTCDate()
+  ));
+  const orderHourEST = estDate.getUTCHours();
+
+  // Filter by amount match (within $0.01), date match, hour match, and ensure transaction is not already linked
   const amountMatchedTransactions = matchingTransactions.filter((transaction) => {
     const amountDiff = Math.abs(transaction.amount - order.money);
     const isAmountMatch = amountDiff < 0.01;
     const isNotLinked = !transaction.linkedDeliveryOrderIds || transaction.linkedDeliveryOrderIds.length === 0;
-    return isAmountMatch && isNotLinked;
+    
+    // Check date match (same day in EST)
+    // Both dates are stored in UTC but represent EST dates, so convert both to EST for comparison
+    const transactionDate = transaction.date instanceof Date ? transaction.date : new Date(transaction.date);
+    const transactionESTTimestamp = transactionDate.getTime() - (EST_OFFSET_HOURS * 60 * 60 * 1000);
+    const transactionESTDate = new Date(transactionESTTimestamp);
+    const transactionDateOnly = new Date(Date.UTC(
+      transactionESTDate.getUTCFullYear(),
+      transactionESTDate.getUTCMonth(),
+      transactionESTDate.getUTCDate()
+    ));
+    const isDateMatch = orderDate.getTime() === transactionDateOnly.getTime();
+    
+    // Check hour match (same hour)
+    // Parse transaction time string (format: "HH:MM" in EST)
+    let isHourMatch = false;
+    if (transaction.time) {
+      const timeParts = transaction.time.split(":");
+      if (timeParts.length === 2) {
+        const transactionHourEST = parseInt(timeParts[0], 10);
+        if (!isNaN(transactionHourEST)) {
+          // Compare EST hours
+          isHourMatch = orderHourEST === transactionHourEST;
+        }
+      }
+    }
+    
+    return isAmountMatch && isNotLinked && isDateMatch && isHourMatch;
   });
 
   // Only auto-link if there is exactly one match

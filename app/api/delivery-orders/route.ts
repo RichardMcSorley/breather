@@ -112,8 +112,61 @@ export async function GET(request: NextRequest) {
 
     const { searchParams } = new URL(request.url);
     const userId = searchParams.get("userId");
+    const id = searchParams.get("id");
     const filterAmount = searchParams.get("filterAmount");
     const filterAppName = searchParams.get("filterAppName");
+
+    // If id is provided, fetch a single order
+    if (id) {
+      if (!userId) {
+        return NextResponse.json({ error: "Missing userId" }, { status: 400 });
+      }
+
+      const order = await DeliveryOrder.findOne({ _id: id, userId }).lean();
+      if (!order) {
+        return NextResponse.json({ error: "Order not found" }, { status: 404 });
+      }
+
+      // Get linked transactions for this order
+      const linkedTransactions = await Transaction.find({
+        userId,
+        linkedDeliveryOrderIds: { $in: [order._id] },
+        type: "income",
+      })
+        .sort({ date: -1 })
+        .lean();
+
+      const transactions = linkedTransactions.map((t) => ({
+        _id: t._id.toString(),
+        amount: t.amount,
+        date: t.date,
+        tag: t.tag,
+        notes: t.notes,
+      }));
+
+      return NextResponse.json({
+        success: true,
+        order: {
+          id: order._id.toString(),
+          entryId: order.entryId,
+          appName: order.appName,
+          miles: order.miles,
+          money: order.money,
+          milesToMoneyRatio: order.milesToMoneyRatio,
+          restaurantName: order.restaurantName,
+          time: order.time,
+          screenshot: order.screenshot,
+          metadata: order.metadata,
+          userLatitude: order.userLatitude,
+          userLongitude: order.userLongitude,
+          userAltitude: order.userAltitude,
+          userAddress: order.userAddress,
+          processedAt: order.processedAt.toISOString(),
+          createdAt: order.createdAt.toISOString(),
+          linkedTransactions: transactions,
+        },
+      });
+    }
 
     if (!userId) {
       return NextResponse.json({ error: "Missing userId" }, { status: 400 });
