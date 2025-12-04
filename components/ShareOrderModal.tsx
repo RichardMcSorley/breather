@@ -115,46 +115,25 @@ export default function ShareOrderModal({
         return;
       }
 
-      // Filter for restaurant/amenity types and zip code match
+      // Filter for restaurant/amenity types (API should already filter by zip code)
       const restaurantTypes = ['restaurant', 'cafe', 'fast_food', 'food_court', 'bar', 'pub'];
       const filteredResults = data
         .filter((result: any) => {
-          // Check if result matches zip code
-          const address = result.address || {};
-          const postalCode = address.postcode || '';
-          const matchesZipCode = postalCode === zipCode || postalCode.startsWith(zipCode.substring(0, 3));
-          
-          // Check if result is a restaurant type
           const type = result.type || '';
           const category = result.category || '';
           const classType = result.class || '';
-          const isRestaurantType = restaurantTypes.some(rt => 
+          return restaurantTypes.some(rt => 
             type.toLowerCase().includes(rt) || 
             category.toLowerCase().includes(rt) ||
             classType.toLowerCase().includes(rt) ||
             result.display_name.toLowerCase().includes(restaurantName.toLowerCase())
           );
-          
-          // Return results that match zip code and are restaurant types
-          return matchesZipCode && isRestaurantType;
         })
         .slice(0, 10); // Limit to 10 results
 
       if (filteredResults.length === 0) {
-        // If no restaurant-specific results, try showing results that at least match zip code
-        const zipFilteredResults = data
-          .filter((result: any) => {
-            const address = result.address || {};
-            const postalCode = address.postcode || '';
-            return postalCode === zipCode || postalCode.startsWith(zipCode.substring(0, 3));
-          })
-          .slice(0, 10);
-        
-        if (zipFilteredResults.length > 0) {
-          setAddresses(zipFilteredResults);
-        } else {
-          setSearchError("No restaurants found in zip code 41101");
-        }
+        // If no restaurant-specific results, show all results (should already be filtered by zip code from API)
+        setAddresses(data.slice(0, 10));
       } else {
         setAddresses(filteredResults);
       }
