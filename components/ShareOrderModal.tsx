@@ -74,7 +74,10 @@ export default function ShareOrderModal({
       if (userLatitude !== undefined && userLongitude !== undefined) {
         // Search for restaurants near the user's location
         // Nominatim nearby search: search for restaurants within ~5km radius
-        const searchQuery = encodeURIComponent(restaurantName.trim());
+        // Using lat/lon parameters centers the search on these coordinates
+        const searchQuery = restaurantName.trim() 
+          ? encodeURIComponent(restaurantName.trim())
+          : encodeURIComponent("restaurant");
         nominatimUrl = `https://nominatim.openstreetmap.org/search?format=json&q=${searchQuery}&lat=${userLatitude}&lon=${userLongitude}&radius=5000&limit=10&addressdetails=1`;
       } else if (userAddress) {
         // Fallback to address-based search
