@@ -73,21 +73,26 @@ export default function ShareOrderModal({
 
     try {
       let nominatimUrl: string;
-      const location = "Ashland Kentucky 41101"; // City, state, and zip code for filtering
+      // Use userAddress from API if available (includes zipcode), otherwise fallback to hardcoded location
+      const location = userAddress 
+        ? userAddress.replace(/\n/g, " ").trim() // Convert multi-line address to single line
+        : "Ashland Kentucky 41101"; // Fallback city, state, and zip code for filtering
       
       // Use location-based search if we have coordinates
       if (userLatitude !== undefined && userLongitude !== undefined) {
         // Search for restaurants near the user's location with location filter
         // Nominatim nearby search: search for restaurants within ~5km radius
         // Using lat/lon parameters centers the search on these coordinates
-        // Include city, state, and zip code in search query to limit results to local area
+        // Include address with zipcode in search query to limit results to local area
         const searchQuery = restaurantName.trim() 
           ? encodeURIComponent(`${restaurantName.trim()} ${location}`)
           : encodeURIComponent(`restaurant ${location}`);
         nominatimUrl = `https://nominatim.openstreetmap.org/search?format=json&q=${searchQuery}&lat=${userLatitude}&lon=${userLongitude}&radius=5000&limit=20&addressdetails=1`;
       } else if (userAddress) {
-        // Fallback to address-based search with location
-        const searchQuery = encodeURIComponent(`${restaurantName.trim()} ${location} ${userAddress}`);
+        // Use userAddress (with zipcode) for address-based search
+        const searchQuery = restaurantName.trim() 
+          ? encodeURIComponent(`${restaurantName.trim()} ${location}`)
+          : encodeURIComponent(`restaurant ${location}`);
         nominatimUrl = `https://nominatim.openstreetmap.org/search?format=json&q=${searchQuery}&limit=20&addressdetails=1`;
       } else if (restaurantName.trim()) {
         // Last resort: just search by restaurant name with location
