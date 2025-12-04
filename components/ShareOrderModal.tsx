@@ -41,6 +41,31 @@ export default function ShareOrderModal({
   const [searching, setSearching] = useState(false);
   const [addresses, setAddresses] = useState<AddressResult[]>([]);
   const [searchError, setSearchError] = useState<string | null>(null);
+  const [locationOverride, setLocationOverride] = useState<string>("");
+
+  // Helper function to extract location from userAddress
+  const extractLocation = useCallback((): string => {
+    let location = "Ashland Kentucky 41101"; // Fallback city, state, and zip code for filtering
+    
+    if (userAddress) {
+      // Split address by newlines and find the line with city, state, and zip code
+      const addressLines = userAddress.split('\n').map(line => line.trim()).filter(line => line);
+      // Look for line matching pattern: "City State ZipCode" (e.g., "Ashland KY 41101")
+      const cityStateZipLine = addressLines.find(line => {
+        // Match pattern: word(s) + state abbreviation (2 letters) + 5-digit zip code
+        return /\w+.*\s+[A-Z]{2}\s+\d{5}/.test(line);
+      });
+      
+      if (cityStateZipLine) {
+        location = cityStateZipLine;
+      } else {
+        // Fallback: use the full address if pattern not found
+        location = userAddress.replace(/\n/g, " ").trim();
+      }
+    }
+    
+    return location;
+  }, [userAddress]);
 
   const handleShare = async (text: string) => {
     if (navigator.share) {
@@ -73,26 +98,8 @@ export default function ShareOrderModal({
 
     try {
       let nominatimUrl: string;
-      // Extract city, state, and zip code from userAddress
-      // Format: "2017 Belmont St\nAshland KY 41101\nUnited States"
-      let location = "Ashland Kentucky 41101"; // Fallback city, state, and zip code for filtering
-      
-      if (userAddress) {
-        // Split address by newlines and find the line with city, state, and zip code
-        const addressLines = userAddress.split('\n').map(line => line.trim()).filter(line => line);
-        // Look for line matching pattern: "City State ZipCode" (e.g., "Ashland KY 41101")
-        const cityStateZipLine = addressLines.find(line => {
-          // Match pattern: word(s) + state abbreviation (2 letters) + 5-digit zip code
-          return /\w+.*\s+[A-Z]{2}\s+\d{5}/.test(line);
-        });
-        
-        if (cityStateZipLine) {
-          location = cityStateZipLine;
-        } else {
-          // Fallback: use the full address if pattern not found
-          location = userAddress.replace(/\n/g, " ").trim();
-        }
-      }
+      // Use location override if provided, otherwise extract from userAddress
+      const location = locationOverride.trim() || extractLocation();
       
       // Use location-based search if we have coordinates
       if (userLatitude !== undefined && userLongitude !== undefined) {
@@ -168,17 +175,26 @@ export default function ShareOrderModal({
     } finally {
       setSearching(false);
     }
-  }, [restaurantName, userLatitude, userLongitude, userAddress]);
+  }, [restaurantName, userLatitude, userLongitude, userAddress, locationOverride, extractLocation]);
 
-  // Auto-search when modal opens
+  // Initialize location override when modal opens
   useEffect(() => {
     if (isOpen) {
-      searchAddresses();
+      const extractedLocation = extractLocation();
+      setLocationOverride(extractedLocation);
     } else {
       // Reset state when modal closes
       setAddresses([]);
       setSearchError(null);
       setSearching(false);
+      setLocationOverride("");
+    }
+  }, [isOpen, extractLocation]);
+
+  // Auto-search when modal opens
+  useEffect(() => {
+    if (isOpen) {
+      searchAddresses();
     }
   }, [isOpen, searchAddresses]);
 
@@ -221,6 +237,35 @@ export default function ShareOrderModal({
           <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
             Restaurant: {restaurantName}
           </h3>
+        </div>
+
+        {/* Location Override Input */}
+        <div>
+          <label htmlFor="location-input" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+            Search Location (City, State, Zip):
+          </label>
+          <div className="flex gap-2">
+            <input
+              id="location-input"
+              type="text"
+              value={locationOverride}
+              onChange={(e) => setLocationOverride(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && !searching) {
+                  searchAddresses();
+                }
+              }}
+              placeholder="e.g., Ashland KY 41101"
+              className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            />
+            <button
+              onClick={searchAddresses}
+              disabled={searching}
+              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed min-h-[40px]"
+            >
+              Search
+            </button>
+          </div>
         </div>
 
         {/* Address Search Results */}
