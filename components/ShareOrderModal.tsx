@@ -69,24 +69,26 @@ export default function ShareOrderModal({
 
     try {
       let nominatimUrl: string;
+      const zipCode = "41101"; // Hardcoded zip code for filtering
       
       // Use location-based search if we have coordinates
       if (userLatitude !== undefined && userLongitude !== undefined) {
-        // Search for restaurants near the user's location
+        // Search for restaurants near the user's location with zip code filter
         // Nominatim nearby search: search for restaurants within ~5km radius
         // Using lat/lon parameters centers the search on these coordinates
+        // Include zip code in search query to limit results to local area
         const searchQuery = restaurantName.trim() 
-          ? encodeURIComponent(restaurantName.trim())
-          : encodeURIComponent("restaurant");
-        nominatimUrl = `https://nominatim.openstreetmap.org/search?format=json&q=${searchQuery}&lat=${userLatitude}&lon=${userLongitude}&radius=5000&limit=10&addressdetails=1`;
+          ? encodeURIComponent(`${restaurantName.trim()} ${zipCode}`)
+          : encodeURIComponent(`restaurant ${zipCode}`);
+        nominatimUrl = `https://nominatim.openstreetmap.org/search?format=json&q=${searchQuery}&lat=${userLatitude}&lon=${userLongitude}&radius=5000&limit=20&addressdetails=1`;
       } else if (userAddress) {
-        // Fallback to address-based search
-        const searchQuery = encodeURIComponent(`${restaurantName.trim()} ${userAddress}`);
-        nominatimUrl = `https://nominatim.openstreetmap.org/search?format=json&q=${searchQuery}&limit=10&addressdetails=1`;
+        // Fallback to address-based search with zip code
+        const searchQuery = encodeURIComponent(`${restaurantName.trim()} ${zipCode} ${userAddress}`);
+        nominatimUrl = `https://nominatim.openstreetmap.org/search?format=json&q=${searchQuery}&limit=20&addressdetails=1`;
       } else if (restaurantName.trim()) {
-        // Last resort: just search by restaurant name
-        const searchQuery = encodeURIComponent(restaurantName.trim());
-        nominatimUrl = `https://nominatim.openstreetmap.org/search?format=json&q=${searchQuery}&limit=10&addressdetails=1`;
+        // Last resort: just search by restaurant name with zip code
+        const searchQuery = encodeURIComponent(`${restaurantName.trim()} ${zipCode}`);
+        nominatimUrl = `https://nominatim.openstreetmap.org/search?format=json&q=${searchQuery}&limit=20&addressdetails=1`;
       } else {
         setSearchError("No location or restaurant name available");
         setSearching(false);
@@ -113,25 +115,46 @@ export default function ShareOrderModal({
         return;
       }
 
-      // Filter for restaurant/amenity types and format results
+      // Filter for restaurant/amenity types and zip code match
       const restaurantTypes = ['restaurant', 'cafe', 'fast_food', 'food_court', 'bar', 'pub'];
       const filteredResults = data
         .filter((result: any) => {
+          // Check if result matches zip code
+          const address = result.address || {};
+          const postalCode = address.postcode || '';
+          const matchesZipCode = postalCode === zipCode || postalCode.startsWith(zipCode.substring(0, 3));
+          
+          // Check if result is a restaurant type
           const type = result.type || '';
           const category = result.category || '';
           const classType = result.class || '';
-          return restaurantTypes.some(rt => 
+          const isRestaurantType = restaurantTypes.some(rt => 
             type.toLowerCase().includes(rt) || 
             category.toLowerCase().includes(rt) ||
             classType.toLowerCase().includes(rt) ||
             result.display_name.toLowerCase().includes(restaurantName.toLowerCase())
           );
+          
+          // Return results that match zip code and are restaurant types
+          return matchesZipCode && isRestaurantType;
         })
         .slice(0, 10); // Limit to 10 results
 
       if (filteredResults.length === 0) {
-        // If no restaurant-specific results, show all results
-        setAddresses(data.slice(0, 10));
+        // If no restaurant-specific results, try showing results that at least match zip code
+        const zipFilteredResults = data
+          .filter((result: any) => {
+            const address = result.address || {};
+            const postalCode = address.postcode || '';
+            return postalCode === zipCode || postalCode.startsWith(zipCode.substring(0, 3));
+          })
+          .slice(0, 10);
+        
+        if (zipFilteredResults.length > 0) {
+          setAddresses(zipFilteredResults);
+        } else {
+          setSearchError("No restaurants found in zip code 41101");
+        }
       } else {
         setAddresses(filteredResults);
       }
