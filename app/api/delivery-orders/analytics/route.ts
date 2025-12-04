@@ -14,6 +14,7 @@ export async function GET(request: NextRequest) {
     const excludeApps = searchParams.getAll("excludeApps");
     const dayOfWeekParam = searchParams.get("dayOfWeek");
     const dayOfWeek = dayOfWeekParam !== null ? parseInt(dayOfWeekParam, 10) : null;
+    const timezone = searchParams.get("timezone") || "America/New_York"; // Default to EST if not provided
 
     if (!userId) {
       return NextResponse.json({ error: "Missing userId" }, { status: 400 });
@@ -44,7 +45,7 @@ export async function GET(request: NextRequest) {
     if (dayOfWeek !== null && !isNaN(dayOfWeek) && dayOfWeek >= 0 && dayOfWeek <= 6) {
       filteredOrdersForBestRestaurant = orders.filter((order) => {
         const orderDate = new Date(order.processedAt);
-        const orderDayOfWeek = orderDate.getDay(); // 0 = Sunday, 6 = Saturday
+        const orderDayOfWeek = getDayOfWeekInTimezone(orderDate, timezone); // 0 = Sunday, 6 = Saturday
         return orderDayOfWeek === dayOfWeek;
       });
     }
@@ -219,12 +220,40 @@ export async function GET(request: NextRequest) {
       })
       .sort((a, b) => b.totalEarnings - a.totalEarnings);
 
+    // Helper function to get hour and minutes in user's timezone
+    const getHourInTimezone = (utcDate: Date, tz: string): number => {
+      const formatter = new Intl.DateTimeFormat("en-US", {
+        timeZone: tz,
+        hour: "numeric",
+        hour12: false,
+      });
+      return parseInt(formatter.format(utcDate), 10);
+    };
+
+    const getMinutesInTimezone = (utcDate: Date, tz: string): number => {
+      const formatter = new Intl.DateTimeFormat("en-US", {
+        timeZone: tz,
+        minute: "numeric",
+      });
+      return parseInt(formatter.format(utcDate), 10);
+    };
+
+    const getDayOfWeekInTimezone = (utcDate: Date, tz: string): number => {
+      // Format date components in the target timezone
+      const year = parseInt(new Intl.DateTimeFormat("en-US", { timeZone: tz, year: "numeric" }).format(utcDate), 10);
+      const month = parseInt(new Intl.DateTimeFormat("en-US", { timeZone: tz, month: "numeric" }).format(utcDate), 10) - 1; // 0-indexed
+      const day = parseInt(new Intl.DateTimeFormat("en-US", { timeZone: tz, day: "numeric" }).format(utcDate), 10);
+      // Create a date object from these components (in local time) and get day of week
+      const dateInTz = new Date(year, month, day);
+      return dateInTz.getDay();
+    };
+
     // Calculate best restaurant per hour (highest combined score in that hour)
     // Use filtered orders if dayOfWeek filter is applied
     const hourRestaurantMap = new Map<string, any>(); // Key: "hour:restaurantName"
     filteredOrdersForBestRestaurant.forEach((order) => {
       const date = new Date(order.processedAt);
-      const hour = date.getHours();
+      const hour = getHourInTimezone(date, timezone);
       const restaurantName = order.restaurantName || "Unknown";
       const key = `${hour}:${restaurantName}`;
 
@@ -284,7 +313,7 @@ export async function GET(request: NextRequest) {
     const dayMap = new Map<number, any>();
     orders.forEach((order) => {
       const date = new Date(order.processedAt);
-      const dayOfWeek = date.getDay(); // 0 = Sunday, 6 = Saturday
+      const dayOfWeek = getDayOfWeekInTimezone(date, timezone); // 0 = Sunday, 6 = Saturday
       if (!dayMap.has(dayOfWeek)) {
         dayMap.set(dayOfWeek, {
           dayOfWeek,
@@ -464,13 +493,13 @@ export async function GET(request: NextRequest) {
       };
       
       // Group orders by hour and segment (each hour divided into 3 segments: 0-20, 20-40, 40-60 minutes)
-      // Use getHours() and getMinutes() to match existing hour logic
+      // Use timezone-aware hour and minute extraction
       const hourSegmentMap = new Map<string, any[]>(); // Key: "hour:segment"
       
       dateRangeOrders.forEach((order) => {
         const date = new Date(order.processedAt);
-        const hour = date.getHours(); // Match existing logic
-        const minutes = date.getMinutes();
+        const hour = getHourInTimezone(date, timezone);
+        const minutes = getMinutesInTimezone(date, timezone);
         
         // Determine segment: 0-19 = segment 0, 20-39 = segment 1, 40-59 = segment 2
         const segment = Math.floor(minutes / 20);
@@ -552,7 +581,7 @@ export async function GET(request: NextRequest) {
           
           for (const order of sortedByTime) {
             const orderDate = new Date(order.processedAt);
-            const orderMinutes = orderDate.getMinutes();
+            const orderMinutes = getMinutesInTimezone(orderDate, timezone);
             const orderStartTime = orderMinutes; // Minutes from start of hour
             
             // If order starts before current time, use current time (we're already past it)
