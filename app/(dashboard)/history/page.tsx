@@ -12,7 +12,6 @@ import LinkCustomerModal from "@/components/LinkCustomerModal";
 import LinkOrderModal from "@/components/LinkOrderModal";
 import { useTransactions, useDeleteTransaction, queryKeys } from "@/hooks/useQueries";
 import { useQueryClient } from "@tanstack/react-query";
-import { openInMaps, shareWithTesla } from "@/lib/map-share-utils";
 
 interface LinkedCustomer {
   id: string;
@@ -388,37 +387,16 @@ export default function HistoryPage() {
                                 </button>
                               ))}
                               {transaction.linkedOcrExports?.map((customer) => (
-                                <div key={customer.id} className="flex items-center gap-1 flex-wrap">
-                                  <button
-                                    onClick={() => {
-                                      setEditingCustomerAddress(customer.customerAddress);
-                                      setEditingCustomerEntryId(customer.entryId || null);
-                                    }}
-                                    className="text-xs text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 hover:underline flex items-center gap-1 text-left"
-                                  >
-                                    👤 {customer.customerName} {customer.customerAddress}
-                                  </button>
-                                  <button
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      openInMaps(customer.customerAddress);
-                                    }}
-                                    className="p-2 text-blue-600 dark:text-blue-400 hover:text-blue-900 dark:hover:text-blue-300 min-w-[44px] min-h-[44px] flex items-center justify-center rounded"
-                                    title="Open in Maps"
-                                  >
-                                    🗺️
-                                  </button>
-                                  <button
-                                    onClick={async (e) => {
-                                      e.stopPropagation();
-                                      await shareWithTesla(customer.customerAddress, customer.customerName);
-                                    }}
-                                    className="p-2 text-blue-600 dark:text-blue-400 hover:text-blue-900 dark:hover:text-blue-300 min-w-[44px] min-h-[44px] flex items-center justify-center rounded"
-                                    title="Share with Tesla"
-                                  >
-                                    📤
-                                  </button>
-                                </div>
+                                <button
+                                  key={customer.id}
+                                  onClick={() => {
+                                    setEditingCustomerAddress(customer.customerAddress);
+                                    setEditingCustomerEntryId(customer.entryId || null);
+                                  }}
+                                  className="text-xs text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 hover:underline flex items-center gap-1 text-left"
+                                >
+                                  👤 {customer.customerName} {customer.customerAddress}
+                                </button>
                               ))}
                             </div>
                           )}
