@@ -371,6 +371,42 @@ export async function attemptAutoLinkCustomerToActiveOrders(
   
   console.log(`Found ${activeOrders.length} active delivery order(s) to potentially link for customer ${customerId}`);
 
+  // Also link customer to the transactions that have these active orders
+  const linkedTransactionIds: string[] = [];
+  for (const transaction of activeTransactions) {
+    const transactionId = transaction._id.toString();
+    
+    // Skip if transaction already has this customer linked
+    if (transaction.linkedOcrExportIds && transaction.linkedOcrExportIds.some((id: any) => 
+      id.toString() === customerId
+    )) {
+      continue;
+    }
+
+    // Skip if customer already has this transaction linked
+    if (customer.linkedTransactionIds && customer.linkedTransactionIds.some((id: any) => 
+      id.toString() === transactionId
+    )) {
+      continue;
+    }
+
+    // Perform bidirectional link between customer and transaction
+    await Transaction.findByIdAndUpdate(
+      transaction._id,
+      { $addToSet: { linkedOcrExportIds: customerId } },
+      { new: true }
+    );
+
+    await OcrExport.findByIdAndUpdate(
+      customerId,
+      { $addToSet: { linkedTransactionIds: transaction._id } },
+      { new: true }
+    );
+
+    linkedTransactionIds.push(transactionId);
+    console.log(`Successfully linked customer ${customerId} to transaction ${transactionId}`);
+  }
+
   // Link customer to each active order that isn't already linked
   for (const order of activeOrders) {
     const orderId = order._id.toString();
@@ -408,6 +444,6 @@ export async function attemptAutoLinkCustomerToActiveOrders(
     linkedOrderIds.push(orderId);
   }
 
-  console.log(`Auto-linked customer to ${linkedOrderIds.length} active order(s)`);
+  console.log(`Auto-linked customer to ${linkedTransactionIds.length} active transaction(s) and ${linkedOrderIds.length} active order(s)`);
   return linkedOrderIds;
 }
