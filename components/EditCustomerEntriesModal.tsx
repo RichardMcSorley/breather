@@ -243,17 +243,45 @@ export default function EditCustomerEntriesModal({
                       <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                         Address
                       </label>
-                      <textarea
-                        value={formValues.customerAddress}
-                        onChange={(e) =>
-                          setFormValues((prev) => ({
-                            ...prev,
-                            customerAddress: e.target.value,
-                          }))
-                        }
-                        className="w-full rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 px-3 py-2 text-sm text-gray-900 dark:text-white"
-                        rows={2}
-                      />
+                      <div className="flex gap-2">
+                        <textarea
+                          value={formValues.customerAddress}
+                          onChange={(e) =>
+                            setFormValues((prev) => ({
+                              ...prev,
+                              customerAddress: e.target.value,
+                            }))
+                          }
+                          className="flex-1 rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 px-3 py-2 text-sm text-gray-900 dark:text-white"
+                          rows={2}
+                        />
+                        {formValues.customerAddress && (
+                          <button
+                            onClick={async () => {
+                              if (navigator.share) {
+                                try {
+                                  await navigator.share({
+                                    text: formValues.customerAddress,
+                                  });
+                                } catch (err) {
+                                  console.log("Share cancelled or failed:", err);
+                                }
+                              } else {
+                                try {
+                                  await navigator.clipboard.writeText(formValues.customerAddress);
+                                  alert("Address copied to clipboard");
+                                } catch (err) {
+                                  console.error("Failed to copy address:", err);
+                                }
+                              }
+                            }}
+                            className="p-2 text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 min-w-[44px] min-h-[44px] flex items-center justify-center self-start"
+                            title="Share Address"
+                          >
+                            📤
+                          </button>
+                        )}
+                      </div>
                     </div>
                     <div>
                       <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
@@ -290,15 +318,43 @@ export default function EditCustomerEntriesModal({
                 ) : (
                   <div>
                     <div className="flex items-start justify-between mb-2">
-                      <div>
+                      <div className="flex-1">
                         <div className="text-sm font-medium text-gray-900 dark:text-white">
                           {formatDate(visit.processedAt || visit.createdAt)}
                         </div>
                         <div className="text-sm text-gray-700 dark:text-gray-300 mt-1">
                           {visit.customerName}
                         </div>
-                        <div className="text-xs text-gray-600 dark:text-gray-400 mt-1">
-                          {visit.customerAddress}
+                        <div className="flex items-center gap-2 mt-1">
+                          <div className="text-xs text-gray-600 dark:text-gray-400">
+                            {visit.customerAddress}
+                          </div>
+                          {visit.customerAddress && (
+                            <button
+                              onClick={async () => {
+                                if (navigator.share) {
+                                  try {
+                                    await navigator.share({
+                                      text: visit.customerAddress,
+                                    });
+                                  } catch (err) {
+                                    console.log("Share cancelled or failed:", err);
+                                  }
+                                } else {
+                                  try {
+                                    await navigator.clipboard.writeText(visit.customerAddress);
+                                    alert("Address copied to clipboard");
+                                  } catch (err) {
+                                    console.error("Failed to copy address:", err);
+                                  }
+                                }
+                              }}
+                              className="p-1 text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 min-w-[44px] min-h-[44px] flex items-center justify-center"
+                              title="Share Address"
+                            >
+                              📤
+                            </button>
+                          )}
                         </div>
                       </div>
                       {visit.appName && (

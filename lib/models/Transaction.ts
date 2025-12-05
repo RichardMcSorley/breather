@@ -13,6 +13,13 @@ export interface ITransaction extends Document {
   dueDate?: Date;
   linkedOcrExportIds?: mongoose.Types.ObjectId[];
   linkedDeliveryOrderIds?: mongoose.Types.ObjectId[];
+  step?: string;
+  active?: boolean;
+  stepLog?: Array<{
+    fromStep?: string;
+    toStep: string;
+    time: Date;
+  }>;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -66,6 +73,26 @@ const TransactionSchema: Schema = new Schema(
     linkedDeliveryOrderIds: [{
       type: Schema.Types.ObjectId,
       ref: "DeliveryOrder",
+    }],
+    step: {
+      type: String,
+      default: "CREATED",
+    },
+    active: {
+      type: Boolean,
+      default: true,
+    },
+    stepLog: [{
+      fromStep: String,
+      toStep: {
+        type: String,
+        required: true,
+      },
+      time: {
+        type: Date,
+        required: true,
+        default: Date.now,
+      },
     }],
   },
   {

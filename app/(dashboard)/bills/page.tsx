@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useMemo, useRef } from "react";
 import { useSession } from "next-auth/react";
+import { Pencil, Trash2 } from "lucide-react";
 import Layout from "@/components/Layout";
 import Card from "@/components/ui/Card";
 import Button from "@/components/ui/Button";
@@ -533,14 +534,14 @@ export default function BillsPage() {
                             className="p-1.5 sm:p-2 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white min-w-[36px] min-h-[36px] sm:min-w-[44px] sm:min-h-[44px] flex items-center justify-center rounded hover:bg-gray-100 dark:hover:bg-gray-700"
                             title="Edit"
                           >
-                            ✏️
+                            <Pencil className="w-4 h-4 sm:w-5 sm:h-5" />
                           </button>
                           <button
                             onClick={() => handleDeleteBill(bill._id)}
                             className="p-1.5 sm:p-2 text-red-600 dark:text-red-400 hover:text-red-900 dark:hover:text-red-300 min-w-[36px] min-h-[36px] sm:min-w-[44px] sm:min-h-[44px] flex items-center justify-center rounded hover:bg-red-50 dark:hover:bg-red-900/20"
                             title="Delete"
                           >
-                            🗑️
+                            <Trash2 className="w-4 h-4 sm:w-5 sm:h-5" />
                           </button>
                         </div>
                       </td>
@@ -712,14 +713,14 @@ export default function BillsPage() {
                                         className="p-1.5 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white min-w-[36px] min-h-[36px] flex items-center justify-center rounded hover:bg-gray-100 dark:hover:bg-gray-700"
                                         title="Edit payment"
                                       >
-                                        ✏️
+                                        <Pencil className="w-4 h-4" />
                                       </button>
                                       <button
                                         onClick={() => handleDeletePayment(payment._id)}
                                         className="p-1.5 text-red-600 dark:text-red-400 hover:text-red-800 dark:hover:text-red-300 min-w-[36px] min-h-[36px] flex items-center justify-center rounded hover:bg-red-50 dark:hover:bg-red-900/20"
                                         title="Delete payment"
                                       >
-                                        🗑️
+                                        <Trash2 className="w-4 h-4" />
                                       </button>
                                     </div>
                                   </div>

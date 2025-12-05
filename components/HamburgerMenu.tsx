@@ -3,6 +3,7 @@
 import { useEffect } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import Link from "next/link";
+import { Receipt, Package, BarChart3, X } from "lucide-react";
 
 interface HamburgerMenuProps {
   isOpen: boolean;
@@ -32,9 +33,9 @@ export default function HamburgerMenu({ isOpen, onClose }: HamburgerMenuProps) {
   }, [isOpen, onClose]);
 
   const menuItems = [
-    { href: "/ocr-data", label: "Customers", icon: "🧾" },
-    { href: "/delivery-orders", label: "Orders", icon: "📦" },
-    { href: "/order-analytics", label: "Order Analytics", icon: "📊" },
+    { href: "/ocr-data", label: "Customers", icon: Receipt },
+    { href: "/delivery-orders", label: "Orders", icon: Package },
+    { href: "/order-analytics", label: "Order Analytics", icon: BarChart3 },
   ];
 
   const handleLinkClick = () => {
@@ -69,7 +70,7 @@ export default function HamburgerMenu({ isOpen, onClose }: HamburgerMenuProps) {
               className="p-2 text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white min-w-[44px] min-h-[44px] flex items-center justify-center"
               aria-label="Close menu"
             >
-              ✕
+              <X className="w-6 h-6" />
             </button>
           </div>
 
@@ -89,7 +90,7 @@ export default function HamburgerMenu({ isOpen, onClose }: HamburgerMenuProps) {
                           : "text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
                       }`}
                     >
-                      <span className="text-xl">{item.icon}</span>
+                      <item.icon className="w-5 h-5" />
                       <span className="font-medium">{item.label}</span>
                     </Link>
                   </li>

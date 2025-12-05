@@ -4,6 +4,7 @@ import { useSession, signOut } from "next-auth/react";
 import { usePathname, useRouter } from "next/navigation";
 import Link from "next/link";
 import { ReactNode, useState } from "react";
+import { BarChart3, Clock, FileText, Car, Menu, Sun, Moon, Settings } from "lucide-react";
 import OfflineIndicator from "./OfflineIndicator";
 import { useTheme } from "./ThemeProvider";
 import ToastContainer from "./ui/Toast";
@@ -21,10 +22,10 @@ export default function Layout({ children }: LayoutProps) {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
 
   const navItems = [
-    { href: "/dashboard", label: "Dashboard", icon: "📊" },
-    { href: "/history", label: "Logs", icon: "🕐" },
-    { href: "/bills", label: "Bills", icon: "📄" },
-    { href: "/mileage", label: "Mileage", icon: "🚗" },
+    { href: "/dashboard", label: "Dashboard", icon: BarChart3 },
+    { href: "/history", label: "Logs", icon: Clock },
+    { href: "/bills", label: "Bills", icon: FileText },
+    { href: "/mileage", label: "Mileage", icon: Car },
   ];
 
   return (
@@ -39,7 +40,7 @@ export default function Layout({ children }: LayoutProps) {
               className="p-2 text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white min-w-[44px] min-h-[44px] flex items-center justify-center"
               aria-label="Open menu"
             >
-              ☰
+              <Menu className="w-6 h-6" />
             </button>
             <h1 className="text-xl font-bold text-gray-900 dark:text-white">Breather</h1>
           </div>
@@ -49,14 +50,14 @@ export default function Layout({ children }: LayoutProps) {
               className="p-2 text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white min-w-[44px] min-h-[44px] flex items-center justify-center"
               aria-label="Toggle dark mode"
             >
-              {theme === "dark" ? "☀️" : "🌙"}
+              {theme === "dark" ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
             </button>
             <button
               onClick={() => router.push("/configuration")}
               className="p-2 text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white min-w-[44px] min-h-[44px] flex items-center justify-center"
               aria-label="Settings"
             >
-              ⚙️
+              <Settings className="w-5 h-5" />
             </button>
             <button
               onClick={() => signOut({ callbackUrl: "/login" })}
@@ -98,7 +99,7 @@ export default function Layout({ children }: LayoutProps) {
                     : "text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white"
                 }`}
               >
-                <span className="text-xl mb-1">{item.icon}</span>
+                <item.icon className="w-5 h-5 mb-1" />
                 <span className="text-xs font-medium">{item.label}</span>
               </Link>
             );

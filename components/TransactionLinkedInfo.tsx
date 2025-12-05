@@ -1,6 +1,7 @@
 "use client";
 
 import { useQueryClient } from "@tanstack/react-query";
+import { User, Utensils } from "lucide-react";
 import { queryKeys } from "@/hooks/useQueries";
 
 interface TransactionLinkedInfoProps {
@@ -42,8 +43,9 @@ export default function TransactionLinkedInfo({
               <div className="flex items-center justify-between">
                 <div>
                   <div className="text-xs text-blue-600 dark:text-blue-400 mb-1">Linked Customer</div>
-                  <div className="text-sm font-semibold text-gray-900 dark:text-white">
-                    👤 {customer.customerName}
+                  <div className="text-sm font-semibold text-gray-900 dark:text-white flex items-center gap-1">
+                    <User className="w-4 h-4" />
+                    {customer.customerName}
                   </div>
                   <div className="text-xs text-gray-600 dark:text-gray-400 mt-1">
                     {customer.customerAddress}
@@ -106,8 +108,9 @@ export default function TransactionLinkedInfo({
               <div className="flex items-center justify-between">
                 <div>
                   <div className="text-xs text-purple-600 dark:text-purple-400 mb-1">Linked Delivery Order</div>
-                  <div className="text-sm font-semibold text-gray-900 dark:text-white">
-                    📦 {order.restaurantName}
+                  <div className="text-sm font-semibold text-gray-900 dark:text-white flex items-center gap-1">
+                    <Utensils className="w-4 h-4" />
+                    {order.restaurantName}
                   </div>
                   <div className="text-xs text-gray-600 dark:text-gray-400 mt-1">
                     {order.appName} • {order.miles?.toFixed(1) || "0"} mi • ${order.money?.toFixed(2) || "0.00"}

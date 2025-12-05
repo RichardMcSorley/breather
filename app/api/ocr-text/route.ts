@@ -9,7 +9,7 @@ import { processOcrScreenshot } from "@/lib/ocr-processor";
 import { geocodeAddress } from "@/lib/geocode-helper";
 import { isSameAddress } from "@/lib/ocr-analytics";
 import { randomBytes } from "crypto";
-import { attemptAutoLinkCustomerToTransaction } from "@/lib/auto-link-helper";
+import { attemptAutoLinkCustomerToTransaction, attemptAutoLinkCustomerToActiveOrders } from "@/lib/auto-link-helper";
 import { getCurrentESTAsUTC } from "@/lib/date-utils";
 
 export async function POST(request: NextRequest) {
@@ -85,6 +85,14 @@ export async function POST(request: NextRequest) {
       } catch (autoLinkError) {
         // Silently fail auto-linking - don't break customer creation
         console.error("Auto-linking error:", autoLinkError);
+      }
+
+      // Attempt auto-linking to active orders
+      try {
+        await attemptAutoLinkCustomerToActiveOrders(exportEntry, userId);
+      } catch (autoLinkOrdersError) {
+        // Silently fail auto-linking - don't break customer creation
+        console.error("Auto-linking to active orders error:", autoLinkOrdersError);
       }
 
       // Check for repeat customers by address (address is the unique identifier)

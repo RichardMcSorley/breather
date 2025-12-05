@@ -19,6 +19,8 @@ export interface IDeliveryOrder extends Document {
   metadata?: Record<string, any>;
   linkedTransactionIds?: mongoose.Types.ObjectId[];
   linkedOcrExportIds?: mongoose.Types.ObjectId[];
+  step?: string;
+  active?: boolean;
   processedAt: Date;
   createdAt: Date;
   updatedAt: Date;
@@ -95,6 +97,14 @@ const DeliveryOrderSchema: Schema = new Schema(
       type: Schema.Types.ObjectId,
       ref: "OcrExport",
     }],
+    step: {
+      type: String,
+      default: "CREATED",
+    },
+    active: {
+      type: Boolean,
+      default: true,
+    },
   },
   {
     timestamps: true,

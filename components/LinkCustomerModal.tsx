@@ -154,6 +154,23 @@ export default function LinkCustomerModal({
         throw new Error(errorData.error || "Failed to link customer");
       }
 
+      // Transition transaction step to NAV_TO_CUSTOMER after linking
+      if (transactionId) {
+        try {
+          await fetch(`/api/transactions/${transactionId}`, {
+            method: "PUT",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              step: "NAV_TO_CUSTOMER",
+            }),
+          });
+        } catch (err) {
+          console.error("Error updating transaction step:", err);
+        }
+      }
+
       onLink?.();
       onClose();
     } catch (err) {
@@ -163,8 +180,45 @@ export default function LinkCustomerModal({
     }
   };
 
+  const handleSkip = async () => {
+    if (!transactionId) return;
+
+    try {
+      setError(null);
+      const response = await fetch(`/api/transactions/${transactionId}`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          step: "NAV_TO_CUSTOMER",
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ error: "Failed to skip step" }));
+        throw new Error(errorData.error || "Failed to skip step");
+      }
+
+      onLink?.();
+      onClose();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to skip step");
+    }
+  };
+
   return (
     <Modal isOpen={isOpen} onClose={onClose} title="Link Customer">
+      {transactionId && (
+        <div className="mb-4 flex justify-end">
+          <button
+            onClick={handleSkip}
+            className="px-4 py-2 text-base font-medium rounded-lg bg-orange-500 text-white hover:bg-orange-600 transition-colors shadow-md"
+          >
+            Skip Step
+          </button>
+        </div>
+      )}
       {filtersActive && (
         <div className="mb-4 p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
           <div className="flex items-center justify-between mb-2">

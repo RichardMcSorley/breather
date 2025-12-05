@@ -51,6 +51,9 @@ export async function GET(
       notes: transaction.notes,
       tag: transaction.tag,
       dueDate: transaction.dueDate ? formatDateAsUTC(new Date(transaction.dueDate)) : undefined,
+      step: transaction.step || "CREATED",
+      active: transaction.active !== undefined ? transaction.active : true,
+      stepLog: transaction.stepLog || [],
       createdAt: transaction.createdAt.toISOString(),
       updatedAt: transaction.updatedAt.toISOString(),
     };
@@ -110,7 +113,7 @@ export async function PUT(
     }
 
     const body = await request.json();
-    const { amount, type, date, time, isBill, notes, tag, dueDate } = body;
+    const { amount, type, date, time, isBill, notes, tag, dueDate, step, active } = body;
 
     const existingTransaction = await Transaction.findOne({
       _id: id,
@@ -166,6 +169,8 @@ export async function PUT(
       notes?: string;
       tag?: string;
       dueDate?: Date;
+      step?: string;
+      active?: boolean;
     }> = {};
 
     if (parsedAmount !== undefined) {
@@ -195,10 +200,29 @@ export async function PUT(
     if (parsedDueDate !== undefined) {
       updateData.dueDate = parsedDueDate;
     }
+    if (step !== undefined) {
+      updateData.step = step;
+    }
+    if (active !== undefined) {
+      updateData.active = active;
+    }
+
+    // Log step transition if step is being changed
+    const shouldLogStep = step !== undefined && step !== existingTransaction.step;
+    const updateQuery: any = { ...updateData };
+    if (shouldLogStep) {
+      updateQuery.$push = {
+        stepLog: {
+          fromStep: existingTransaction.step || null,
+          toStep: step,
+          time: new Date(),
+        },
+      };
+    }
 
     const transaction = await Transaction.findOneAndUpdate(
       { _id: id, userId: session.user.id },
-      updateData,
+      updateQuery,
       { new: true }
     );
 
@@ -225,6 +249,9 @@ export async function PUT(
       ...transactionObj,
       date: formattedDate || transactionObj.date,
       dueDate: formattedDueDate,
+      step: transactionObj.step || "CREATED",
+      active: transactionObj.active !== undefined ? transactionObj.active : true,
+      stepLog: transactionObj.stepLog || [],
     });
   } catch (error) {
     return handleApiError(error);

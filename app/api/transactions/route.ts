@@ -73,7 +73,7 @@ export async function GET(request: NextRequest) {
 
     const transactions = await Transaction.find(query)
       .populate("linkedOcrExportIds", "customerName customerAddress appName entryId")
-      .populate("linkedDeliveryOrderIds", "restaurantName restaurantAddress appName miles money entryId userLatitude userLongitude userAddress")
+      .populate("linkedDeliveryOrderIds", "restaurantName restaurantAddress appName miles money entryId userLatitude userLongitude userAddress step active")
       .sort({ date: -1, createdAt: -1 })
       .skip((page - 1) * limit)
       .limit(limit)
@@ -86,6 +86,9 @@ export async function GET(request: NextRequest) {
         _id: t._id.toString(),
         date: t.date ? formatDateAsUTC(new Date(t.date)) : "",
         dueDate: t.dueDate ? formatDateAsUTC(new Date(t.dueDate)) : undefined,
+        step: t.step,
+        active: t.active,
+        stepLog: t.stepLog || [],
         createdAt: t.createdAt.toISOString(),
         updatedAt: t.updatedAt.toISOString(),
       };
@@ -150,7 +153,7 @@ export async function POST(request: NextRequest) {
     await connectDB();
 
     const body = await request.json();
-    const { amount, type, date, time, isBill, notes, tag, dueDate } = body;
+    const { amount, type, date, time, isBill, notes, tag, dueDate, step, active } = body;
 
     if (!amount || !type || !date || !time) {
       return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
@@ -194,6 +197,13 @@ export async function POST(request: NextRequest) {
       notes,
       tag,
       dueDate: parsedDueDate,
+      step: step || "CREATED",
+      active: active !== undefined ? active : true,
+      stepLog: [{
+        fromStep: null,
+        toStep: step || "CREATED",
+        time: new Date(),
+      }],
     });
 
     // Attempt auto-linking for income transactions
@@ -223,6 +233,9 @@ export async function POST(request: NextRequest) {
       ...transactionObj,
       date: formattedDate || transactionObj.date,
       dueDate: formattedDueDate,
+      step: transactionObj.step || "CREATED",
+      active: transactionObj.active !== undefined ? transactionObj.active : true,
+      stepLog: transactionObj.stepLog || [],
     }, { status: 201 });
   } catch (error) {
     return handleApiError(error);

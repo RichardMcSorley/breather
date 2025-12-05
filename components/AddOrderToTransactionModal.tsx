@@ -17,6 +17,11 @@ interface DeliveryOrder {
   restaurantName: string;
   time: string;
   processedAt: string;
+  step?: string;
+  active?: boolean;
+  userLatitude?: number;
+  userLongitude?: number;
+  userAddress?: string;
   linkedTransactions?: Array<{
     _id: string;
     amount: number;

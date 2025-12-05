@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useMemo } from "react";
+import { Utensils } from "lucide-react";
 import Modal from "./ui/Modal";
 import { format } from "date-fns";
 import { getDayOfWeekName, getHourBucketName } from "@/lib/ocr-analytics";
@@ -471,8 +472,9 @@ export default function CustomerDetailsModal({
                         className="p-3 bg-gray-50 dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-700 flex items-center justify-between"
                       >
                         <div>
-                          <div className="font-semibold text-gray-900 dark:text-white">
-                            📦 {order.restaurantName}
+                          <div className="font-semibold text-gray-900 dark:text-white flex items-center gap-1">
+                            <Utensils className="w-4 h-4" />
+                            {order.restaurantName}
                           </div>
                           <div className="text-xs text-gray-600 dark:text-gray-400">
                             {order.appName} • {order.miles.toFixed(1)} mi • ${order.money.toFixed(2)}

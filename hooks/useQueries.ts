@@ -702,6 +702,126 @@ export function useQuickTransaction() {
   });
 }
 
+export function useQuickAddOrderTransaction() {
+  const queryClient = useQueryClient();
+  const toast = useToast();
+
+  return useMutation({
+    mutationFn: async (userId: string) => {
+      // Fetch delivery orders from last 24 hours
+      const params = new URLSearchParams({
+        userId,
+        limit: "50",
+      });
+      const ordersRes = await fetch(`/api/delivery-orders?${params.toString()}`);
+      if (!ordersRes.ok) {
+        throw new Error("Failed to fetch delivery orders");
+      }
+      const ordersData = await ordersRes.json();
+      
+      // Filter to only unlinked orders from last 24 hours
+      const now = new Date();
+      const orders = (ordersData.orders || []).filter((order: any) => {
+        // Filter out orders already linked to transactions
+        if (order.linkedTransactions && order.linkedTransactions.length > 0) {
+          return false;
+        }
+        
+        // Filter to only show orders from the last 24 hours
+        const orderDate = new Date(order.processedAt);
+        const hoursDiff = (now.getTime() - orderDate.getTime()) / (1000 * 60 * 60);
+        return hoursDiff <= 24;
+      });
+
+      if (orders.length === 0) {
+        throw new Error("No unlinked orders found from the last 24 hours");
+      }
+
+      // Get the most recent order (they're already sorted by processedAt desc)
+      const order = orders[0];
+
+      // Convert UTC processedAt to EST date/time (same logic as AddTransactionModal)
+      const utcDate = new Date(order.processedAt);
+      const utcTimestamp = utcDate.getTime();
+      
+      // EST is UTC-5, so subtract 5 hours in milliseconds
+      const EST_OFFSET_MS = 5 * 60 * 60 * 1000;
+      const estTimestamp = utcTimestamp - EST_OFFSET_MS;
+      const estDate = new Date(estTimestamp);
+      
+      // Extract EST date components
+      const estYear = estDate.getUTCFullYear();
+      const estMonth = estDate.getUTCMonth();
+      const estDay = estDate.getUTCDate();
+      const estHour = estDate.getUTCHours();
+      const estMinute = estDate.getUTCMinutes();
+      
+      // Format EST date as YYYY-MM-DD
+      const formattedDate = `${estYear}-${String(estMonth + 1).padStart(2, '0')}-${String(estDay).padStart(2, '0')}`;
+      
+      // Use order's time if available, otherwise use EST time from processedAt
+      let orderTime = order.time || "";
+      if (!orderTime) {
+        orderTime = `${String(estHour).padStart(2, '0')}:${String(estMinute).padStart(2, '0')}`;
+      }
+
+      // Create transaction
+      const transactionRes = await fetch("/api/transactions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          amount: order.money,
+          type: "income",
+          date: formattedDate,
+          time: orderTime,
+          notes: "",
+          tag: order.appName,
+          isBill: false,
+          step: "CREATED",
+          active: true,
+        }),
+      });
+
+      if (!transactionRes.ok) {
+        const errorData = await transactionRes.json().catch(() => ({ error: "Unknown error" }));
+        throw new Error(errorData.error || "Failed to create transaction");
+      }
+
+      const transaction = await transactionRes.json();
+
+      // Link the order to the transaction
+      if (transaction._id && order.id) {
+        const linkRes = await fetch("/api/link", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            transactionId: transaction._id,
+            deliveryOrderId: order.id,
+            action: "link",
+          }),
+        });
+
+        if (!linkRes.ok) {
+          // Transaction was created but linking failed - log error but don't fail completely
+          console.error("Failed to link order:", await linkRes.text());
+        }
+      }
+
+      return { transaction, order };
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ["transactions"] });
+      queryClient.invalidateQueries({ queryKey: ["deliveryOrders"] });
+      queryClient.invalidateQueries({ queryKey: ["summary"] });
+      queryClient.invalidateQueries({ queryKey: ["heatmap"] });
+      toast.success(`Transaction added for ${data.order.restaurantName}`);
+    },
+    onError: (error: Error) => {
+      toast.error(error.message || "Error adding order transaction");
+    },
+  });
+}
+
 export function useTeslaConnection() {
   return useQuery({
     queryKey: queryKeys.teslaConnection(),

@@ -23,6 +23,13 @@ export interface TransactionResponse {
   notes?: string;
   tag?: string;
   dueDate?: string; // YYYY-MM-DD format
+  step?: string;
+  active?: boolean;
+  stepLog?: Array<{
+    fromStep?: string | null;
+    toStep: string;
+    time: Date | string;
+  }>;
   createdAt: string;
   updatedAt: string;
 }
@@ -206,6 +213,13 @@ export interface FormattedTransaction {
   notes?: string;
   tag?: string;
   dueDate?: string;
+  step?: string;
+  active?: boolean;
+  stepLog?: Array<{
+    fromStep?: string | null;
+    toStep: string;
+    time: Date | string;
+  }>;
   createdAt: string;
   updatedAt: string;
 }

@@ -60,6 +60,8 @@ export async function POST(request: NextRequest) {
         rawResponse: processed.rawResponse,
         metadata: processed.metadata,
         processedAt: processedAtDate,
+        step: "CREATED",
+        active: true,
         ...(lat !== undefined && lat !== null && { userLatitude: lat }),
         ...(lon !== undefined && lon !== null && { userLongitude: lon }),
         ...(alt !== undefined && alt !== null && { userAltitude: alt }),
@@ -162,6 +164,8 @@ export async function GET(request: NextRequest) {
           userLongitude: order.userLongitude,
           userAltitude: order.userAltitude,
           userAddress: order.userAddress,
+          step: order.step || "CREATED",
+          active: order.active,
           processedAt: order.processedAt.toISOString(),
           createdAt: order.createdAt.toISOString(),
           linkedTransactions: transactions,
@@ -260,6 +264,8 @@ export async function GET(request: NextRequest) {
         userLongitude: order.userLongitude,
         userAltitude: order.userAltitude,
         userAddress: order.userAddress,
+        step: order.step || "CREATED",
+        active: order.active !== undefined ? order.active : true,
         processedAt: order.processedAt.toISOString(),
         createdAt: order.createdAt.toISOString(),
         linkedTransactions: transactionsByOrderId.get(order._id.toString()) || [],
@@ -304,7 +310,7 @@ export async function PATCH(request: NextRequest) {
     await connectDB();
 
     const body = await request.json();
-    const { id, appName, miles, money, restaurantName, restaurantAddress, time } = body;
+    const { id, appName, miles, money, restaurantName, restaurantAddress, time, step } = body;
 
     if (!id) {
       return NextResponse.json({ error: "Missing id" }, { status: 400 });
@@ -335,6 +341,9 @@ export async function PATCH(request: NextRequest) {
     }
     if (typeof time === "string") {
       updateSet.time = time;
+    }
+    if (typeof step === "string") {
+      updateSet.step = step;
     }
 
     // Recalculate ratio if miles or money changed
@@ -373,6 +382,8 @@ export async function PATCH(request: NextRequest) {
         restaurantName: result.restaurantName,
         restaurantAddress: result.restaurantAddress,
         time: result.time,
+        step: result.step || "CREATED",
+        active: result.active !== undefined ? result.active : true,
         processedAt: result.processedAt.toISOString(),
         createdAt: result.createdAt.toISOString(),
       },

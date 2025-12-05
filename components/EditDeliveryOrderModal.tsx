@@ -1,9 +1,11 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { Search } from "lucide-react";
 import Modal from "./ui/Modal";
 import { format } from "date-fns";
 import MetadataViewer from "./MetadataViewer";
+import ShareOrderModal from "./ShareOrderModal";
 
 interface LinkedTransaction {
   _id: string;
@@ -54,6 +56,7 @@ export default function EditDeliveryOrderModal({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [showShareModal, setShowShareModal] = useState(false);
   const [formValues, setFormValues] = useState({
     appName: "",
     miles: "",
@@ -128,6 +131,13 @@ export default function EditDeliveryOrderModal({
         throw new Error("Money must be a positive number");
       }
 
+      // Remove restaurant name from the beginning of the address if present
+      let cleanedAddress = formValues.restaurantAddress || null;
+      if (cleanedAddress && formValues.restaurantName && cleanedAddress.startsWith(formValues.restaurantName)) {
+        // Remove restaurant name and any following comma/space
+        cleanedAddress = cleanedAddress.substring(formValues.restaurantName.length).replace(/^[,\s]+/, "").trim();
+      }
+
       const response = await fetch("/api/delivery-orders", {
         method: "PATCH",
         headers: {
@@ -139,7 +149,7 @@ export default function EditDeliveryOrderModal({
           miles,
           money,
           restaurantName: formValues.restaurantName,
-          restaurantAddress: formValues.restaurantAddress || null,
+          restaurantAddress: cleanedAddress,
           time: formValues.time,
         }),
       });
@@ -250,18 +260,53 @@ export default function EditDeliveryOrderModal({
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
               Restaurant Address
             </label>
-            <input
-              type="text"
-              value={formValues.restaurantAddress}
-              onChange={(e) =>
-                setFormValues((prev) => ({
-                  ...prev,
-                  restaurantAddress: e.target.value,
-                }))
-              }
-              className="w-full rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 px-3 py-2 text-sm text-gray-900 dark:text-white"
-              placeholder="e.g., 123 Main St, City, State"
-            />
+            <div className="flex gap-2">
+              <input
+                type="text"
+                value={formValues.restaurantAddress}
+                onChange={(e) =>
+                  setFormValues((prev) => ({
+                    ...prev,
+                    restaurantAddress: e.target.value,
+                  }))
+                }
+                className="flex-1 rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 px-3 py-2 text-sm text-gray-900 dark:text-white"
+                placeholder="e.g., 123 Main St, City, State"
+              />
+              <button
+                onClick={() => setShowShareModal(true)}
+                className="p-2 text-purple-600 dark:text-purple-400 hover:text-purple-800 dark:hover:text-purple-300 min-w-[44px] min-h-[44px] flex items-center justify-center"
+                title="Search Restaurant Address"
+              >
+                <Search className="w-5 h-5" />
+              </button>
+              {formValues.restaurantAddress && (
+                <button
+                  onClick={async () => {
+                    if (navigator.share) {
+                      try {
+                        await navigator.share({
+                          text: formValues.restaurantAddress,
+                        });
+                      } catch (err) {
+                        console.log("Share cancelled or failed:", err);
+                      }
+                    } else {
+                      try {
+                        await navigator.clipboard.writeText(formValues.restaurantAddress);
+                        alert("Address copied to clipboard");
+                      } catch (err) {
+                        console.error("Failed to copy address:", err);
+                      }
+                    }
+                  }}
+                  className="p-2 text-purple-600 dark:text-purple-400 hover:text-purple-800 dark:hover:text-purple-300 min-w-[44px] min-h-[44px] flex items-center justify-center"
+                  title="Share Restaurant Address"
+                >
+                  📤
+                </button>
+              )}
+            </div>
           </div>
 
           <div className="grid grid-cols-2 gap-4">
@@ -417,6 +462,31 @@ export default function EditDeliveryOrderModal({
             </button>
           </div>
         </div>
+      )}
+
+      {order && (
+        <ShareOrderModal
+          isOpen={showShareModal}
+          onClose={() => setShowShareModal(false)}
+          restaurantName={formValues.restaurantName || order.restaurantName}
+          orderId={orderId || undefined}
+          orderDetails={{
+            miles: parseFloat(formValues.miles) || order.miles,
+            money: parseFloat(formValues.money) || order.money,
+            milesToMoneyRatio: formValues.miles && formValues.money 
+              ? parseFloat(formValues.money) / parseFloat(formValues.miles)
+              : order.milesToMoneyRatio,
+            appName: formValues.appName || order.appName,
+          }}
+          userLatitude={order.userLatitude || undefined}
+          userLongitude={order.userLongitude || undefined}
+          userAddress={order.userAddress || undefined}
+          onAddressSaved={() => {
+            fetchOrder();
+            onUpdate?.();
+            setShowShareModal(false);
+          }}
+        />
       )}
     </Modal>
   );

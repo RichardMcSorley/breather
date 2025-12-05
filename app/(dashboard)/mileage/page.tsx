@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useSession } from "next-auth/react";
+import { Pencil, Trash2 } from "lucide-react";
 import Layout from "@/components/Layout";
 import Card from "@/components/ui/Card";
 import Button from "@/components/ui/Button";
@@ -432,7 +433,7 @@ export default function MileagePage() {
                         className="p-2 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white min-w-[44px] min-h-[44px] flex items-center justify-center"
                         aria-label="Edit entry"
                       >
-                        ✏️
+                        <Pencil className="w-5 h-5" />
                       </button>
                       <button
                         onClick={() => handleDelete(entry._id)}
@@ -443,7 +444,7 @@ export default function MileagePage() {
                         {deleteMileageEntry.isPending ? (
                           <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-red-600 dark:border-red-400"></div>
                         ) : (
-                          <span className="text-xl">🗑️</span>
+                          <Trash2 className="w-5 h-5" />
                         )}
                       </button>
                     </div>

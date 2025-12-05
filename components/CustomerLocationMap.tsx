@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { AlertTriangle } from "lucide-react";
 import dynamic from "next/dynamic";
 import "leaflet/dist/leaflet.css";
 
@@ -90,7 +91,7 @@ export default function CustomerLocationMap({ entries }: CustomerLocationMapProp
       {missingLocations > 0 && (
         <div className="mb-3 p-3 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg">
           <p className="text-sm text-yellow-800 dark:text-yellow-400">
-            ⚠️ {missingLocations} {missingLocations === 1 ? "address" : "addresses"} {missingLocations === 1 ? "could" : "could"} not be geocoded and {missingLocations === 1 ? "is" : "are"} not shown on the map
+            <AlertTriangle className="w-4 h-4 inline mr-1" /> {missingLocations} {missingLocations === 1 ? "address" : "addresses"} {missingLocations === 1 ? "could" : "could"} not be geocoded and {missingLocations === 1 ? "is" : "are"} not shown on the map
           </p>
         </div>
       )}

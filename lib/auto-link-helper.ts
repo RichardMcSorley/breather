@@ -314,3 +314,68 @@ export async function attemptAutoLinkCustomerToTransaction(
 
   return transaction._id.toString();
 }
+
+/**
+ * Attempts to auto-link a customer (OcrExport) to all active delivery orders.
+ * Links to all active orders that match the customer's appName (if provided).
+ * 
+ * @param customer - The customer (OcrExport) to link
+ * @param userId - The user ID for filtering
+ * @returns Array of linked order IDs
+ */
+export async function attemptAutoLinkCustomerToActiveOrders(
+  customer: any,
+  userId: string
+): Promise<string[]> {
+  const linkedOrderIds: string[] = [];
+
+  // Find all active orders for this user
+  const activeOrdersQuery: any = {
+    userId,
+    active: true,
+  };
+
+  // If customer has appName, match by appName
+  if (customer.appName) {
+    const customerAppName = (customer.appName || "").trim().toLowerCase();
+    if (customerAppName) {
+      activeOrdersQuery.appName = { $regex: new RegExp(`^${customerAppName}$`, "i") };
+    }
+  }
+
+  const activeOrders = await DeliveryOrder.find(activeOrdersQuery).lean();
+
+  // Link customer to each active order that isn't already linked
+  for (const order of activeOrders) {
+    // Skip if already linked
+    if (order.linkedOcrExportIds && order.linkedOcrExportIds.some((id: any) => 
+      id.toString() === customer._id.toString()
+    )) {
+      continue;
+    }
+
+    // Skip if customer already has this order linked
+    if (customer.linkedDeliveryOrderIds && customer.linkedDeliveryOrderIds.some((id: any) => 
+      id.toString() === order._id.toString()
+    )) {
+      continue;
+    }
+
+    // Perform bidirectional link
+    await DeliveryOrder.findByIdAndUpdate(
+      order._id,
+      { $addToSet: { linkedOcrExportIds: customer._id } },
+      { new: true }
+    );
+
+    await OcrExport.findByIdAndUpdate(
+      customer._id,
+      { $addToSet: { linkedDeliveryOrderIds: order._id } },
+      { new: true }
+    );
+
+    linkedOrderIds.push(order._id.toString());
+  }
+
+  return linkedOrderIds;
+}
