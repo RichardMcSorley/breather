@@ -605,6 +605,7 @@ export default function HistoryPage() {
       queryClient.invalidateQueries({ queryKey: ["deliveryOrders"] });
       queryClient.invalidateQueries({ queryKey: ["summary"] });
       queryClient.invalidateQueries({ queryKey: ["heatmap"] });
+      queryClient.invalidateQueries({ queryKey: ["dateTotals"] });
     } catch (error) {
       console.error("Error creating transaction from order:", error);
       alert(error instanceof Error ? error.message : "Failed to create transaction");
@@ -674,7 +675,6 @@ export default function HistoryPage() {
   return (
     <Layout>
       <div className="mb-6">
-        <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-4">Logs</h2>
         <div className="flex justify-end gap-2">
           <button
             onClick={() => {

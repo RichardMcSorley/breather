@@ -35,7 +35,6 @@ const DeliveryOrderSchema: Schema = new Schema(
     userId: {
       type: String,
       required: true,
-      index: true,
     },
     appName: {
       type: String,

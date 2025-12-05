@@ -13,7 +13,6 @@ const OcrTextSchema: Schema = new Schema(
     userId: {
       type: String,
       required: true,
-      index: true,
     },
     ocrText: {
       type: String,

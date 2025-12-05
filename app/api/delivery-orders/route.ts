@@ -177,14 +177,23 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "Missing userId" }, { status: 400 });
     }
 
-    const limit = Math.min(100, parseInt(searchParams.get("limit") || "100", 10));
+    // Parse pagination parameters
+    const pageParam = searchParams.get("page");
+    const limitParam = searchParams.get("limit");
+    const page = Math.max(1, parseInt(pageParam || "1", 10));
+    const limit = Math.min(100, Math.max(1, parseInt(limitParam || "25", 10)));
+    const skip = (page - 1) * limit;
 
     // Parse filter values
     const filterAmountNum = filterAmount ? parseFloat(filterAmount) : null;
 
+    // Get total count for pagination (before filtering)
+    const totalCount = await DeliveryOrder.countDocuments({ userId });
+
     // Get delivery orders for the user, sorted by most recent first
     let orders = await DeliveryOrder.find({ userId })
       .sort({ processedAt: -1 })
+      .skip(skip)
       .limit(limit)
       .lean();
 
@@ -246,6 +255,15 @@ export async function GET(request: NextRequest) {
       }
     });
 
+    // Calculate total after filtering (if filters are applied)
+    let total = totalCount;
+    if (filterAppName || filterAmountNum !== null) {
+      // If filters are applied, we need to count filtered results
+      // For now, we'll use the filtered orders length as approximation
+      // A more accurate approach would require a separate count query with filters
+      total = orders.length;
+    }
+
     return NextResponse.json({
       success: true,
       orders: orders.map((order) => ({
@@ -270,6 +288,12 @@ export async function GET(request: NextRequest) {
         createdAt: order.createdAt.toISOString(),
         linkedTransactions: transactionsByOrderId.get(order._id.toString()) || [],
       })),
+      pagination: {
+        page,
+        limit,
+        total,
+        totalPages: Math.ceil(total / limit),
+      },
     });
   } catch (error) {
     return handleApiError(error);

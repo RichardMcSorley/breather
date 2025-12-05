@@ -278,6 +278,7 @@ export function useCreateTransaction() {
       queryClient.invalidateQueries({ queryKey: ["transactions"] });
       queryClient.invalidateQueries({ queryKey: ["summary"] });
       queryClient.invalidateQueries({ queryKey: ["heatmap"] });
+      queryClient.invalidateQueries({ queryKey: ["dateTotals"] });
       toast.success("Transaction saved successfully");
     },
     onError: (error: Error) => {
@@ -310,6 +311,7 @@ export function useUpdateTransaction() {
       queryClient.invalidateQueries({ queryKey: ["transaction"] });
       queryClient.invalidateQueries({ queryKey: ["summary"] });
       queryClient.invalidateQueries({ queryKey: ["heatmap"] });
+      queryClient.invalidateQueries({ queryKey: ["dateTotals"] });
       toast.success("Transaction updated successfully");
     },
     onError: (error: Error) => {
@@ -339,6 +341,7 @@ export function useDeleteTransaction() {
       queryClient.invalidateQueries({ queryKey: ["transactions"] });
       queryClient.invalidateQueries({ queryKey: ["summary"] });
       queryClient.invalidateQueries({ queryKey: ["heatmap"] });
+      queryClient.invalidateQueries({ queryKey: ["dateTotals"] });
       toast.success("Transaction deleted successfully");
     },
     onError: (error: Error) => {

@@ -29,7 +29,6 @@ const TransactionSchema: Schema = new Schema(
     userId: {
       type: String,
       required: true,
-      index: true,
     },
     amount: {
       type: Number,

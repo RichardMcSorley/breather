@@ -15,7 +15,6 @@ const BillPaymentSchema: Schema = new Schema(
     userId: {
       type: String,
       required: true,
-      index: true,
     },
     billId: {
       type: Schema.Types.ObjectId,

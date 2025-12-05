@@ -348,50 +348,34 @@ export default function ShareOrderModal({
   };
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title="Search Restaurant Address">
+    <Modal isOpen={isOpen} onClose={onClose} title={`Restaurant: ${restaurantName}`}>
       <div className="space-y-4">
-        {transactionId && shouldUpdateStep && (
-          <div className="flex justify-end">
-            <button
-              onClick={handleSkip}
-              className="px-4 py-2 text-base font-medium rounded-lg bg-orange-500 text-white hover:bg-orange-600 transition-colors shadow-md"
-            >
-              Skip Step
-            </button>
-          </div>
-        )}
-        <div>
-          <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-            Restaurant: {restaurantName}
-          </h3>
-        </div>
-
         {/* Search Input */}
         <div>
           <label htmlFor="search-input" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
             Search:
           </label>
           <div className="flex gap-2">
-            <input
-              id="search-input"
-              type="text"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" && !searching) {
-                  searchAddresses();
-                }
-              }}
-              placeholder="e.g., Taco Bell Ashland KY 41101"
-              className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            />
-            <button
-              onClick={searchAddresses}
-              disabled={searching}
-              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed min-h-[40px]"
-            >
-              Search
-            </button>
+            <div className="flex-1 relative">
+              <div className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400">
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                </svg>
+              </div>
+              <input
+                id="search-input"
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && !searching) {
+                    searchAddresses();
+                  }
+                }}
+                placeholder="Search address or restaurant name"
+                className="w-full pl-10 pr-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              />
+            </div>
           </div>
         </div>
 
@@ -411,39 +395,48 @@ export default function ShareOrderModal({
           )}
 
           {!searching && addresses.length > 0 && (
-            <div className="space-y-2 max-h-[400px] overflow-y-auto">
-              <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                Found Restaurants:
+            <div className="space-y-3 max-h-[400px] overflow-y-auto">
+              <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">
+                NEARBY RESULTS
               </h3>
               {addresses.map((address, index) => {
                 // Extract restaurant name from display_name (usually first part before comma)
                 const displayParts = address.display_name.split(',').map(p => p.trim());
                 const restaurantNameFromResult = displayParts[0] || '';
                 
-                // Format the full address from the search result
-                const formattedAddress = formatAddress(address.display_name);
-                
-                // Combine restaurant name with formatted address
-                const displayText = restaurantNameFromResult && formattedAddress !== restaurantNameFromResult
-                  ? `${restaurantNameFromResult}, ${formattedAddress}`
-                  : formattedAddress;
+                // Format the full address from the search result (skip restaurant name if it's the first part)
+                let addressParts = displayParts;
+                if (restaurantNameFromResult && restaurantNameFromResult.toLowerCase() === restaurantName.toLowerCase()) {
+                  addressParts = displayParts.slice(1);
+                }
+                const formattedAddress = formatAddress(addressParts.join(', '));
                 
                 return (
                   <div
                     key={index}
-                    className="p-3 bg-gray-50 dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-700"
+                    className="p-4 bg-gray-50 dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-700"
                   >
-                    <div className="text-sm text-gray-900 dark:text-white mb-2">
-                      {displayText}
+                    {/* Restaurant Name at top - left aligned */}
+                    <div className="font-bold text-base text-gray-900 dark:text-white mb-2 text-left">
+                      {restaurantNameFromResult || restaurantName}
                     </div>
-                    <div className="flex items-center gap-2">
-                      <div className="flex items-center gap-1 text-xs text-gray-500 dark:text-gray-400">
-                        {getTypeIcon(address.type)}
-                        <span>{formatTypeText(address.type)}</span>
-                      </div>
+                    
+                    {/* Address below restaurant name - left aligned */}
+                    <div className="text-sm text-gray-700 dark:text-gray-300 mb-2 text-left">
+                      {formattedAddress}
+                    </div>
+                    
+                    {/* Icon and type - left aligned */}
+                    <div className="flex items-center gap-1 text-xs text-gray-500 dark:text-gray-400 mb-3 text-left">
+                      {getTypeIcon(address.type)}
+                      <span>{formatTypeText(address.type)}</span>
+                    </div>
+                    
+                    {/* Select button right-aligned */}
+                    <div className="flex justify-end">
                       <button
                         onClick={() => handleSelectAddress(address.display_name)}
-                        className="ml-auto px-3 py-1 text-xs rounded bg-green-600 text-white hover:bg-green-700 min-h-[32px]"
+                        className="px-6 py-2 text-sm font-medium rounded-lg bg-blue-600 text-white hover:bg-blue-700 min-h-[40px] transition-colors"
                       >
                         Select
                       </button>
@@ -460,6 +453,18 @@ export default function ShareOrderModal({
             </div>
           )}
         </div>
+
+        {/* Skip Step button at bottom */}
+        {transactionId && shouldUpdateStep && (
+          <div className="flex justify-end pt-4 border-t border-gray-200 dark:border-gray-700">
+            <button
+              onClick={handleSkip}
+              className="px-6 py-2 text-base font-medium rounded-lg bg-orange-500 text-white hover:bg-orange-600 transition-colors shadow-md min-h-[44px]"
+            >
+              Skip Step
+            </button>
+          </div>
+        )}
       </div>
     </Modal>
   );

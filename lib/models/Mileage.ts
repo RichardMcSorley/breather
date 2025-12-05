@@ -16,7 +16,6 @@ const MileageSchema: Schema = new Schema(
     userId: {
       type: String,
       required: true,
-      index: true,
     },
     odometer: {
       type: Number,

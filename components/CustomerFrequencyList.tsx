@@ -2,6 +2,8 @@
 
 import { useState, useEffect } from "react";
 import Card from "./ui/Card";
+import { format } from "date-fns";
+import { Pencil, Trash2, Eye } from "lucide-react";
 
 interface Customer {
   address: string;
@@ -47,7 +49,7 @@ export default function CustomerFrequencyList({
       const params = new URLSearchParams();
       if (userId) params.append("userId", userId);
       params.append("page", page.toString());
-      params.append("limit", "20");
+      params.append("limit", "25");
 
       const response = await fetch(`/api/ocr-exports/customers?${params.toString()}`);
       if (!response.ok) {
@@ -106,6 +108,14 @@ export default function CustomerFrequencyList({
     setConfirmDeleteAddress(null);
   };
 
+  const formatDate = (dateString: string) => {
+    try {
+      return format(new Date(dateString), "MMM d, yyyy");
+    } catch {
+      return dateString;
+    }
+  };
+
   if (loading && customers.length === 0) {
     return (
       <Card className="p-6">
@@ -126,12 +136,12 @@ export default function CustomerFrequencyList({
 
   return (
     <Card className="overflow-hidden">
-      <div className="p-6 border-b border-gray-200 dark:border-gray-700">
+      <div className="p-4 sm:p-6 border-b border-gray-200 dark:border-gray-700">
         <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
           Customer Frequency
         </h3>
         <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-          Customers sorted by visit count
+          Customers sorted by latest visit
         </p>
       </div>
 
@@ -141,120 +151,123 @@ export default function CustomerFrequencyList({
         </div>
       ) : (
         <>
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead className="bg-gray-50 dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700">
-                <tr>
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider">
-                    Customer Name(s)
-                  </th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider">
-                    Visits
-                  </th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider">
-                    Apps
-                  </th>
-                  <th className="px-4 py-3 text-right text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider">
-                    Actions
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
-                {customers.map((customer) => (
-                  <tr
-                    key={customer.address}
-                    className={`hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors ${
-                      onCustomerClick ? "cursor-pointer" : ""
-                    }`}
-                  >
-                    <td className="px-4 py-3">
-                      <div className="flex items-center gap-2">
-                        <span className="text-sm font-semibold text-gray-900 dark:text-white">
-                          {customer.customerName}
+          {/* Mobile-friendly card layout */}
+          <div className="p-4 sm:p-6 space-y-4">
+            {customers.map((customer) => (
+              <div
+                key={customer.address}
+                className={`rounded-lg p-4 border ${
+                  customer.isRepeatCustomer
+                    ? "border-green-300 dark:border-green-700 bg-green-50 dark:bg-green-900/20"
+                    : "border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800"
+                } hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors`}
+              >
+                {/* Header: Customer name and visit count */}
+                <div className="flex items-start justify-between mb-3 gap-2">
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 mb-1">
+                      <h4 className="text-base font-semibold text-gray-900 dark:text-white truncate">
+                        {customer.customerName}
+                      </h4>
+                      {customer.isRepeatCustomer && (
+                        <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400 flex-shrink-0">
+                          Repeat
                         </span>
-                        {customer.isRepeatCustomer && (
-                          <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400">
-                            Repeat
-                          </span>
-                        )}
-                        {customer.customerNames && customer.customerNames.length > 1 && (
-                          <span className="text-xs text-gray-500 dark:text-gray-400">
-                            (+{customer.customerNames.length - 1} more)
-                          </span>
-                        )}
+                      )}
+                    </div>
+                    {customer.customerNames && customer.customerNames.length > 1 && (
+                      <div className="text-xs text-gray-500 dark:text-gray-400">
+                        +{customer.customerNames.length - 1} more name{customer.customerNames.length - 1 !== 1 ? "s" : ""}
                       </div>
-                    </td>
-                    <td className="px-4 py-3">
-                      <div className="text-sm text-gray-700 dark:text-gray-300">
-                        {customer.visitCount}
-                      </div>
-                    </td>
-                    <td className="px-4 py-3">
-                      <div className="flex flex-wrap gap-1">
-                        {customer.apps.length > 0 ? (
-                          customer.apps.slice(0, 2).map((app) => (
-                            <span
-                              key={app}
-                              className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400"
-                            >
-                              {app}
-                            </span>
-                          ))
-                        ) : (
-                          <span className="text-xs text-gray-400">-</span>
-                        )}
-                        {customer.apps.length > 2 && (
-                          <span className="text-xs text-gray-400">
-                            +{customer.apps.length - 2} more
-                          </span>
-                        )}
-                      </div>
-                    </td>
-                    <td className="px-4 py-3 whitespace-nowrap text-right">
-                      <div className="flex gap-2 justify-end">
-                        {onCustomerClick && (
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              onCustomerClick(customer.address);
-                            }}
-                            className="px-3 py-1 text-sm rounded border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
-                          >
-                            View
-                          </button>
-                        )}
-                        {onEditClick && (
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              onEditClick(customer.address);
-                            }}
-                            className="px-3 py-1 text-sm rounded bg-blue-600 text-white hover:bg-blue-700"
-                          >
-                            Edit
-                          </button>
-                        )}
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleDeleteClick(customer.address);
-                          }}
-                          disabled={deletingAddress === customer.address}
-                          className="px-3 py-1 text-sm rounded bg-red-600 text-white hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                    )}
+                  </div>
+                  <div className="text-right flex-shrink-0">
+                    <div className="text-lg font-bold text-gray-900 dark:text-white">
+                      {customer.visitCount}
+                    </div>
+                    <div className="text-xs text-gray-500 dark:text-gray-400">
+                      visit{customer.visitCount !== 1 ? "s" : ""}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Address */}
+                <div className="text-sm text-gray-600 dark:text-gray-400 mb-3 break-words">
+                  {customer.address}
+                </div>
+
+                {/* Details: Apps and dates */}
+                <div className="space-y-2 mb-3">
+                  {customer.apps.length > 0 && (
+                    <div className="flex flex-wrap gap-1">
+                      {customer.apps.slice(0, 3).map((app) => (
+                        <span
+                          key={app}
+                          className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400"
                         >
-                          {deletingAddress === customer.address ? "Deleting..." : "Delete"}
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+                          {app}
+                        </span>
+                      ))}
+                      {customer.apps.length > 3 && (
+                        <span className="text-xs text-gray-500 dark:text-gray-400">
+                          +{customer.apps.length - 3} more
+                        </span>
+                      )}
+                    </div>
+                  )}
+                  <div className="text-xs text-gray-500 dark:text-gray-400">
+                    Last visit: {formatDate(customer.lastVisitDate)}
+                    {customer.firstVisitDate !== customer.lastVisitDate && (
+                      <> • First: {formatDate(customer.firstVisitDate)}</>
+                    )}
+                  </div>
+                </div>
+
+                {/* Actions */}
+                <div className="flex gap-2 pt-3 border-t border-gray-200 dark:border-gray-700">
+                  {onCustomerClick && (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onCustomerClick(customer.address);
+                      }}
+                      className="flex items-center gap-2 px-3 py-2 text-sm rounded border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 min-h-[44px]"
+                    >
+                      <Eye className="w-4 h-4" />
+                      View
+                    </button>
+                  )}
+                  {onEditClick && (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onEditClick(customer.address);
+                      }}
+                      className="flex items-center gap-2 px-3 py-2 text-sm rounded bg-blue-600 text-white hover:bg-blue-700 min-h-[44px]"
+                    >
+                      <Pencil className="w-4 h-4" />
+                      Edit
+                    </button>
+                  )}
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleDeleteClick(customer.address);
+                    }}
+                    disabled={deletingAddress === customer.address}
+                    className="flex items-center gap-2 px-3 py-2 text-sm rounded bg-red-600 text-white hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed min-h-[44px]"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                    {deletingAddress === customer.address ? "Deleting..." : "Delete"}
+                  </button>
+                </div>
+              </div>
+            ))}
           </div>
 
           {/* Pagination */}
           {totalPages > 1 && (
-            <div className="px-6 py-4 border-t border-gray-200 dark:border-gray-700 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+            <div className="px-4 sm:px-6 py-4 border-t border-gray-200 dark:border-gray-700 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
               <div className="text-sm text-gray-700 dark:text-gray-300 text-center sm:text-left">
                 Page {page} of {totalPages}
               </div>
@@ -322,4 +335,3 @@ export default function CustomerFrequencyList({
     </Card>
   );
 }
-

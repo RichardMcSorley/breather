@@ -18,7 +18,7 @@ export async function POST(request: NextRequest) {
     await connectDB();
 
     const body = await request.json();
-    const { transactionId, ocrExportId, deliveryOrderId, action } = body;
+    const { transactionId, ocrExportId, deliveryOrderId, action, force } = body;
 
     if (action !== "link" && action !== "unlink") {
       return NextResponse.json({ error: "Invalid action. Must be 'link' or 'unlink'" }, { status: 400 });
@@ -41,13 +41,15 @@ export async function POST(request: NextRequest) {
       }
 
       if (action === "link") {
-        // Validate filters: appName match
-        const customerAppName = (ocrExport.appName || "").trim().toLowerCase();
-        const orderAppName = (deliveryOrder.appName || "").trim().toLowerCase();
-        if (customerAppName && orderAppName && customerAppName !== orderAppName) {
-          return NextResponse.json({ 
-            error: "Cannot link: customer appName does not match order appName" 
-          }, { status: 400 });
+        // Validate filters: appName match (unless forced)
+        if (!force) {
+          const customerAppName = (ocrExport.appName || "").trim().toLowerCase();
+          const orderAppName = (deliveryOrder.appName || "").trim().toLowerCase();
+          if (customerAppName && orderAppName && customerAppName !== orderAppName) {
+            return NextResponse.json({ 
+              error: "Cannot link: customer appName does not match order appName" 
+            }, { status: 400 });
+          }
         }
 
         // Add order to customer's linked orders
@@ -118,8 +120,8 @@ export async function POST(request: NextRequest) {
           return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
         }
 
-        // Validate filters: appName
-        if (transaction.tag) {
+        // Validate filters: appName (unless forced)
+        if (!force && transaction.tag) {
           const transactionTag = (transaction.tag || "").trim().toLowerCase();
           const customerAppName = (ocrExport.appName || "").trim().toLowerCase();
           if (transactionTag && customerAppName && transactionTag !== customerAppName) {
@@ -158,8 +160,8 @@ export async function POST(request: NextRequest) {
           return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
         }
 
-        // Validate filters: appName
-        if (transaction.tag) {
+        // Validate filters: appName (unless forced)
+        if (!force && transaction.tag) {
           const transactionTag = (transaction.tag || "").trim().toLowerCase();
           const orderAppName = (deliveryOrder.appName || "").trim().toLowerCase();
           if (transactionTag && orderAppName && transactionTag !== orderAppName) {

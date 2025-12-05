@@ -19,7 +19,7 @@ export async function GET(request: NextRequest) {
     const filterAppName = searchParams.get("filterAppName");
 
     const page = Math.max(1, parseInt(pageParam || "1"));
-    const limit = Math.min(100, Math.max(1, parseInt(limitParam || "50")));
+    const limit = Math.min(100, Math.max(1, parseInt(limitParam || "25")));
     const skip = (page - 1) * limit;
 
     // Parse filter values
@@ -147,8 +147,12 @@ export async function GET(request: NextRequest) {
       });
     }
 
-    // Sort by visit count (descending)
-    customers.sort((a, b) => b.visitCount - a.visitCount);
+    // Sort by latest visit date (descending) - most recent first
+    customers.sort((a, b) => {
+      const dateA = new Date(a.lastVisitDate).getTime();
+      const dateB = new Date(b.lastVisitDate).getTime();
+      return dateB - dateA;
+    });
 
     // Apply pagination
     const total = customers.length;

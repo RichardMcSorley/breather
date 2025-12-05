@@ -43,7 +43,6 @@ const TeslaConnectionSchema: Schema = new Schema(
   }
 );
 
-TeslaConnectionSchema.index({ userId: 1 });
 
 const TeslaConnection: Model<ITeslaConnection> =
   mongoose.models.TeslaConnection || mongoose.model<ITeslaConnection>("TeslaConnection", TeslaConnectionSchema);

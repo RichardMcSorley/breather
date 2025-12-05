@@ -409,33 +409,57 @@ export default function BillsPage() {
 
   return (
     <Layout>
-      <div className="mb-6">
-        <div className="flex items-center justify-between mb-3">
-          <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Bills</h2>
+      <div className="mb-6 space-y-2">
+        {/* First row: + Add Bill on the right */}
+        <div className="flex justify-end gap-2">
           <Button variant="primary" onClick={handleAddBill} className="text-sm px-3 py-2">
             + Add Bill
           </Button>
         </div>
-        {bills.length > 0 && (
-          <div className="flex flex-wrap gap-2">
-            <Button
-              variant="outline"
-              onClick={() => setShowPaymentPlanModal(true)}
-              className="text-sm px-3 py-2"
-            >
-              Generate Plan
-            </Button>
-            {paymentPlan.length > 0 && (
-              <Button 
-                variant={viewMode === "plan" ? "primary" : "outline"}
-                onClick={() => setViewMode(viewMode === "bills" ? "plan" : "bills")}
-                className="text-sm px-3 py-2"
-              >
-                {viewMode === "bills" ? "View Plan" : "View Bills"}
-              </Button>
+        
+        {/* Second row: Generate Plan and View Bills on left, Show All on right */}
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex gap-2">
+            {bills.length > 0 && (
+              <>
+                <Button
+                  variant="outline"
+                  onClick={() => setShowPaymentPlanModal(true)}
+                  className="text-sm px-3 py-2"
+                >
+                  Generate Plan
+                </Button>
+                {paymentPlan.length > 0 && (
+                  <Button 
+                    variant={viewMode === "plan" ? "primary" : "outline"}
+                    onClick={() => setViewMode(viewMode === "bills" ? "plan" : "bills")}
+                    className="text-sm px-3 py-2"
+                  >
+                    {viewMode === "bills" ? "View Plan" : "View Bills"}
+                  </Button>
+                )}
+              </>
             )}
           </div>
-        )}
+          <div className="flex gap-2">
+            {viewMode === "plan" && paymentPlan.length > 0 && (
+              <button
+                onClick={() => {
+                  const newValue = !hidePaidEntries;
+                  setHidePaidEntries(newValue);
+                  localStorage.setItem("bills_hide_paid_entries", newValue.toString());
+                }}
+                className={`px-3 py-1.5 rounded-lg text-sm font-medium min-h-[44px] ${
+                  hidePaidEntries
+                    ? "bg-green-600 text-white"
+                    : "bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300"
+                }`}
+              >
+                {hidePaidEntries ? "Show All" : "Hide Paid"}
+              </button>
+            )}
+          </div>
+        </div>
       </div>
 
       {viewMode === "bills" ? (
@@ -560,24 +584,6 @@ export default function BillsPage() {
             </div>
           ) : (
             <>
-              {paymentPlan.length > 0 && (
-                <div className="flex items-center justify-end mb-2">
-                  <button
-                    onClick={() => {
-                      const newValue = !hidePaidEntries;
-                      setHidePaidEntries(newValue);
-                      localStorage.setItem("bills_hide_paid_entries", newValue.toString());
-                    }}
-                    className={`px-3 py-1.5 rounded-lg text-sm font-medium min-h-[44px] ${
-                      hidePaidEntries
-                        ? "bg-green-600 text-white"
-                        : "bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300"
-                    }`}
-                  >
-                    {hidePaidEntries ? "Show All" : "Hide Paid"}
-                  </button>
-                </div>
-              )}
               {Object.entries(groupedPaymentPlan)
               .sort(([dateA], [dateB]) => dateA.localeCompare(dateB))
               .map(([date, entries]) => {

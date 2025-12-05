@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useSession } from "next-auth/react";
-import { Pencil, Trash2 } from "lucide-react";
+import { Pencil, Trash2, RefreshCw, Car } from "lucide-react";
 import Layout from "@/components/Layout";
 import Card from "@/components/ui/Card";
 import Button from "@/components/ui/Button";
@@ -331,36 +331,33 @@ export default function MileagePage() {
   return (
     <Layout>
       <div className="mb-6">
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-xl font-bold text-gray-900 dark:text-white">Mileage Tracking</h2>
-          <div className="flex gap-2 items-center">
-            {!teslaLoading && teslaConnection?.connected ? (
-              <Button
-                variant="outline"
-                onClick={() => syncTesla.mutate()}
-                disabled={syncTesla.isPending}
-                className="flex items-center gap-2"
-              >
-                {syncTesla.isPending ? (
-                  <>
-                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-gray-900 dark:border-white"></div>
-                    Syncing...
-                  </>
-                ) : (
-                  <>
-                    <span>🔄</span>
-                    Sync Tesla
-                  </>
-                )}
-              </Button>
-            ) : null}
+        <div className="flex justify-end gap-2 mb-4">
+          {!teslaLoading && teslaConnection?.connected ? (
             <Button
-              variant="primary"
-              onClick={() => setShowAddModal(true)}
+              variant="outline"
+              onClick={() => syncTesla.mutate()}
+              disabled={syncTesla.isPending}
+              className="flex items-center gap-2"
             >
-              Add Entry
+              {syncTesla.isPending ? (
+                <>
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-gray-900 dark:border-white"></div>
+                  Syncing...
+                </>
+              ) : (
+                <>
+                  <RefreshCw className="w-4 h-4" />
+                  Sync Tesla
+                </>
+              )}
             </Button>
-          </div>
+          ) : null}
+          <Button
+            variant="primary"
+            onClick={() => setShowAddModal(true)}
+          >
+            Add Entry
+          </Button>
         </div>
       </div>
 
@@ -399,20 +396,23 @@ export default function MileagePage() {
               
               return (
                 <div key={entry._id}>
-                  <div className="flex justify-between items-center py-3">
-                    <div className="flex-1">
-                      <div className="font-semibold text-gray-900 dark:text-white">
-                        {formatOdometer(entry.odometer)} miles
-                      </div>
-                      <div className="text-sm text-gray-600 dark:text-gray-400">
-                        {formatDate(entry.date)}
+                  <div className="py-3">
+                    <div className="font-semibold text-gray-900 dark:text-white mb-2">
+                      {formatOdometer(entry.odometer)} miles
+                    </div>
+                    <div className="flex items-center justify-between mb-1">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <div className="text-sm text-gray-600 dark:text-gray-400">
+                          {formatDate(entry.date)}
+                        </div>
                         {entry.carId && (
-                          <span className="ml-2 px-2 py-0.5 rounded text-xs font-medium bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300">
-                            🚗 {entry.carId}
+                          <span className="px-2 py-0.5 rounded text-xs font-medium bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 flex items-center gap-1">
+                            <Car className="w-3 h-3" />
+                            {entry.carId}
                           </span>
                         )}
                         {entry.classification && (
-                          <span className={`ml-2 px-2 py-0.5 rounded text-xs font-medium ${
+                          <span className={`px-2 py-0.5 rounded text-xs font-medium ${
                             entry.classification === "work"
                               ? "bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300"
                               : "bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300"
@@ -421,33 +421,33 @@ export default function MileagePage() {
                           </span>
                         )}
                       </div>
-                      {entry.notes && (
-                        <div className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-                          {entry.notes}
-                        </div>
-                      )}
+                      <div className="flex items-center gap-2 ml-4 flex-shrink-0">
+                        <button
+                          onClick={() => setEditingEntryId(entry._id)}
+                          className="p-2 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white min-w-[44px] min-h-[44px] flex items-center justify-center"
+                          aria-label="Edit entry"
+                        >
+                          <Pencil className="w-5 h-5" />
+                        </button>
+                        <button
+                          onClick={() => handleDelete(entry._id)}
+                          disabled={deleteMileageEntry.isPending}
+                          className="p-2 text-red-600 dark:text-red-400 hover:text-red-800 dark:hover:text-red-300 disabled:opacity-50 min-w-[44px] min-h-[44px] flex items-center justify-center"
+                          aria-label="Delete entry"
+                        >
+                          {deleteMileageEntry.isPending ? (
+                            <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-red-600 dark:border-red-400"></div>
+                          ) : (
+                            <Trash2 className="w-5 h-5" />
+                          )}
+                        </button>
+                      </div>
                     </div>
-                    <div className="flex items-center gap-2 ml-4">
-                      <button
-                        onClick={() => setEditingEntryId(entry._id)}
-                        className="p-2 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white min-w-[44px] min-h-[44px] flex items-center justify-center"
-                        aria-label="Edit entry"
-                      >
-                        <Pencil className="w-5 h-5" />
-                      </button>
-                      <button
-                        onClick={() => handleDelete(entry._id)}
-                        disabled={deleteMileageEntry.isPending}
-                        className="p-2 text-red-600 dark:text-red-400 hover:text-red-800 dark:hover:text-red-300 disabled:opacity-50 min-w-[44px] min-h-[44px] flex items-center justify-center"
-                        aria-label="Delete entry"
-                      >
-                        {deleteMileageEntry.isPending ? (
-                          <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-red-600 dark:border-red-400"></div>
-                        ) : (
-                          <Trash2 className="w-5 h-5" />
-                        )}
-                      </button>
-                    </div>
+                    {entry.notes && (
+                      <div className="text-sm text-gray-600 dark:text-gray-400">
+                        {entry.notes}
+                      </div>
+                    )}
                   </div>
                   {milesDifference !== null && index < entries.length - 1 && (
                     <div className="relative py-2">
