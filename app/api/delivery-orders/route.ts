@@ -117,6 +117,7 @@ export async function GET(request: NextRequest) {
     const id = searchParams.get("id");
     const filterAmount = searchParams.get("filterAmount");
     const filterAppName = searchParams.get("filterAppName");
+    const searchQuery = searchParams.get("search");
 
     // If id is provided, fetch a single order
     if (id) {
@@ -157,6 +158,9 @@ export async function GET(request: NextRequest) {
           milesToMoneyRatio: order.milesToMoneyRatio,
           restaurantName: order.restaurantName,
           restaurantAddress: order.restaurantAddress,
+          restaurantPlaceId: order.restaurantPlaceId,
+          restaurantLat: order.restaurantLat,
+          restaurantLon: order.restaurantLon,
           time: order.time,
           screenshot: order.screenshot,
           metadata: order.metadata,
@@ -187,14 +191,9 @@ export async function GET(request: NextRequest) {
     // Parse filter values
     const filterAmountNum = filterAmount ? parseFloat(filterAmount) : null;
 
-    // Get total count for pagination (before filtering)
-    const totalCount = await DeliveryOrder.countDocuments({ userId });
-
-    // Get delivery orders for the user, sorted by most recent first
+    // Get all delivery orders for the user (before filtering and pagination)
     let orders = await DeliveryOrder.find({ userId })
       .sort({ processedAt: -1 })
-      .skip(skip)
-      .limit(limit)
       .lean();
 
     // Apply filters if provided
@@ -218,6 +217,22 @@ export async function GET(request: NextRequest) {
         }
 
         return true;
+      });
+    }
+
+    // Apply search filter if provided (search by restaurant name or address)
+    if (searchQuery && searchQuery.trim()) {
+      const queryLower = searchQuery.trim().toLowerCase();
+      orders = orders.filter((order) => {
+        // Search in restaurant name
+        if (order.restaurantName && order.restaurantName.toLowerCase().includes(queryLower)) {
+          return true;
+        }
+        // Search in restaurant address
+        if (order.restaurantAddress && order.restaurantAddress.toLowerCase().includes(queryLower)) {
+          return true;
+        }
+        return false;
       });
     }
 
@@ -255,18 +270,15 @@ export async function GET(request: NextRequest) {
       }
     });
 
-    // Calculate total after filtering (if filters are applied)
-    let total = totalCount;
-    if (filterAppName || filterAmountNum !== null) {
-      // If filters are applied, we need to count filtered results
-      // For now, we'll use the filtered orders length as approximation
-      // A more accurate approach would require a separate count query with filters
-      total = orders.length;
-    }
+    // Calculate total after all filtering (filters and search)
+    const total = orders.length;
+
+    // Apply pagination
+    const paginatedOrders = orders.slice(skip, skip + limit);
 
     return NextResponse.json({
       success: true,
-      orders: orders.map((order) => ({
+      orders: paginatedOrders.map((order) => ({
         id: order._id.toString(),
         entryId: order.entryId,
         appName: order.appName,
@@ -275,6 +287,9 @@ export async function GET(request: NextRequest) {
         milesToMoneyRatio: order.milesToMoneyRatio,
         restaurantName: order.restaurantName,
         restaurantAddress: order.restaurantAddress,
+        restaurantPlaceId: order.restaurantPlaceId,
+        restaurantLat: order.restaurantLat,
+        restaurantLon: order.restaurantLon,
         time: order.time,
         screenshot: order.screenshot,
         metadata: order.metadata,
@@ -334,7 +349,7 @@ export async function PATCH(request: NextRequest) {
     await connectDB();
 
     const body = await request.json();
-    const { id, appName, miles, money, restaurantName, restaurantAddress, time, step } = body;
+    const { id, appName, miles, money, restaurantName, restaurantAddress, restaurantPlaceId, restaurantLat, restaurantLon, time, step } = body;
 
     if (!id) {
       return NextResponse.json({ error: "Missing id" }, { status: 400 });
@@ -362,6 +377,15 @@ export async function PATCH(request: NextRequest) {
     }
     if (typeof restaurantAddress === "string") {
       updateSet.restaurantAddress = restaurantAddress;
+    }
+    if (typeof restaurantPlaceId === "string") {
+      updateSet.restaurantPlaceId = restaurantPlaceId;
+    }
+    if (typeof restaurantLat === "number") {
+      updateSet.restaurantLat = restaurantLat;
+    }
+    if (typeof restaurantLon === "number") {
+      updateSet.restaurantLon = restaurantLon;
     }
     if (typeof time === "string") {
       updateSet.time = time;
@@ -405,6 +429,9 @@ export async function PATCH(request: NextRequest) {
         milesToMoneyRatio: result.milesToMoneyRatio,
         restaurantName: result.restaurantName,
         restaurantAddress: result.restaurantAddress,
+        restaurantPlaceId: result.restaurantPlaceId,
+        restaurantLat: result.restaurantLat,
+        restaurantLon: result.restaurantLon,
         time: result.time,
         step: result.step || "CREATED",
         active: result.active !== undefined ? result.active : true,

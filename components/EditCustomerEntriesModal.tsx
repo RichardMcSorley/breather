@@ -1,10 +1,11 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { Search } from "lucide-react";
 import Modal from "./ui/Modal";
 import { format } from "date-fns";
 import MetadataViewer from "./MetadataViewer";
-import { getStreetViewUrl } from "@/lib/streetview-helper";
+import SearchAddressModal from "./SearchAddressModal";
 
 interface Visit {
   _id: string;
@@ -64,16 +65,56 @@ export default function EditCustomerEntriesModal({
   });
   const [saving, setSaving] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [notes, setNotes] = useState("");
+  const [existingNotes, setExistingNotes] = useState<string | null>(null);
+  const [loadingNotes, setLoadingNotes] = useState(false);
+  const [savingNotes, setSavingNotes] = useState(false);
+  const [isEditingNotes, setIsEditingNotes] = useState(false);
+  const [streetViewUrl, setStreetViewUrl] = useState<string | null>(null);
+  const [showSearchModal, setShowSearchModal] = useState(false);
+  const [pendingPlaceData, setPendingPlaceData] = useState<{ placeId?: string; lat?: number; lon?: number } | null>(null);
 
   useEffect(() => {
     if (isOpen && address) {
       fetchCustomerDetails();
+      fetchNotes();
     } else {
       setData(null);
       setError(null);
       setEditingId(null);
+      setNotes("");
+      setExistingNotes(null);
+      setIsEditingNotes(false);
+      setStreetViewUrl(null);
     }
   }, [isOpen, address, userId]);
+
+  // Fetch Street View URL when data is available
+  useEffect(() => {
+    if (data?.address) {
+      const params = new URLSearchParams({
+        address: data.address,
+        width: "600",
+        height: "300",
+      });
+      
+      fetch(`/api/streetview?${params.toString()}`)
+        .then((res) => res.json())
+        .then((result) => {
+          if (result.url) {
+            setStreetViewUrl(result.url);
+          } else {
+            setStreetViewUrl(null);
+          }
+        })
+        .catch((err) => {
+          console.error("Failed to fetch Street View URL:", err);
+          setStreetViewUrl(null);
+        });
+    } else {
+      setStreetViewUrl(null);
+    }
+  }, [data?.address]);
 
   // Auto-start editing when data loads and entryId is provided
   useEffect(() => {
@@ -121,6 +162,7 @@ export default function EditCustomerEntriesModal({
       customerName: visit.customerName || "",
       customerAddress: visit.customerAddress || "",
     });
+    setPendingPlaceData(null); // Reset place data when starting to edit
   };
 
   const cancelEditing = () => {
@@ -130,20 +172,36 @@ export default function EditCustomerEntriesModal({
       customerName: "",
       customerAddress: "",
     });
+    setPendingPlaceData(null);
   };
 
   const handleSave = async (id: string) => {
     try {
       setSaving(true);
+      const updateData: any = {
+        id,
+        ...formValues,
+      };
+      
+      // Include place data if available
+      if (pendingPlaceData) {
+        if (pendingPlaceData.placeId !== undefined) {
+          updateData.placeId = pendingPlaceData.placeId;
+        }
+        if (pendingPlaceData.lat !== undefined) {
+          updateData.lat = pendingPlaceData.lat;
+        }
+        if (pendingPlaceData.lon !== undefined) {
+          updateData.lon = pendingPlaceData.lon;
+        }
+      }
+      
       const response = await fetch("/api/ocr-exports", {
         method: "PATCH",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({
-          id,
-          ...formValues,
-        }),
+        body: JSON.stringify(updateData),
       });
 
       if (!response.ok) {
@@ -188,6 +246,54 @@ export default function EditCustomerEntriesModal({
     }
   };
 
+  const fetchNotes = async () => {
+    if (!address) return;
+    
+    try {
+      setLoadingNotes(true);
+      const response = await fetch(
+        `/api/ocr-exports/notes?address=${encodeURIComponent(address)}`
+      );
+      if (response.ok) {
+        const data = await response.json();
+        setExistingNotes(data.notes);
+        setNotes(data.notes || "");
+      }
+    } catch (error) {
+      console.error("Error fetching notes:", error);
+    } finally {
+      setLoadingNotes(false);
+    }
+  };
+
+  const handleSaveNotes = async () => {
+    if (!address) return;
+    
+    try {
+      setSavingNotes(true);
+      const response = await fetch("/api/ocr-exports/notes", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          address: address,
+          notes: notes.trim() || null,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to save notes");
+      }
+
+      setExistingNotes(notes.trim() || null);
+      setIsEditingNotes(false);
+    } catch (error) {
+      console.error("Error saving notes:", error);
+      alert("Failed to save notes");
+    } finally {
+      setSavingNotes(false);
+    }
+  };
+
   const formatDate = (dateString: string) => {
     try {
       return format(new Date(dateString), "MMM d, yyyy h:mm a");
@@ -225,40 +331,92 @@ export default function EditCustomerEntriesModal({
       {data && !loading && (
         <div className="space-y-4">
           {/* Street View Image */}
-          {(() => {
-            // Use the customer address directly, not coordinates
-            const streetViewImageUrl = getStreetViewUrl(
-              data.address,
-              undefined, // Don't use lat
-              undefined, // Don't use lon
-              600,
-              300
-            );
-            // Use standard Google Maps search URL to open the address
-            const googleMapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(data.address)}`;
-            
-            return streetViewImageUrl ? (
-              <div className="mb-4">
-                <div className="text-xs text-gray-500 dark:text-gray-400 mb-2">Street View</div>
-                <a
-                  href={googleMapsUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="block rounded-lg border border-gray-300 dark:border-gray-600 overflow-hidden hover:opacity-90 transition-opacity cursor-pointer"
-                >
-                  <img
-                    src={streetViewImageUrl}
-                    alt={`Street view of ${data.address}`}
-                    className="w-full h-[300px] object-cover"
-                    onError={(e) => {
-                      // Hide image if it fails to load (e.g., no Street View available or API key missing)
-                      (e.target as HTMLImageElement).style.display = 'none';
-                    }}
-                  />
-                </a>
+          {streetViewUrl && (
+            <div className="mb-4">
+              <div className="text-xs text-gray-500 dark:text-gray-400 mb-2">Street View</div>
+              <a
+                href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(data.address)}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="block rounded-lg border border-gray-300 dark:border-gray-600 overflow-hidden hover:opacity-90 transition-opacity cursor-pointer"
+              >
+                <img
+                  src={streetViewUrl}
+                  alt={`Street view of ${data.address}`}
+                  className="w-full h-[300px] object-cover"
+                  onError={(e) => {
+                    // Hide image if it fails to load (e.g., no Street View available or API key missing)
+                    (e.target as HTMLImageElement).style.display = 'none';
+                  }}
+                />
+              </a>
+            </div>
+          )}
+
+          {/* Notes Section */}
+          <div>
+            <div className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+              Notes
+            </div>
+            {loadingNotes ? (
+              <div className="p-3 bg-gray-50 dark:bg-gray-900 rounded-lg text-sm text-gray-500 dark:text-gray-400">
+                Loading notes...
               </div>
-            ) : null;
-          })()}
+            ) : isEditingNotes || !existingNotes ? (
+              <div className="space-y-2">
+                <textarea
+                  value={notes}
+                  onChange={(e) => setNotes(e.target.value)}
+                  placeholder="Add notes for this address..."
+                  className="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 px-3 py-2 text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
+                  rows={4}
+                />
+                <div className="flex justify-end gap-2">
+                  {existingNotes && (
+                    <button
+                      onClick={() => {
+                        setNotes(existingNotes);
+                        setIsEditingNotes(false);
+                      }}
+                      className="px-4 py-2 text-sm font-medium rounded-lg border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 min-h-[40px] transition-colors"
+                    >
+                      Cancel
+                    </button>
+                  )}
+                  <button
+                    onClick={handleSaveNotes}
+                    disabled={savingNotes}
+                    className="px-4 py-2 text-sm font-medium rounded-lg bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 min-h-[40px] transition-colors"
+                  >
+                    {savingNotes ? "Saving..." : "Save Notes"}
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="flex-1">
+                    <div className="text-xs text-blue-600 dark:text-blue-400 mb-1 font-medium">
+                      Notes:
+                    </div>
+                    <div className="text-sm text-gray-700 dark:text-gray-300 whitespace-pre-wrap">
+                      {existingNotes}
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => {
+                      setNotes(existingNotes || "");
+                      setIsEditingNotes(true);
+                    }}
+                    className="px-3 py-1.5 text-xs font-medium rounded-lg border border-blue-300 dark:border-blue-700 text-blue-700 dark:text-blue-300 hover:bg-blue-100 dark:hover:bg-blue-900/40 min-h-[32px] transition-colors flex-shrink-0"
+                  >
+                    Edit
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+
           <div className="space-y-3 max-h-[500px] overflow-y-auto">
             <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">
               ENTRIES ({data.visitCount})
@@ -302,6 +460,13 @@ export default function EditCustomerEntriesModal({
                           className="flex-1 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 px-3 py-2 text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                           rows={2}
                         />
+                        <button
+                          onClick={() => setShowSearchModal(true)}
+                          className="p-2 text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 min-w-[44px] min-h-[44px] flex items-center justify-center self-start"
+                          title="Search Address"
+                        >
+                          <Search className="w-5 h-5" />
+                        </button>
                         {formValues.customerAddress && (
                           <button
                             onClick={async () => {
@@ -433,6 +598,31 @@ export default function EditCustomerEntriesModal({
             ))}
           </div>
         </div>
+      )}
+
+      {/* Search Address Modal */}
+      {data && (
+        <SearchAddressModal
+          isOpen={showSearchModal}
+          onClose={() => setShowSearchModal(false)}
+          title="Search Customer Address"
+          initialQuery={formValues.customerAddress || data.address}
+          userLatitude={data.visits[0]?.userLatitude || undefined}
+          userLongitude={data.visits[0]?.userLongitude || undefined}
+          userAddress={data.visits[0]?.userAddress || undefined}
+          onAddressSelected={(address, placeId, lat, lon) => {
+            setFormValues((prev) => ({
+              ...prev,
+              customerAddress: address,
+            }));
+            // Store place_id, lat, lon for saving
+            setPendingPlaceData({
+              placeId,
+              lat,
+              lon,
+            });
+          }}
+        />
       )}
     </Modal>
   );

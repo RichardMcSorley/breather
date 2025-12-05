@@ -2,7 +2,6 @@
 
 import { useState, useEffect } from "react";
 import Modal from "./ui/Modal";
-import { getStreetViewUrl } from "@/lib/streetview-helper";
 
 interface DeliveryConfirmationModalProps {
   isOpen: boolean;
@@ -26,27 +25,48 @@ export default function DeliveryConfirmationModal({
   const [loadingNotes, setLoadingNotes] = useState(false);
   const [savingNotes, setSavingNotes] = useState(false);
   const [isEditingNotes, setIsEditingNotes] = useState(false);
+  const [streetViewImageUrl, setStreetViewImageUrl] = useState<string | null>(null);
 
-  const streetViewImageUrl = getStreetViewUrl(
-    customerAddress,
-    undefined,
-    undefined,
-    600,
-    300
-  );
   const googleMapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(customerAddress)}`;
 
-  // Fetch existing notes when modal opens
+  // Fetch existing notes and Street View URL when modal opens
   useEffect(() => {
     if (isOpen && customerAddress) {
       fetchNotes();
+      fetchStreetViewUrl();
       setIsEditingNotes(false);
     } else {
       setNotes("");
       setExistingNotes(null);
       setIsEditingNotes(false);
+      setStreetViewImageUrl(null);
     }
   }, [isOpen, customerAddress]);
+
+  const fetchStreetViewUrl = async () => {
+    try {
+      const params = new URLSearchParams({
+        address: customerAddress,
+        width: "600",
+        height: "300",
+      });
+      
+      const response = await fetch(`/api/streetview?${params.toString()}`);
+      if (response.ok) {
+        const result = await response.json();
+        if (result.url) {
+          setStreetViewImageUrl(result.url);
+        } else {
+          setStreetViewImageUrl(null);
+        }
+      } else {
+        setStreetViewImageUrl(null);
+      }
+    } catch (error) {
+      console.error("Failed to fetch Street View URL:", error);
+      setStreetViewImageUrl(null);
+    }
+  };
 
   const fetchNotes = async () => {
     try {
@@ -63,6 +83,28 @@ export default function DeliveryConfirmationModal({
       console.error("Error fetching notes:", error);
     } finally {
       setLoadingNotes(false);
+    }
+  };
+
+  const handleNavigate = async () => {
+    try {
+      // Use Web Share API if available (mobile devices)
+      if (navigator.share) {
+        await navigator.share({
+          title: customerName ? `Navigate to ${customerName}` : "Navigate to Customer",
+          text: customerAddress,
+        });
+      } else {
+        // Fallback: open Google Maps in new tab
+        window.open(googleMapsUrl, "_blank");
+      }
+    } catch (error) {
+      // User cancelled share or error occurred
+      if (error instanceof Error && error.name !== "AbortError") {
+        console.error("Error sharing address:", error);
+        // Fallback to opening Google Maps if share fails
+        window.open(googleMapsUrl, "_blank");
+      }
     }
   };
 
@@ -182,8 +224,14 @@ export default function DeliveryConfirmationModal({
           )}
         </div>
 
-        {/* Action Button */}
-        <div className="flex justify-end pt-4 border-t border-gray-200 dark:border-gray-700">
+        {/* Action Buttons */}
+        <div className="flex justify-end gap-3 pt-4 border-t border-gray-200 dark:border-gray-700">
+          <button
+            onClick={handleNavigate}
+            className="px-6 py-2 text-sm font-medium rounded-lg bg-blue-600 text-white hover:bg-blue-700 min-h-[44px] transition-colors"
+          >
+            Navigate
+          </button>
           <button
             onClick={handleMarkDelivered}
             disabled={isMarking || savingNotes}

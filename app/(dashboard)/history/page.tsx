@@ -5,7 +5,6 @@ import { useSession } from "next-auth/react";
 import { format, isToday, isYesterday } from "date-fns";
 import { Sparkles, MapPin, User, Car, Package, Check, Utensils, Pencil, Trash2, ShoppingBag, ArrowUpCircle, ArrowDownCircle } from "lucide-react";
 import { formatAddress } from "@/lib/address-formatter";
-import { getStreetViewUrl } from "@/lib/streetview-helper";
 import Layout from "@/components/Layout";
 import AddTransactionModal from "@/components/AddTransactionModal";
 import AddOrderToTransactionModal from "@/components/AddOrderToTransactionModal";
@@ -173,9 +172,41 @@ const CompletionLog = ({ stepLog, currentStep, actionButton, actionButtonColor, 
   const customerAddress = linkedOcrExports && linkedOcrExports.length > 0 ? linkedOcrExports[0].customerAddress : null;
   const customerLat = linkedOcrExports && linkedOcrExports.length > 0 ? linkedOcrExports[0].lat : undefined;
   const customerLon = linkedOcrExports && linkedOcrExports.length > 0 ? linkedOcrExports[0].lon : undefined;
-  const streetViewUrl = showStreetView && (customerAddress || (customerLat !== undefined && customerLon !== undefined))
-    ? getStreetViewUrl(customerAddress || undefined, customerLat, customerLon, 600, 300)
-    : null;
+  
+  const [streetViewUrl, setStreetViewUrl] = useState<string | null>(null);
+
+  // Fetch Street View URL when needed
+  useEffect(() => {
+    if (showStreetView && (customerAddress || (customerLat !== undefined && customerLon !== undefined))) {
+      const params = new URLSearchParams({
+        width: "600",
+        height: "300",
+      });
+      
+      if (customerLat !== undefined && customerLon !== undefined) {
+        params.append("lat", customerLat.toString());
+        params.append("lon", customerLon.toString());
+      } else if (customerAddress) {
+        params.append("address", customerAddress);
+      }
+      
+      fetch(`/api/streetview?${params.toString()}`)
+        .then((res) => res.json())
+        .then((result) => {
+          if (result.url) {
+            setStreetViewUrl(result.url);
+          } else {
+            setStreetViewUrl(null);
+          }
+        })
+        .catch((err) => {
+          console.error("Failed to fetch Street View URL:", err);
+          setStreetViewUrl(null);
+        });
+    } else {
+      setStreetViewUrl(null);
+    }
+  }, [showStreetView, customerAddress, customerLat, customerLon]);
 
   // Get button color classes based on step
   const getButtonColorClasses = (step?: string): string => {

@@ -46,7 +46,7 @@ export async function PATCH(request: NextRequest) {
     await connectDB();
 
     const body = await request.json();
-    const { id, appName, customerName, customerAddress, rawResponse, notes } = body;
+    const { id, appName, customerName, customerAddress, placeId, lat, lon, rawResponse, notes } = body;
 
     if (!id) {
       return NextResponse.json({ error: "Missing id" }, { status: 400 });
@@ -74,6 +74,15 @@ export async function PATCH(request: NextRequest) {
       updateSet.customerAddress = customerAddress;
       needsGeocoding = true;
     }
+    if (typeof placeId === "string") {
+      updateSet.placeId = placeId;
+    }
+    if (typeof lat === "number") {
+      updateSet.lat = lat;
+    }
+    if (typeof lon === "number") {
+      updateSet.lon = lon;
+    }
     if (typeof rawResponse === "string") {
       updateSet.rawResponse = rawResponse;
     }
@@ -85,8 +94,8 @@ export async function PATCH(request: NextRequest) {
       return NextResponse.json({ error: "No fields to update" }, { status: 400 });
     }
 
-    // If address is updated, geocode it
-    if (needsGeocoding) {
+    // If address is updated and we don't have lat/lon from Google Places, geocode it
+    if (needsGeocoding && (updateSet.lat === undefined && updateSet.lon === undefined)) {
       try {
         const geocodeData = await geocodeAddress(updateSet.customerAddress);
         if (geocodeData && geocodeData.lat != null && geocodeData.lon != null) {
@@ -106,6 +115,9 @@ export async function PATCH(request: NextRequest) {
         updateSet.lon = null;
         updateSet.geocodeDisplayName = "unknown";
       }
+    } else if (needsGeocoding && updateSet.lat !== undefined && updateSet.lon !== undefined) {
+      // If we have lat/lon from Google Places, set geocodeDisplayName from the address
+      updateSet.geocodeDisplayName = updateSet.customerAddress || null;
     }
 
     // Use $set to explicitly update fields

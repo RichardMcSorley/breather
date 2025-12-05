@@ -17,6 +17,7 @@ export async function GET(request: NextRequest) {
     const limitParam = searchParams.get("limit");
     const filterAmount = searchParams.get("filterAmount");
     const filterAppName = searchParams.get("filterAppName");
+    const searchQuery = searchParams.get("search");
 
     const page = Math.max(1, parseInt(pageParam || "1"));
     const limit = Math.min(100, Math.max(1, parseInt(limitParam || "25")));
@@ -144,6 +145,26 @@ export async function GET(request: NextRequest) {
         });
 
         return hasMatchingVisit;
+      });
+    }
+
+    // Apply search filter if provided (search by customer name or address)
+    if (searchQuery && searchQuery.trim()) {
+      const queryLower = searchQuery.trim().toLowerCase();
+      customers = customers.filter((customer) => {
+        // Search in primary customer name
+        if (customer.customerName.toLowerCase().includes(queryLower)) {
+          return true;
+        }
+        // Search in all customer names
+        if (customer.customerNames && customer.customerNames.some(name => name.toLowerCase().includes(queryLower))) {
+          return true;
+        }
+        // Search in address
+        if (customer.address.toLowerCase().includes(queryLower)) {
+          return true;
+        }
+        return false;
       });
     }
 

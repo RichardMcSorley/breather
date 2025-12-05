@@ -15,6 +15,7 @@ export interface IOcrExport extends Document {
   metadata?: Record<string, any>;
   lat?: number;
   lon?: number;
+  placeId?: string;
   geocodeDisplayName?: string;
   notes?: string;
   linkedTransactionIds?: mongoose.Types.ObjectId[];
@@ -71,6 +72,9 @@ const OcrExportSchema: Schema = new Schema(
     },
     lon: {
       type: Number,
+    },
+    placeId: {
+      type: String,
     },
     geocodeDisplayName: {
       type: String,

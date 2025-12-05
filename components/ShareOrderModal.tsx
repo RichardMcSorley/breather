@@ -29,6 +29,8 @@ interface AddressResult {
   lat: string;
   lon: string;
   type: string;
+  place_id?: string;
+  name?: string;
 }
 
 export default function ShareOrderModal({
@@ -79,10 +81,43 @@ export default function ShareOrderModal({
     setAddresses([]);
 
     try {
-      let nominatimUrl: string;
       // Use the search query from the input, or default to restaurant name + location
       const query = searchQuery.trim() || `${restaurantName.trim()} ${extractLocation()}`;
+      
+      // Try Google Places API first
+      let googleResults: AddressResult[] = [];
+          try {
+            const placesParams = new URLSearchParams({
+              query,
+              type: "restaurant", // Filter for restaurants
+              ...(userLatitude !== undefined && userLongitude !== undefined && {
+                lat: userLatitude.toString(),
+                lon: userLongitude.toString(),
+                radius: "5000",
+              }),
+            });
+
+            const placesResponse = await fetch(`/api/places/search?${placesParams.toString()}`);
+        
+        if (placesResponse.ok) {
+          const placesData = await placesResponse.json();
+          if (placesData.results && placesData.results.length > 0) {
+            googleResults = placesData.results.slice(0, 10);
+          }
+        }
+      } catch (googleErr) {
+        console.log("Google Places API failed, falling back to Nominatim:", googleErr);
+      }
+
+      // If Google Places returned results, use them
+      if (googleResults.length > 0) {
+        setAddresses(googleResults);
+        return;
+      }
+
+      // Fallback to Nominatim
       const encodedQuery = encodeURIComponent(query);
+      let nominatimUrl: string;
       
       // Use location-based search if we have coordinates
       if (userLatitude !== undefined && userLongitude !== undefined) {
@@ -157,8 +192,41 @@ export default function ShareOrderModal({
         setAddresses([]);
 
         try {
-          let nominatimUrl: string;
+          // Try Google Places API first
+          let googleResults: AddressResult[] = [];
+          try {
+            const placesParams = new URLSearchParams({
+              query: initialQuery,
+              type: "restaurant", // Filter for restaurants
+              ...(userLatitude !== undefined && userLongitude !== undefined && {
+                lat: userLatitude.toString(),
+                lon: userLongitude.toString(),
+                radius: "5000",
+              }),
+            });
+
+            const placesResponse = await fetch(`/api/places/search?${placesParams.toString()}`);
+            
+            if (placesResponse.ok) {
+              const placesData = await placesResponse.json();
+              if (placesData.results && placesData.results.length > 0) {
+                googleResults = placesData.results.slice(0, 10);
+              }
+            }
+          } catch (googleErr) {
+            console.log("Google Places API failed, falling back to Nominatim:", googleErr);
+          }
+
+          // If Google Places returned results, use them
+          if (googleResults.length > 0) {
+            setAddresses(googleResults);
+            setSearching(false);
+            return;
+          }
+
+          // Fallback to Nominatim
           const encodedQuery = encodeURIComponent(initialQuery);
+          let nominatimUrl: string;
           
           // Use location-based search if we have coordinates
           if (userLatitude !== undefined && userLongitude !== undefined) {
@@ -227,22 +295,26 @@ export default function ShareOrderModal({
   }, [isOpen, restaurantName, extractLocation, userLatitude, userLongitude]);
 
 
-  const handleSelectAddress = async (address: string) => {
+  const handleSelectAddress = async (addressResult: AddressResult) => {
     // Extract restaurant name from the address (first part before comma)
-    const displayParts = address.split(',').map(p => p.trim());
+    const displayParts = addressResult.display_name.split(',').map(p => p.trim());
     const extractedRestaurantName = displayParts[0] || restaurantName;
     
     // Remove restaurant name from the beginning of the address if present
-    let cleanedAddress = address;
-    if (extractedRestaurantName && address.startsWith(extractedRestaurantName)) {
+    let cleanedAddress = addressResult.display_name;
+    if (extractedRestaurantName && addressResult.display_name.startsWith(extractedRestaurantName)) {
       // Remove restaurant name and any following comma/space
-      cleanedAddress = address.substring(extractedRestaurantName.length).replace(/^[,\s]+/, "").trim();
+      cleanedAddress = addressResult.display_name.substring(extractedRestaurantName.length).replace(/^[,\s]+/, "").trim();
     }
     
     // Format the address before saving
     const formattedAddress = formatAddress(cleanedAddress);
     
-    // Save address and restaurant name to order if orderId is provided
+    // Parse lat/lon from strings to numbers
+    const lat = addressResult.lat ? parseFloat(addressResult.lat) : undefined;
+    const lon = addressResult.lon ? parseFloat(addressResult.lon) : undefined;
+    
+    // Save address, place_id, lat, lon and restaurant name to order if orderId is provided
     if (orderId) {
       try {
         const response = await fetch("/api/delivery-orders", {
@@ -254,6 +326,9 @@ export default function ShareOrderModal({
             id: orderId,
             restaurantName: extractedRestaurantName,
             restaurantAddress: formattedAddress,
+            restaurantPlaceId: addressResult.place_id,
+            restaurantLat: lat,
+            restaurantLon: lon,
           }),
         });
 
@@ -435,7 +510,7 @@ export default function ShareOrderModal({
                     {/* Select button right-aligned */}
                     <div className="flex justify-end">
                       <button
-                        onClick={() => handleSelectAddress(address.display_name)}
+                        onClick={() => handleSelectAddress(address)}
                         className="px-6 py-2 text-sm font-medium rounded-lg bg-blue-600 text-white hover:bg-blue-700 min-h-[40px] transition-colors"
                       >
                         Select

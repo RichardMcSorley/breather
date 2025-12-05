@@ -46,6 +46,9 @@ NEXTAUTH_SECRET=your_nextauth_secret
 GOOGLE_CLIENT_ID=your_google_client_id
 GOOGLE_CLIENT_SECRET=your_google_client_secret
 
+# Google Maps API (Optional - for restaurant search and Street View)
+GOOGLE_MAPS_API_KEY=your_google_maps_api_key
+
 # Tesla API Integration (Optional)
 TESLA_CLIENT_ID=your_tesla_client_id
 TESLA_CLIENT_SECRET=your_tesla_client_secret
@@ -67,7 +70,16 @@ openssl rand -base64 32
    - Create OAuth 2.0 credentials
    - Add authorized redirect URI: `http://localhost:3000/api/auth/callback/google`
 
-5. Set up Tesla API integration (optional):
+5. Set up Google Maps API (optional - for restaurant search and Street View):
+   - Go to [Google Cloud Console](https://console.cloud.google.com/)
+   - In the same project used for OAuth, enable the following APIs:
+     - Places API (for restaurant address search)
+     - Street View Static API (for Street View images)
+   - Create an API key in "Credentials"
+   - Restrict the API key to only the enabled APIs for security
+   - Add `GOOGLE_MAPS_API_KEY` to your `.env` file
+
+6. Set up Tesla API integration (optional):
    - Go to [Tesla Developer Portal](https://developer.tesla.com/dashboard)
    - Create a new application
    - Add redirect URI: `http://localhost:3000/api/tesla/callback` (for development)
@@ -94,7 +106,7 @@ openssl rand -base64 32
      - The public key will be automatically hosted at: `https://your-domain/.well-known/appspecific/com.tesla.3p.public-key.pem`
      - Register your application (see Registration section below)
 
-6. Create PWA icons (optional):
+7. Create PWA icons (optional):
    - Create icons in `public/icons/` directory
    - Sizes needed: 72x72, 96x96, 128x128, 144x144, 152x152, 192x192, 384x384, 512x512
    - You can use a tool like [PWA Asset Generator](https://github.com/elegantapp/pwa-asset-generator)

@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { format } from "date-fns";
-import { Pencil, Trash2, Utensils, Package } from "lucide-react";
+import { Pencil, Trash2, Utensils, Package, Search } from "lucide-react";
 
 interface DeliveryOrder {
   id: string;
@@ -36,12 +36,14 @@ export default function DeliveryOrdersList({
   const [total, setTotal] = useState(0);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState<string>("");
+  const [activeSearchQuery, setActiveSearchQuery] = useState<string>("");
 
   useEffect(() => {
     if (userId) {
       fetchOrders();
     }
-  }, [userId, page]);
+  }, [userId, page, activeSearchQuery]);
 
   const fetchOrders = async () => {
     if (!userId) return;
@@ -54,6 +56,9 @@ export default function DeliveryOrdersList({
       params.append("userId", userId);
       params.append("page", page.toString());
       params.append("limit", "25");
+      if (activeSearchQuery.trim()) {
+        params.append("search", activeSearchQuery.trim());
+      }
 
       const response = await fetch(`/api/delivery-orders?${params.toString()}`);
       if (!response.ok) {
@@ -163,6 +168,33 @@ export default function DeliveryOrdersList({
 
   return (
     <div className="space-y-2">
+      {/* Search Input */}
+      <div className="mb-4 flex gap-2">
+        <input
+          type="text"
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              setActiveSearchQuery(searchQuery);
+              setPage(1);
+            }
+          }}
+          placeholder="Search by restaurant name or address..."
+          className="flex-1 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 px-4 py-2 text-sm text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+        />
+        <button
+          onClick={() => {
+            setActiveSearchQuery(searchQuery);
+            setPage(1);
+          }}
+          className="px-4 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-700 min-h-[44px] flex items-center justify-center gap-2 transition-colors"
+        >
+          <Search className="w-4 h-4" />
+          <span className="hidden sm:inline">Search</span>
+        </button>
+      </div>
+
       {orders.length === 0 ? (
         <div className="text-center py-12 text-gray-500 dark:text-gray-400">
           No delivery orders found.

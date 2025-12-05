@@ -9,6 +9,9 @@ export interface IDeliveryOrder extends Document {
   milesToMoneyRatio: number;
   restaurantName: string;
   restaurantAddress?: string;
+  restaurantPlaceId?: string;
+  restaurantLat?: number;
+  restaurantLon?: number;
   time?: string;
   screenshot?: string;
   userLatitude?: number;
@@ -58,6 +61,15 @@ const DeliveryOrderSchema: Schema = new Schema(
     },
     restaurantAddress: {
       type: String,
+    },
+    restaurantPlaceId: {
+      type: String,
+    },
+    restaurantLat: {
+      type: Number,
+    },
+    restaurantLon: {
+      type: Number,
     },
     time: {
       type: String,
