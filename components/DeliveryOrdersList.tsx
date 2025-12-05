@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import Card from "./ui/Card";
 import { format } from "date-fns";
 import { Pencil, Trash2, Utensils, Package } from "lucide-react";
 
@@ -35,94 +34,14 @@ export default function DeliveryOrdersList({
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [total, setTotal] = useState(0);
-  const [selectedApp, setSelectedApp] = useState<string>("");
-  const [searchQuery, setSearchQuery] = useState<string>("");
-  const [isSearching, setIsSearching] = useState(false);
-  const [searchLoading, setSearchLoading] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
-  const [searchResults, setSearchResults] = useState<DeliveryOrder[]>([]);
-
-  const ITEMS_PER_PAGE = 25;
 
   useEffect(() => {
     if (userId) {
-      if (isSearching && searchQuery.trim() !== "") {
-        performSearch();
-      } else {
-        fetchOrders();
-      }
-    }
-  }, [userId, page, selectedApp]);
-
-  const performSearch = async () => {
-    if (!userId || searchQuery.trim() === "") {
-      return;
-    }
-
-    try {
-      setSearchLoading(true);
-      setError(null);
-      setIsSearching(true);
-      setPage(1);
-
-      const params = new URLSearchParams();
-      params.append("userId", userId);
-      params.append("query", searchQuery.trim());
-      if (selectedApp) {
-        params.append("filterAppName", selectedApp);
-      }
-
-      const response = await fetch(`/api/delivery-orders/search?${params.toString()}`);
-      if (!response.ok) {
-        throw new Error("Failed to search delivery orders");
-      }
-
-      const data = await response.json();
-      setSearchResults(data.orders || []);
-      
-      // Client-side pagination for search results
-      const startIndex = (page - 1) * ITEMS_PER_PAGE;
-      const endIndex = startIndex + ITEMS_PER_PAGE;
-      setOrders(data.orders?.slice(startIndex, endIndex) || []);
-      setTotalPages(Math.ceil((data.orders?.length || 0) / ITEMS_PER_PAGE));
-      setTotal(data.orders?.length || 0);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "An error occurred");
-      setSearchResults([]);
-      setOrders([]);
-    } finally {
-      setSearchLoading(false);
-    }
-  };
-
-  // Handle search
-  useEffect(() => {
-    if (searchQuery.trim() === "") {
-      setIsSearching(false);
-      setSearchResults([]);
-      setPage(1);
       fetchOrders();
-      return;
     }
-
-    // Debounce search
-    const timeoutId = setTimeout(() => {
-      performSearch();
-    }, 300);
-
-    return () => clearTimeout(timeoutId);
-  }, [searchQuery, selectedApp, userId]);
-
-  // Update paginated search results when page changes
-  useEffect(() => {
-    if (isSearching && searchResults.length > 0) {
-      const startIndex = (page - 1) * ITEMS_PER_PAGE;
-      const endIndex = startIndex + ITEMS_PER_PAGE;
-      setOrders(searchResults.slice(startIndex, endIndex));
-      setTotalPages(Math.ceil(searchResults.length / ITEMS_PER_PAGE));
-    }
-  }, [page, searchResults, isSearching]);
+  }, [userId, page]);
 
   const fetchOrders = async () => {
     if (!userId) return;
@@ -134,10 +53,7 @@ export default function DeliveryOrdersList({
       const params = new URLSearchParams();
       params.append("userId", userId);
       params.append("page", page.toString());
-      params.append("limit", ITEMS_PER_PAGE.toString());
-      if (selectedApp) {
-        params.append("filterAppName", selectedApp);
-      }
+      params.append("limit", "25");
 
       const response = await fetch(`/api/delivery-orders?${params.toString()}`);
       if (!response.ok) {
@@ -175,14 +91,8 @@ export default function DeliveryOrdersList({
         throw new Error(errorData.error || "Failed to delete order");
       }
 
-      // Refresh the list or search results based on current state
-      if (isSearching && searchQuery.trim() !== "") {
-        // Re-run search to refresh results
-        await performSearch();
-      } else {
-        // Refresh regular list
-        await fetchOrders();
-      }
+      // Refresh the list
+      await fetchOrders();
       setConfirmDeleteId(null);
       setDeletingId(null);
       
@@ -202,9 +112,17 @@ export default function DeliveryOrdersList({
 
   const formatDate = (dateString: string) => {
     try {
-      return format(new Date(dateString), "MMM d, yyyy h:mm a");
+      return format(new Date(dateString), "MMM d, yyyy");
     } catch {
       return dateString;
+    }
+  };
+
+  const formatDateTime = (dateString: string) => {
+    try {
+      return format(new Date(dateString), "h:mm a");
+    } catch {
+      return "";
     }
   };
 
@@ -227,155 +145,68 @@ export default function DeliveryOrdersList({
     return appColors[appName] || { bg: "bg-gray-100 dark:bg-gray-700", text: "text-gray-500 dark:text-gray-400" };
   };
 
-  // Get unique app names for filter dropdown (from all orders we've seen)
-  const [uniqueAppNames, setUniqueAppNames] = useState<string[]>([]);
-  
-  useEffect(() => {
-    // Fetch unique app names separately for the filter
-    const fetchAppNames = async () => {
-      if (!userId) return;
-      try {
-        const response = await fetch(`/api/delivery-orders?userId=${userId}&limit=1000`);
-        if (response.ok) {
-          const data = await response.json();
-          const appNames = (data.orders || []).map((o: DeliveryOrder) => o.appName).filter((name: string | undefined): name is string => Boolean(name));
-          const apps: string[] = Array.from(new Set<string>(appNames)).sort();
-          setUniqueAppNames(apps);
-        }
-      } catch (err) {
-        // Silently fail - filter will just be empty
-      }
-    };
-    fetchAppNames();
-  }, [userId]);
-
   if (loading && orders.length === 0) {
     return (
-      <Card className="p-6">
-        <div className="flex items-center justify-center min-h-[200px]">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900 dark:border-white"></div>
-        </div>
-      </Card>
+      <div className="flex items-center justify-center min-h-[200px]">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900 dark:border-white"></div>
+      </div>
     );
   }
 
   if (error && orders.length === 0) {
     return (
-      <Card className="p-6 bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800">
+      <div className="rounded-lg p-4 mb-2 border bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800">
         <div className="text-red-600 dark:text-red-400">Error: {error}</div>
-      </Card>
+      </div>
     );
   }
 
   return (
-    <Card className="overflow-hidden">
-      <div className="p-4 sm:p-6 border-b border-gray-200 dark:border-gray-700">
-        <div className="flex flex-col gap-4">
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-            <div>
-              <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
-                Delivery Orders
-              </h3>
-              <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-                {isSearching
-                  ? `Search results (${total} matches)`
-                  : `Showing ${orders.length} of ${total} orders`}
-              </p>
-            </div>
-            {uniqueAppNames.length > 0 && (
-              <div className="flex items-center gap-2">
-                <label
-                  htmlFor="app-filter"
-                  className="text-sm font-medium text-gray-700 dark:text-gray-300"
-                >
-                  Filter:
-                </label>
-                <select
-                  id="app-filter"
-                  value={selectedApp}
-                  onChange={(e) => {
-                    setSelectedApp(e.target.value);
-                    setPage(1);
-                  }}
-                  className="px-3 py-2 text-sm rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-white min-h-[44px] focus:outline-none focus:ring-2 focus:ring-blue-500"
-                >
-                  <option value="">All Apps</option>
-                  {uniqueAppNames.map((appName) => (
-                    <option key={appName} value={appName}>
-                      {appName}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            )}
-          </div>
-          <div className="flex items-center gap-2">
-            <label
-              htmlFor="search-orders"
-              className="text-sm font-medium text-gray-700 dark:text-gray-300"
-            >
-              Search:
-            </label>
-            <input
-              id="search-orders"
-              type="text"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search by app name or restaurant..."
-              className="flex-1 px-3 py-2 text-sm rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-white min-h-[44px] focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
-            {searchLoading && (
-              <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-gray-900 dark:border-white"></div>
-            )}
-            {searchQuery && (
-              <button
-                onClick={() => setSearchQuery("")}
-                className="px-3 py-2 text-sm text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white min-h-[44px]"
-                aria-label="Clear search"
-              >
-                ✕
-              </button>
-            )}
-          </div>
-        </div>
-      </div>
-
+    <div className="space-y-2">
       {orders.length === 0 ? (
         <div className="text-center py-12 text-gray-500 dark:text-gray-400">
           No delivery orders found.
         </div>
       ) : (
         <>
-          {/* Mobile-friendly card layout */}
-          <div className="p-4 sm:p-6 space-y-4">
-            {orders.map((order) => {
-              const appColor = getAppTagColor(order.appName);
-              return (
-                <div
-                  key={order.id}
-                  className="rounded-lg p-4 border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900"
-                >
-                  {/* Restaurant name and money amount */}
-                  <div className="flex items-start justify-between mb-2 gap-2">
-                    <div className="font-bold text-base text-gray-900 dark:text-white text-left flex-1 min-w-0 flex items-center gap-1">
-                      <span className="flex-shrink-0"><Utensils className="w-4 h-4" /></span>
-                      <span className="truncate">{order.restaurantName}</span>
-                    </div>
-                    <div className="text-lg font-bold text-gray-900 dark:text-white flex-shrink-0">
-                      {formatCurrency(order.money)}
-                    </div>
+          {orders.map((order) => {
+            const appColor = getAppTagColor(order.appName);
+            return (
+              <div
+                key={order.id}
+                className="rounded-lg p-4 pb-4 mb-2 border flex flex-col gap-3 overflow-visible min-w-0 bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700"
+              >
+                {/* Top section: App badge and money amount */}
+                <div className="flex items-start justify-between mb-1 gap-2 min-w-0">
+                  <div className="flex items-center gap-2 flex-1 min-w-0 flex-wrap">
+                    <span className={`text-sm px-2 py-1 rounded flex-shrink-0 ${appColor.bg} ${appColor.text}`}>
+                      {order.appName}
+                    </span>
                   </div>
-                  
-                  {/* Date below restaurant name - left aligned */}
-                  <div className="text-sm text-gray-700 dark:text-gray-300 mb-2 text-left">
-                    {formatDate(order.processedAt)}
+                  <div className="text-lg font-bold flex-shrink-0 text-gray-900 dark:text-white">
+                    {formatCurrency(order.money)}
+                  </div>
+                </div>
+
+                {/* Restaurant name */}
+                <div className="mb-1 min-w-0">
+                  <div className="text-sm text-gray-900 dark:text-white flex items-center gap-1 text-left w-full min-w-0">
+                    <span className="flex-shrink-0"><Utensils className="w-4 h-4" /></span>
+                    <span className="truncate">
+                      {order.restaurantName}
+                    </span>
+                  </div>
+                  <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                    {formatDate(order.processedAt)} {formatDateTime(order.processedAt)}
                     {order.time && (
-                      <span className="ml-2">• {order.time}</span>
+                      <> • {order.time}</>
                     )}
                   </div>
-                  
-                  {/* Miles and ratio - left aligned */}
-                  <div className="flex items-center gap-4 text-sm text-gray-700 dark:text-gray-300 mb-2 text-left">
+                </div>
+
+                {/* Bottom section: Miles/ratio and Edit/Delete buttons */}
+                <div className="flex items-center justify-between mt-auto pt-1 border-t border-gray-200 dark:border-gray-700 gap-2 min-w-0">
+                  <div className="text-xs text-gray-500 dark:text-gray-400 flex-1 min-w-0 flex items-center gap-2">
                     <div className="flex items-center gap-1">
                       <Package className="w-3 h-3" />
                       <span>
@@ -386,16 +217,7 @@ export default function DeliveryOrdersList({
                       <span className="font-medium">${order.milesToMoneyRatio.toFixed(2)}</span>/mi
                     </div>
                   </div>
-                  
-                  {/* App name badge - left aligned */}
-                  <div className="flex items-center gap-1 text-xs text-gray-500 dark:text-gray-400 mb-3 text-left">
-                    <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${appColor.bg} ${appColor.text}`}>
-                      {order.appName}
-                    </span>
-                  </div>
-                  
-                  {/* Action buttons right-aligned */}
-                  <div className="flex items-center justify-end gap-2 pt-3 border-t border-gray-200 dark:border-gray-700">
+                  <div className="flex items-center gap-2 flex-shrink-0">
                     {onEditClick && (
                       <button
                         onClick={(e) => {
@@ -421,28 +243,71 @@ export default function DeliveryOrdersList({
                     </button>
                   </div>
                 </div>
-              );
-            })}
-          </div>
+              </div>
+            );
+          })}
 
           {/* Pagination */}
           {totalPages > 1 && (
-            <div className="px-4 sm:px-6 py-4 border-t border-gray-200 dark:border-gray-700 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-              <div className="text-sm text-gray-700 dark:text-gray-300 text-center sm:text-left">
-                Page {page} of {totalPages}
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mt-6 pt-6 border-t border-gray-200 dark:border-gray-700">
+              <div className="text-sm text-gray-600 dark:text-gray-400 text-center sm:text-left">
+                <span className="hidden sm:inline">
+                  Showing {((page - 1) * 25) + 1} to {Math.min(page * 25, total)} of {total} orders
+                </span>
+                <span className="sm:hidden">
+                  Page {page} of {totalPages}
+                </span>
               </div>
-              <div className="flex gap-2 justify-center sm:justify-end">
+              <div className="flex items-center justify-center gap-2 flex-wrap">
                 <button
                   onClick={() => setPage((p) => Math.max(1, p - 1))}
                   disabled={page === 1}
-                  className="px-3 py-1 text-sm rounded border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed min-h-[44px]"
+                  className={`px-4 py-2 rounded-lg text-sm font-medium min-h-[44px] ${
+                    page === 1
+                      ? "bg-gray-100 dark:bg-gray-700 text-gray-400 dark:text-gray-500 cursor-not-allowed"
+                      : "bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600"
+                  }`}
                 >
                   Previous
                 </button>
+                
+                <div className="flex items-center gap-1">
+                  {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                    let pageNum: number;
+                    if (totalPages <= 5) {
+                      pageNum = i + 1;
+                    } else if (page <= 3) {
+                      pageNum = i + 1;
+                    } else if (page >= totalPages - 2) {
+                      pageNum = totalPages - 4 + i;
+                    } else {
+                      pageNum = page - 2 + i;
+                    }
+                    
+                    return (
+                      <button
+                        key={pageNum}
+                        onClick={() => setPage(pageNum)}
+                        className={`min-w-[44px] min-h-[44px] px-3 py-2 rounded-lg text-sm font-medium ${
+                          page === pageNum
+                            ? "bg-blue-600 text-white"
+                            : "bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600"
+                        }`}
+                      >
+                        {pageNum}
+                      </button>
+                    );
+                  })}
+                </div>
+                
                 <button
                   onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
                   disabled={page === totalPages}
-                  className="px-3 py-1 text-sm rounded border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed min-h-[44px]"
+                  className={`px-4 py-2 rounded-lg text-sm font-medium min-h-[44px] ${
+                    page === totalPages
+                      ? "bg-gray-100 dark:bg-gray-700 text-gray-400 dark:text-gray-500 cursor-not-allowed"
+                      : "bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600"
+                  }`}
                 >
                   Next
                 </button>
@@ -481,6 +346,6 @@ export default function DeliveryOrdersList({
           </div>
         </div>
       )}
-    </Card>
+    </div>
   );
 }

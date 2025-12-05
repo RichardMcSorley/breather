@@ -20,6 +20,17 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "Missing userId" }, { status: 400 });
     }
 
+    // Helper function to get day of week in timezone (must be defined before use)
+    const getDayOfWeekInTimezone = (utcDate: Date, tz: string): number => {
+      // Format date components in the target timezone
+      const year = parseInt(new Intl.DateTimeFormat("en-US", { timeZone: tz, year: "numeric" }).format(utcDate), 10);
+      const month = parseInt(new Intl.DateTimeFormat("en-US", { timeZone: tz, month: "numeric" }).format(utcDate), 10) - 1; // 0-indexed
+      const day = parseInt(new Intl.DateTimeFormat("en-US", { timeZone: tz, day: "numeric" }).format(utcDate), 10);
+      // Create a date object from these components (in local time) and get day of week
+      const dateInTz = new Date(year, month, day);
+      return dateInTz.getDay();
+    };
+
     // Get all delivery orders for the user from this year
     const startOfYear = new Date(new Date().getFullYear(), 0, 1);
     let orders = await DeliveryOrder.find({
@@ -236,16 +247,6 @@ export async function GET(request: NextRequest) {
         minute: "numeric",
       });
       return parseInt(formatter.format(utcDate), 10);
-    };
-
-    const getDayOfWeekInTimezone = (utcDate: Date, tz: string): number => {
-      // Format date components in the target timezone
-      const year = parseInt(new Intl.DateTimeFormat("en-US", { timeZone: tz, year: "numeric" }).format(utcDate), 10);
-      const month = parseInt(new Intl.DateTimeFormat("en-US", { timeZone: tz, month: "numeric" }).format(utcDate), 10) - 1; // 0-indexed
-      const day = parseInt(new Intl.DateTimeFormat("en-US", { timeZone: tz, day: "numeric" }).format(utcDate), 10);
-      // Create a date object from these components (in local time) and get day of week
-      const dateInTz = new Date(year, month, day);
-      return dateInTz.getDay();
     };
 
     // Calculate best restaurant per hour (highest combined score in that hour)
