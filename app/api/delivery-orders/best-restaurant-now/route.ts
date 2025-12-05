@@ -55,6 +55,21 @@ export async function GET(request: NextRequest) {
       .sort({ processedAt: -1 })
       .lean();
 
+    // Filter to only include DoorDash (Dasher) or GrubHub (GH Drivers) orders
+    // Match the exact app names as they appear in the codebase: "Dasher" and "GH Drivers"
+    const allowedApps = ["dasher", "gh drivers"];
+    const originalOrderCount = orders.length;
+    const uniqueAppsBeforeFilter = [...new Set(orders.map((o: any) => o.appName))];
+    orders = orders.filter((order) => {
+      const appName = (order.appName || "").toLowerCase().trim();
+      return allowedApps.includes(appName);
+    });
+    
+    // Debug: Log filtering results (remove after verification)
+    if (orders.length === 0 && originalOrderCount > 0) {
+      console.log(`[best-restaurant-now] Filtered ${originalOrderCount} orders to ${orders.length}. Unique apps before filter: ${uniqueAppsBeforeFilter.join(", ")}`);
+    }
+
     // Filter by day of week (0 = Sunday, 6 = Saturday)
     if (currentDayOfWeek !== null && !isNaN(currentDayOfWeek) && currentDayOfWeek >= 0 && currentDayOfWeek <= 6) {
       orders = orders.filter((order) => {

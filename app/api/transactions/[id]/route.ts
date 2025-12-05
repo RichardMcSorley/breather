@@ -30,7 +30,7 @@ export async function GET(
       _id: id,
       userId: session.user.id,
     })
-      .populate("linkedOcrExportIds", "customerName customerAddress appName entryId")
+      .populate("linkedOcrExportIds", "customerName customerAddress appName entryId lat lon")
       .populate("linkedDeliveryOrderIds", "restaurantName restaurantAddress appName miles money entryId userLatitude userLongitude userAddress")
       .lean();
 
@@ -68,6 +68,8 @@ export async function GET(
           customerAddress: customer.customerAddress,
           appName: customer.appName,
           entryId: customer.entryId,
+          lat: customer.lat,
+          lon: customer.lon,
         }));
     }
 

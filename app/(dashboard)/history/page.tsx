@@ -22,6 +22,8 @@ interface LinkedCustomer {
   customerAddress: string;
   appName?: string;
   entryId: string;
+  lat?: number;
+  lon?: number;
 }
 
 interface LinkedOrder {
@@ -153,9 +155,13 @@ interface CompletionLogProps {
   actionButtonColor?: string;
   transactionDate?: string;
   transactionTime?: string;
+  transactionId?: string;
+  linkedDeliveryOrders?: LinkedOrder[];
+  linkedOcrExports?: LinkedCustomer[];
+  onStageClick?: (step: string) => void;
 }
 
-const CompletionLog = ({ stepLog, currentStep, actionButton, actionButtonColor, transactionDate, transactionTime }: CompletionLogProps) => {
+const CompletionLog = ({ stepLog, currentStep, actionButton, actionButtonColor, transactionDate, transactionTime, transactionId, linkedDeliveryOrders, linkedOcrExports, onStageClick }: CompletionLogProps) => {
   if (!stepLog || stepLog.length === 0) {
     return null;
   }
@@ -340,13 +346,25 @@ const CompletionLog = ({ stepLog, currentStep, actionButton, actionButtonColor, 
             <div key={index} className={`flex items-center ${isLast && !actionButton ? 'flex-shrink-0' : 'flex-1'}`}>
               {/* Step badge */}
               <div className="flex flex-col items-center flex-shrink-0">
-                <div
-                  className={`w-6 h-6 rounded-full ${stepColors.bg} border ${stepColors.border} flex items-center justify-center text-white text-xs ${
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    if (onStageClick) {
+                      onStageClick(log.toStep);
+                    }
+                  }}
+                  disabled={!onStageClick}
+                  className={`w-6 h-6 rounded-full ${stepColors.bg} border ${stepColors.border} flex items-center justify-center text-white text-xs transition-all ${
                     isCurrentStep ? "ring-1 ring-offset-1 ring-offset-white dark:ring-offset-gray-800 ring-gray-400 dark:ring-gray-500" : ""
+                  } ${
+                    onStageClick 
+                      ? "cursor-pointer hover:scale-110 hover:shadow-md active:scale-95" 
+                      : "cursor-default"
                   }`}
+                  title={onStageClick ? `Share ${formatStepName(log.toStep)} address` : undefined}
                 >
                   {getStepIcon(log.toStep)}
-                </div>
+                </button>
               </div>
               
               {/* Connecting line with time above */}
@@ -803,6 +821,45 @@ export default function HistoryPage() {
                             actionButtonColor={transaction.step}
                             transactionDate={transaction.date}
                             transactionTime={transaction.time}
+                            transactionId={transaction._id}
+                            linkedDeliveryOrders={transaction.linkedDeliveryOrders}
+                            linkedOcrExports={transaction.linkedOcrExports}
+                            onStageClick={async (step: string) => {
+                              let addressToShare: string | null = null;
+                              
+                              // Determine which address to share based on the stage
+                              if (step === "NAV_TO_RESTERAUNT" && transaction.linkedDeliveryOrders && transaction.linkedDeliveryOrders.length > 0) {
+                                const restaurantAddress = transaction.linkedDeliveryOrders[0].restaurantAddress;
+                                if (restaurantAddress) {
+                                  addressToShare = formatAddress(restaurantAddress);
+                                }
+                              } else if (step === "NAV_TO_CUSTOMER" && transaction.linkedOcrExports && transaction.linkedOcrExports.length > 0) {
+                                const customerAddress = transaction.linkedOcrExports[0].customerAddress;
+                                if (customerAddress) {
+                                  addressToShare = formatAddress(customerAddress);
+                                }
+                              }
+                              
+                              // Open share sheet if we have an address
+                              if (addressToShare) {
+                                if (navigator.share) {
+                                  try {
+                                    await navigator.share({ text: addressToShare });
+                                  } catch (err) {
+                                    // User cancelled or error occurred - silently fail
+                                    console.log("Share cancelled or failed:", err);
+                                  }
+                                } else {
+                                  // Fallback: copy to clipboard
+                                  try {
+                                    await navigator.clipboard.writeText(addressToShare);
+                                    alert("Address copied to clipboard");
+                                  } catch (err) {
+                                    console.error("Failed to copy address:", err);
+                                  }
+                                }
+                              }
+                            }}
                             actionButton={
                               isIncome && transaction.active === true && transaction.linkedDeliveryOrders && transaction.linkedDeliveryOrders.length > 0 ? (
                                 transaction.step === "CREATED" ? (

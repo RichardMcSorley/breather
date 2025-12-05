@@ -72,7 +72,7 @@ export async function GET(request: NextRequest) {
     }
 
     const transactions = await Transaction.find(query)
-      .populate("linkedOcrExportIds", "customerName customerAddress appName entryId")
+      .populate("linkedOcrExportIds", "customerName customerAddress appName entryId lat lon")
       .populate("linkedDeliveryOrderIds", "restaurantName restaurantAddress appName miles money entryId userLatitude userLongitude userAddress step active")
       .sort({ date: -1, createdAt: -1 })
       .skip((page - 1) * limit)
@@ -103,6 +103,8 @@ export async function GET(request: NextRequest) {
             customerAddress: customer.customerAddress,
             appName: customer.appName,
             entryId: customer.entryId,
+            lat: customer.lat,
+            lon: customer.lon,
           }));
       }
 

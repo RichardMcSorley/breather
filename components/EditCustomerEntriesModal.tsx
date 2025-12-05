@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import Modal from "./ui/Modal";
 import { format } from "date-fns";
 import MetadataViewer from "./MetadataViewer";
+import { getStreetViewUrl } from "@/lib/streetview-helper";
 
 interface Visit {
   _id: string;
@@ -223,6 +224,41 @@ export default function EditCustomerEntriesModal({
 
       {data && !loading && (
         <div className="space-y-4">
+          {/* Street View Image */}
+          {(() => {
+            // Use the customer address directly, not coordinates
+            const streetViewImageUrl = getStreetViewUrl(
+              data.address,
+              undefined, // Don't use lat
+              undefined, // Don't use lon
+              600,
+              300
+            );
+            // Use standard Google Maps search URL to open the address
+            const googleMapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(data.address)}`;
+            
+            return streetViewImageUrl ? (
+              <div className="mb-4">
+                <div className="text-xs text-gray-500 dark:text-gray-400 mb-2">Street View</div>
+                <a
+                  href={googleMapsUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="block rounded-lg border border-gray-300 dark:border-gray-600 overflow-hidden hover:opacity-90 transition-opacity cursor-pointer"
+                >
+                  <img
+                    src={streetViewImageUrl}
+                    alt={`Street view of ${data.address}`}
+                    className="w-full h-[300px] object-cover"
+                    onError={(e) => {
+                      // Hide image if it fails to load (e.g., no Street View available or API key missing)
+                      (e.target as HTMLImageElement).style.display = 'none';
+                    }}
+                  />
+                </a>
+              </div>
+            ) : null;
+          })()}
           <div className="space-y-3 max-h-[500px] overflow-y-auto">
             <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">
               ENTRIES ({data.visitCount})
