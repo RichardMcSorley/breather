@@ -317,7 +317,7 @@ export async function attemptAutoLinkCustomerToTransaction(
 
 /**
  * Attempts to auto-link a customer (OcrExport) to all active delivery orders.
- * Links to all active orders that match the customer's appName (if provided).
+ * Links to all active orders regardless of appName.
  * 
  * @param customer - The customer (OcrExport) to link
  * @param userId - The user ID for filtering
@@ -329,53 +329,58 @@ export async function attemptAutoLinkCustomerToActiveOrders(
 ): Promise<string[]> {
   const linkedOrderIds: string[] = [];
 
-  // Find all active orders for this user
-  const activeOrdersQuery: any = {
-    userId,
-    active: true,
-  };
-
-  // If customer has appName, match by appName
-  if (customer.appName) {
-    const customerAppName = (customer.appName || "").trim().toLowerCase();
-    if (customerAppName) {
-      activeOrdersQuery.appName = { $regex: new RegExp(`^${customerAppName}$`, "i") };
-    }
+  // Get customer ID (handle both Mongoose document and plain object)
+  const customerId = customer._id ? (typeof customer._id === 'string' ? customer._id : customer._id.toString()) : (customer.id || null);
+  if (!customerId) {
+    console.warn("attemptAutoLinkCustomerToActiveOrders: customer has no _id", customer);
+    return linkedOrderIds;
   }
 
-  const activeOrders = await DeliveryOrder.find(activeOrdersQuery).lean();
+  // Find all active orders for this user (no appName requirement)
+  const activeOrders = await DeliveryOrder.find({
+    userId,
+    active: true,
+  }).lean();
+  
+  console.log(`Found ${activeOrders.length} active order(s) to potentially link for customer ${customerId}`);
 
   // Link customer to each active order that isn't already linked
   for (const order of activeOrders) {
+    const orderId = order._id.toString();
+    
     // Skip if already linked
     if (order.linkedOcrExportIds && order.linkedOcrExportIds.some((id: any) => 
-      id.toString() === customer._id.toString()
+      id.toString() === customerId
     )) {
+      console.log(`Order ${orderId} already linked to customer ${customerId}`);
       continue;
     }
 
     // Skip if customer already has this order linked
     if (customer.linkedDeliveryOrderIds && customer.linkedDeliveryOrderIds.some((id: any) => 
-      id.toString() === order._id.toString()
+      id.toString() === orderId
     )) {
+      console.log(`Customer ${customerId} already linked to order ${orderId}`);
       continue;
     }
 
     // Perform bidirectional link
     await DeliveryOrder.findByIdAndUpdate(
       order._id,
-      { $addToSet: { linkedOcrExportIds: customer._id } },
+      { $addToSet: { linkedOcrExportIds: customerId } },
       { new: true }
     );
 
     await OcrExport.findByIdAndUpdate(
-      customer._id,
+      customerId,
       { $addToSet: { linkedDeliveryOrderIds: order._id } },
       { new: true }
     );
 
-    linkedOrderIds.push(order._id.toString());
+    console.log(`Successfully linked customer ${customerId} to order ${orderId}`);
+    linkedOrderIds.push(orderId);
   }
 
+  console.log(`Auto-linked customer to ${linkedOrderIds.length} active order(s)`);
   return linkedOrderIds;
 }

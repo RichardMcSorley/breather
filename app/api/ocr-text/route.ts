@@ -89,9 +89,14 @@ export async function POST(request: NextRequest) {
 
       // Attempt auto-linking to active orders
       try {
-        await attemptAutoLinkCustomerToActiveOrders(exportEntry, userId);
+        const linkedOrderIds = await attemptAutoLinkCustomerToActiveOrders(exportEntry, userId);
+        if (linkedOrderIds.length > 0) {
+          console.log(`Successfully auto-linked customer ${exportEntry._id} to ${linkedOrderIds.length} active order(s):`, linkedOrderIds);
+        } else {
+          console.log(`No active orders found to link for customer ${exportEntry._id} (appName: ${exportEntry.appName || 'none'})`);
+        }
       } catch (autoLinkOrdersError) {
-        // Silently fail auto-linking - don't break customer creation
+        // Log error but don't break customer creation
         console.error("Auto-linking to active orders error:", autoLinkOrdersError);
       }
 
