@@ -14,6 +14,7 @@ import EditDeliveryOrderModal from "@/components/EditDeliveryOrderModal";
 import LinkCustomerModal from "@/components/LinkCustomerModal";
 import LinkOrderModal from "@/components/LinkOrderModal";
 import ShareOrderModal from "@/components/ShareOrderModal";
+import DeliveryConfirmationModal from "@/components/DeliveryConfirmationModal";
 import { useTransactions, useDeleteTransaction, queryKeys } from "@/hooks/useQueries";
 import { useQueryClient, useQuery } from "@tanstack/react-query";
 
@@ -442,6 +443,8 @@ export default function HistoryPage() {
   const [selectedOrderForTransaction, setSelectedOrderForTransaction] = useState<SelectedDeliveryOrder | null>(null);
   const [sharingOrder, setSharingOrder] = useState<{ orderId?: string; restaurantName: string; orderDetails?: { miles?: number; money?: number; milesToMoneyRatio?: number; appName?: string }; userLatitude?: number; userLongitude?: number; userAddress?: string } | null>(null);
   const [linkingRestaurantOrder, setLinkingRestaurantOrder] = useState<LinkedOrder | null>(null);
+  const [deliveryConfirmation, setDeliveryConfirmation] = useState<{ transactionId: string; customerAddress: string; customerName?: string } | null>(null);
+  const [isMarkingDelivered, setIsMarkingDelivered] = useState(false);
   const [showStreetViewForTransaction, setShowStreetViewForTransaction] = useState<string | null>(null);
   
   const { data, isLoading: loading } = useTransactions("all", "all", page, limit);
@@ -1013,32 +1016,28 @@ export default function HistoryPage() {
                                         <button
                                           onClick={async (e) => {
                                             e.stopPropagation();
+                                            // First, try to share the address
                                             if (navigator.share) {
                                               try {
                                                 await navigator.share({ text: formattedAddress });
-                                                await fetch(`/api/transactions/${transaction._id}`, {
-                                                  method: "PUT",
-                                                  headers: { "Content-Type": "application/json" },
-                                                  body: JSON.stringify({ step: "DELIVERING" }),
-                                                });
-                                                queryClient.invalidateQueries({ queryKey: ["transactions"] });
                                               } catch (err) {
+                                                // User cancelled or error occurred - continue to modal anyway
                                                 console.log("Share cancelled or failed:", err);
                                               }
                                             } else {
+                                              // Fallback: copy to clipboard
                                               try {
                                                 await navigator.clipboard.writeText(formattedAddress);
-                                                alert("Address copied to clipboard");
-                                                await fetch(`/api/transactions/${transaction._id}`, {
-                                                  method: "PUT",
-                                                  headers: { "Content-Type": "application/json" },
-                                                  body: JSON.stringify({ step: "DELIVERING" }),
-                                                });
-                                                queryClient.invalidateQueries({ queryKey: ["transactions"] });
                                               } catch (err) {
                                                 console.error("Failed to copy address:", err);
                                               }
                                             }
+                                            // Then open the modal
+                                            setDeliveryConfirmation({
+                                              transactionId: transaction._id,
+                                              customerAddress: customerAddress,
+                                              customerName: customer.customerName,
+                                            });
                                           }}
                                           className="absolute inset-0 w-full h-full flex items-center justify-center text-xs font-medium px-4 py-2"
                                         >
@@ -1406,6 +1405,33 @@ export default function HistoryPage() {
           />
         ) : null;
       })()}
+
+      <DeliveryConfirmationModal
+        isOpen={deliveryConfirmation !== null}
+        onClose={() => setDeliveryConfirmation(null)}
+        customerAddress={deliveryConfirmation?.customerAddress || ""}
+        customerName={deliveryConfirmation?.customerName}
+        onMarkDelivered={async (notes) => {
+          if (!deliveryConfirmation) return;
+          
+          try {
+            setIsMarkingDelivered(true);
+            await fetch(`/api/transactions/${deliveryConfirmation.transactionId}`, {
+              method: "PUT",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ step: "DONE", active: false }),
+            });
+            queryClient.invalidateQueries({ queryKey: ["transactions"] });
+            setDeliveryConfirmation(null);
+          } catch (err) {
+            console.error("Error marking as delivered:", err);
+            alert("Failed to mark as delivered");
+          } finally {
+            setIsMarkingDelivered(false);
+          }
+        }}
+        isMarking={isMarkingDelivered}
+      />
     </Layout>
   );
 }

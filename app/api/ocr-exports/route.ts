@@ -46,7 +46,7 @@ export async function PATCH(request: NextRequest) {
     await connectDB();
 
     const body = await request.json();
-    const { id, appName, customerName, customerAddress, rawResponse } = body;
+    const { id, appName, customerName, customerAddress, rawResponse, notes } = body;
 
     if (!id) {
       return NextResponse.json({ error: "Missing id" }, { status: 400 });
@@ -76,6 +76,9 @@ export async function PATCH(request: NextRequest) {
     }
     if (typeof rawResponse === "string") {
       updateSet.rawResponse = rawResponse;
+    }
+    if (typeof notes === "string" || notes === null || notes === undefined) {
+      updateSet.notes = notes || null;
     }
 
     if (Object.keys(updateSet).length === 0) {

@@ -185,6 +185,7 @@ export async function GET(
         lat: entry.lat,
         lon: entry.lon,
         geocodeDisplayName: entry.geocodeDisplayName,
+        notes: entry.notes,
         userLatitude: entry.userLatitude,
         userLongitude: entry.userLongitude,
         userAltitude: entry.userAltitude,
