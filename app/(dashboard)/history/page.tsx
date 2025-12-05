@@ -5,6 +5,7 @@ import { useSession } from "next-auth/react";
 import { format, isToday, isYesterday } from "date-fns";
 import { Sparkles, MapPin, User, Car, Package, Check, Utensils, Pencil, Trash2, ShoppingBag, ArrowUpCircle, ArrowDownCircle } from "lucide-react";
 import { formatAddress } from "@/lib/address-formatter";
+import { getStreetViewUrl } from "@/lib/streetview-helper";
 import Layout from "@/components/Layout";
 import AddTransactionModal from "@/components/AddTransactionModal";
 import AddOrderToTransactionModal from "@/components/AddOrderToTransactionModal";
@@ -159,12 +160,21 @@ interface CompletionLogProps {
   linkedDeliveryOrders?: LinkedOrder[];
   linkedOcrExports?: LinkedCustomer[];
   onStageClick?: (step: string) => void;
+  showStreetView?: boolean;
 }
 
-const CompletionLog = ({ stepLog, currentStep, actionButton, actionButtonColor, transactionDate, transactionTime, transactionId, linkedDeliveryOrders, linkedOcrExports, onStageClick }: CompletionLogProps) => {
+const CompletionLog = ({ stepLog, currentStep, actionButton, actionButtonColor, transactionDate, transactionTime, transactionId, linkedDeliveryOrders, linkedOcrExports, onStageClick, showStreetView }: CompletionLogProps) => {
   if (!stepLog || stepLog.length === 0) {
     return null;
   }
+
+  // Get customer address for Street View if available
+  const customerAddress = linkedOcrExports && linkedOcrExports.length > 0 ? linkedOcrExports[0].customerAddress : null;
+  const customerLat = linkedOcrExports && linkedOcrExports.length > 0 ? linkedOcrExports[0].lat : undefined;
+  const customerLon = linkedOcrExports && linkedOcrExports.length > 0 ? linkedOcrExports[0].lon : undefined;
+  const streetViewUrl = showStreetView && (customerAddress || (customerLat !== undefined && customerLon !== undefined))
+    ? getStreetViewUrl(customerAddress || undefined, customerLat, customerLon, 600, 300)
+    : null;
 
   // Get button color classes based on step
   const getButtonColorClasses = (step?: string): string => {
@@ -306,6 +316,20 @@ const CompletionLog = ({ stepLog, currentStep, actionButton, actionButtonColor, 
           )}
         </div>
       )}
+      {/* Street View Image */}
+      {streetViewUrl && (
+        <div className="mb-4 rounded-lg overflow-hidden border border-gray-200 dark:border-gray-700">
+          <img
+            src={streetViewUrl}
+            alt={`Street view of ${customerAddress || 'customer address'}`}
+            className="w-full h-auto"
+            onError={(e) => {
+              // Hide image if it fails to load (e.g., no Street View available or API key missing)
+              (e.target as HTMLImageElement).style.display = 'none';
+            }}
+          />
+        </div>
+      )}
       <div className="flex items-center w-full justify-between">
       {stepLog.map((log, index) => {
           const stepColors = getStepColorClasses(log.toStep);
@@ -418,6 +442,7 @@ export default function HistoryPage() {
   const [selectedOrderForTransaction, setSelectedOrderForTransaction] = useState<SelectedDeliveryOrder | null>(null);
   const [sharingOrder, setSharingOrder] = useState<{ orderId?: string; restaurantName: string; orderDetails?: { miles?: number; money?: number; milesToMoneyRatio?: number; appName?: string }; userLatitude?: number; userLongitude?: number; userAddress?: string } | null>(null);
   const [linkingRestaurantOrder, setLinkingRestaurantOrder] = useState<LinkedOrder | null>(null);
+  const [showStreetViewForTransaction, setShowStreetViewForTransaction] = useState<string | null>(null);
   
   const { data, isLoading: loading } = useTransactions("all", "all", page, limit);
   // Fetch all transactions for date totals calculation
@@ -824,6 +849,7 @@ export default function HistoryPage() {
                             transactionId={transaction._id}
                             linkedDeliveryOrders={transaction.linkedDeliveryOrders}
                             linkedOcrExports={transaction.linkedOcrExports}
+                            showStreetView={showStreetViewForTransaction === transaction._id && (transaction.step === "NAV_TO_CUSTOMER" || transaction.step === "DELIVERING")}
                             onStageClick={async (step: string) => {
                               let addressToShare: string | null = null;
                               
@@ -987,6 +1013,8 @@ export default function HistoryPage() {
                                         <button
                                           onClick={async (e) => {
                                             e.stopPropagation();
+                                            // Show Street View when Nav is clicked
+                                            setShowStreetViewForTransaction(transaction._id);
                                             if (navigator.share) {
                                               try {
                                                 await navigator.share({ text: formattedAddress });
@@ -1067,6 +1095,8 @@ export default function HistoryPage() {
                                   <button
                                     onClick={async (e) => {
                                       e.stopPropagation();
+                                      // Hide Street View when Done is clicked
+                                      setShowStreetViewForTransaction(null);
                                       try {
                                         await fetch(`/api/transactions/${transaction._id}`, {
                                           method: "PUT",
