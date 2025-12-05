@@ -1,9 +1,8 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import Card from "./ui/Card";
 import { format } from "date-fns";
-import { Pencil, Trash2, Eye } from "lucide-react";
+import { Pencil, Trash2, User } from "lucide-react";
 
 interface Customer {
   address: string;
@@ -34,6 +33,7 @@ export default function CustomerFrequencyList({
   const [error, setError] = useState<string | null>(null);
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
+  const [total, setTotal] = useState(0);
   const [deletingAddress, setDeletingAddress] = useState<string | null>(null);
   const [confirmDeleteAddress, setConfirmDeleteAddress] = useState<string | null>(null);
 
@@ -59,6 +59,7 @@ export default function CustomerFrequencyList({
       const data = await response.json();
       setCustomers(data.customers || []);
       setTotalPages(data.pagination?.totalPages || 1);
+      setTotal(data.pagination?.total || 0);
     } catch (err) {
       setError(err instanceof Error ? err.message : "An error occurred");
     } finally {
@@ -116,173 +117,210 @@ export default function CustomerFrequencyList({
     }
   };
 
+  const formatDateTime = (dateString: string) => {
+    try {
+      return format(new Date(dateString), "h:mm a");
+    } catch {
+      return "";
+    }
+  };
+
+  // App name to color mapping (matching logs screen)
+  const getAppTagColor = (appName: string) => {
+    const appColors: Record<string, { bg: string; text: string }> = {
+      "Uber Driver": { bg: "bg-black dark:bg-gray-800", text: "text-white dark:text-gray-100" },
+      "Dasher": { bg: "bg-red-100 dark:bg-red-900/30", text: "text-red-700 dark:text-red-300" },
+      "GH Drivers": { bg: "bg-orange-100 dark:bg-orange-900/30", text: "text-orange-700 dark:text-orange-300" },
+      "Shopper": { bg: "bg-purple-100 dark:bg-purple-900/30", text: "text-purple-700 dark:text-purple-300" },
+    };
+
+    return appColors[appName] || { bg: "bg-gray-100 dark:bg-gray-700", text: "text-gray-500 dark:text-gray-400" };
+  };
+
   if (loading && customers.length === 0) {
     return (
-      <Card className="p-6">
-        <div className="flex items-center justify-center min-h-[200px]">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900 dark:border-white"></div>
-        </div>
-      </Card>
+      <div className="flex items-center justify-center min-h-[200px]">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900 dark:border-white"></div>
+      </div>
     );
   }
 
   if (error && customers.length === 0) {
     return (
-      <Card className="p-6 bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800">
+      <div className="rounded-lg p-4 mb-2 border bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800">
         <div className="text-red-600 dark:text-red-400">Error: {error}</div>
-      </Card>
+      </div>
     );
   }
 
   return (
-    <Card className="overflow-hidden">
-      <div className="p-4 sm:p-6 border-b border-gray-200 dark:border-gray-700">
-        <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
-          Customer Frequency
-        </h3>
-        <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-          Customers sorted by latest visit
-        </p>
-      </div>
-
+    <div className="space-y-2">
       {customers.length === 0 ? (
         <div className="text-center py-12 text-gray-500 dark:text-gray-400">
           No customers found.
         </div>
       ) : (
         <>
-          {/* Mobile-friendly card layout */}
-          <div className="p-4 sm:p-6 space-y-4">
-            {customers.map((customer) => (
-              <div
-                key={customer.address}
-                className={`rounded-lg p-4 border ${
-                  customer.isRepeatCustomer
-                    ? "border-green-300 dark:border-green-700 bg-green-50 dark:bg-green-900/20"
-                    : "border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800"
-                } hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors`}
-              >
-                {/* Header: Customer name and visit count */}
-                <div className="flex items-start justify-between mb-3 gap-2">
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-1">
-                      <h4 className="text-base font-semibold text-gray-900 dark:text-white truncate">
-                        {customer.customerName}
-                      </h4>
-                      {customer.isRepeatCustomer && (
-                        <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400 flex-shrink-0">
-                          Repeat
-                        </span>
-                      )}
-                    </div>
-                    {customer.customerNames && customer.customerNames.length > 1 && (
-                      <div className="text-xs text-gray-500 dark:text-gray-400">
-                        +{customer.customerNames.length - 1} more name{customer.customerNames.length - 1 !== 1 ? "s" : ""}
-                      </div>
+          {customers.map((customer) => (
+            <div
+              key={customer.address}
+              className={`rounded-lg p-4 pb-4 mb-2 border flex flex-col gap-3 overflow-visible min-w-0 ${
+                customer.isRepeatCustomer
+                  ? "bg-green-50 dark:bg-green-900/20 border-green-300 dark:border-green-700 shadow-md"
+                  : "bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700"
+              }`}
+            >
+              {/* Top section: App badges and visit count */}
+              <div className="flex items-start justify-between mb-1 gap-2 min-w-0">
+                <div className="flex items-center gap-2 flex-1 min-w-0 flex-wrap">
+                  {customer.apps.length > 0 && customer.apps.slice(0, 2).map((app) => {
+                    const appColor = getAppTagColor(app);
+                    return (
+                      <span key={app} className={`text-sm px-2 py-1 rounded flex-shrink-0 ${appColor.bg} ${appColor.text}`}>
+                        {app}
+                      </span>
+                    );
+                  })}
+                  {customer.apps.length > 2 && (
+                    <span className="text-sm px-2 py-1 rounded flex-shrink-0 bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400">
+                      +{customer.apps.length - 2} more
+                    </span>
+                  )}
+                  {customer.isRepeatCustomer && (
+                    <span className="text-sm px-2 py-1 rounded flex-shrink-0 bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400">
+                      Repeat
+                    </span>
+                  )}
+                </div>
+                <div className="text-lg font-bold flex-shrink-0 text-gray-900 dark:text-white">
+                  {customer.visitCount}
+                </div>
+              </div>
+
+              {/* Customer name and address */}
+              <div className="mb-1 min-w-0">
+                <button
+                  onClick={() => {
+                    if (onCustomerClick) {
+                      onCustomerClick(customer.address);
+                    }
+                  }}
+                  className="text-sm text-gray-900 dark:text-white hover:underline flex items-center gap-1 text-left w-full min-w-0"
+                >
+                  <span className="flex-shrink-0"><User className="w-4 h-4" /></span>
+                  <span className="truncate">
+                    {customer.customerName}
+                    {customer.address && (
+                      <>
+                        <span className="mx-1 text-gray-400 dark:text-gray-500">•</span>
+                        <span>{customer.address}</span>
+                      </>
                     )}
+                  </span>
+                </button>
+                {customer.customerNames && customer.customerNames.length > 1 && (
+                  <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                    +{customer.customerNames.length - 1} more name{customer.customerNames.length - 1 !== 1 ? "s" : ""}
                   </div>
-                  <div className="text-right flex-shrink-0">
-                    <div className="text-lg font-bold text-gray-900 dark:text-white">
-                      {customer.visitCount}
-                    </div>
-                    <div className="text-xs text-gray-500 dark:text-gray-400">
-                      visit{customer.visitCount !== 1 ? "s" : ""}
-                    </div>
-                  </div>
-                </div>
-
-                {/* Address */}
-                <div className="text-sm text-gray-600 dark:text-gray-400 mb-3 break-words">
-                  {customer.address}
-                </div>
-
-                {/* Details: Apps and dates */}
-                <div className="space-y-2 mb-3">
-                  {customer.apps.length > 0 && (
-                    <div className="flex flex-wrap gap-1">
-                      {customer.apps.slice(0, 3).map((app) => (
-                        <span
-                          key={app}
-                          className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400"
-                        >
-                          {app}
-                        </span>
-                      ))}
-                      {customer.apps.length > 3 && (
-                        <span className="text-xs text-gray-500 dark:text-gray-400">
-                          +{customer.apps.length - 3} more
-                        </span>
-                      )}
-                    </div>
+                )}
+                <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                  Last: {formatDate(customer.lastVisitDate)} {formatDateTime(customer.lastVisitDate)}
+                  {customer.firstVisitDate !== customer.lastVisitDate && (
+                    <> • First: {formatDate(customer.firstVisitDate)}</>
                   )}
-                  <div className="text-xs text-gray-500 dark:text-gray-400">
-                    Last visit: {formatDate(customer.lastVisitDate)}
-                    {customer.firstVisitDate !== customer.lastVisitDate && (
-                      <> • First: {formatDate(customer.firstVisitDate)}</>
-                    )}
-                  </div>
                 </div>
+              </div>
 
-                {/* Actions */}
-                <div className="flex gap-2 pt-3 border-t border-gray-200 dark:border-gray-700">
-                  {onCustomerClick && (
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onCustomerClick(customer.address);
-                      }}
-                      className="flex items-center gap-2 px-3 py-2 text-sm rounded border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 min-h-[44px]"
-                    >
-                      <Eye className="w-4 h-4" />
-                      View
-                    </button>
-                  )}
-                  {onEditClick && (
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onEditClick(customer.address);
-                      }}
-                      className="flex items-center gap-2 px-3 py-2 text-sm rounded bg-blue-600 text-white hover:bg-blue-700 min-h-[44px]"
-                    >
-                      <Pencil className="w-4 h-4" />
-                      Edit
-                    </button>
-                  )}
+              {/* Bottom section: Edit/Delete buttons */}
+              <div className="flex items-center justify-end mt-auto pt-1 border-t border-gray-200 dark:border-gray-700 gap-2">
+                {onEditClick && (
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
-                      handleDeleteClick(customer.address);
+                      onEditClick(customer.address);
                     }}
-                    disabled={deletingAddress === customer.address}
-                    className="flex items-center gap-2 px-3 py-2 text-sm rounded bg-red-600 text-white hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed min-h-[44px]"
+                    className="p-2 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white min-w-[44px] min-h-[44px] flex items-center justify-center rounded-full bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600"
+                    title="Edit"
                   >
-                    <Trash2 className="w-4 h-4" />
-                    {deletingAddress === customer.address ? "Deleting..." : "Delete"}
+                    <Pencil className="w-5 h-5" />
                   </button>
-                </div>
+                )}
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleDeleteClick(customer.address);
+                  }}
+                  disabled={deletingAddress === customer.address}
+                  className="p-2 text-red-600 dark:text-red-400 hover:text-red-900 dark:hover:text-red-300 min-w-[44px] min-h-[44px] flex items-center justify-center rounded-full bg-red-100 dark:bg-red-900/30 hover:bg-red-200 dark:hover:bg-red-900/50 disabled:opacity-50 disabled:cursor-not-allowed"
+                  title="Delete"
+                >
+                  <Trash2 className="w-5 h-5" />
+                </button>
               </div>
-            ))}
-          </div>
+            </div>
+          ))}
 
           {/* Pagination */}
           {totalPages > 1 && (
-            <div className="px-4 sm:px-6 py-4 border-t border-gray-200 dark:border-gray-700 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-              <div className="text-sm text-gray-700 dark:text-gray-300 text-center sm:text-left">
-                Page {page} of {totalPages}
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mt-6 pt-6 border-t border-gray-200 dark:border-gray-700">
+              <div className="text-sm text-gray-600 dark:text-gray-400 text-center sm:text-left">
+                <span className="hidden sm:inline">
+                  Showing {((page - 1) * 25) + 1} to {Math.min(page * 25, total)} of {total} customers
+                </span>
+                <span className="sm:hidden">
+                  Page {page} of {totalPages}
+                </span>
               </div>
-              <div className="flex gap-2 justify-center sm:justify-end">
+              <div className="flex items-center justify-center gap-2 flex-wrap">
                 <button
                   onClick={() => setPage((p) => Math.max(1, p - 1))}
                   disabled={page === 1}
-                  className="px-3 py-1 text-sm rounded border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed min-h-[44px]"
+                  className={`px-4 py-2 rounded-lg text-sm font-medium min-h-[44px] ${
+                    page === 1
+                      ? "bg-gray-100 dark:bg-gray-700 text-gray-400 dark:text-gray-500 cursor-not-allowed"
+                      : "bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600"
+                  }`}
                 >
                   Previous
                 </button>
+                
+                <div className="flex items-center gap-1">
+                  {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                    let pageNum: number;
+                    if (totalPages <= 5) {
+                      pageNum = i + 1;
+                    } else if (page <= 3) {
+                      pageNum = i + 1;
+                    } else if (page >= totalPages - 2) {
+                      pageNum = totalPages - 4 + i;
+                    } else {
+                      pageNum = page - 2 + i;
+                    }
+                    
+                    return (
+                      <button
+                        key={pageNum}
+                        onClick={() => setPage(pageNum)}
+                        className={`min-w-[44px] min-h-[44px] px-3 py-2 rounded-lg text-sm font-medium ${
+                          page === pageNum
+                            ? "bg-blue-600 text-white"
+                            : "bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600"
+                        }`}
+                      >
+                        {pageNum}
+                      </button>
+                    );
+                  })}
+                </div>
+                
                 <button
                   onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
                   disabled={page === totalPages}
-                  className="px-3 py-1 text-sm rounded border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed min-h-[44px]"
+                  className={`px-4 py-2 rounded-lg text-sm font-medium min-h-[44px] ${
+                    page === totalPages
+                      ? "bg-gray-100 dark:bg-gray-700 text-gray-400 dark:text-gray-500 cursor-not-allowed"
+                      : "bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600"
+                  }`}
                 >
                   Next
                 </button>
@@ -332,6 +370,6 @@ export default function CustomerFrequencyList({
           </div>
         </div>
       )}
-    </Card>
+    </div>
   );
 }
