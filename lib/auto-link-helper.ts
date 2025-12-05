@@ -336,13 +336,40 @@ export async function attemptAutoLinkCustomerToActiveOrders(
     return linkedOrderIds;
   }
 
-  // Find all active orders for this user (no appName requirement)
-  const activeOrders = await DeliveryOrder.find({
+  // Find all active transactions (income type, active: true) for this user
+  const activeTransactions = await Transaction.find({
     userId,
+    type: "income",
     active: true,
   }).lean();
+
+  // Get all delivery order IDs from active transactions
+  const activeOrderIds: string[] = [];
+  for (const transaction of activeTransactions) {
+    if (transaction.linkedDeliveryOrderIds && transaction.linkedDeliveryOrderIds.length > 0) {
+      for (const orderId of transaction.linkedDeliveryOrderIds) {
+        const orderIdStr = orderId.toString();
+        if (!activeOrderIds.includes(orderIdStr)) {
+          activeOrderIds.push(orderIdStr);
+        }
+      }
+    }
+  }
+
+  console.log(`Found ${activeTransactions.length} active transaction(s) with ${activeOrderIds.length} linked delivery order(s)`);
+
+  if (activeOrderIds.length === 0) {
+    console.log(`No active delivery orders found to link for customer ${customerId}`);
+    return linkedOrderIds;
+  }
+
+  // Find the delivery orders
+  const activeOrders = await DeliveryOrder.find({
+    _id: { $in: activeOrderIds },
+    userId,
+  }).lean();
   
-  console.log(`Found ${activeOrders.length} active order(s) to potentially link for customer ${customerId}`);
+  console.log(`Found ${activeOrders.length} active delivery order(s) to potentially link for customer ${customerId}`);
 
   // Link customer to each active order that isn't already linked
   for (const order of activeOrders) {
