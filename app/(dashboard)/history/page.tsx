@@ -173,7 +173,7 @@ const CompletionLog = ({ stepLog, currentStep, actionButton, actionButtonColor, 
   const customerLat = linkedOcrExports && linkedOcrExports.length > 0 ? linkedOcrExports[0].lat : undefined;
   const customerLon = linkedOcrExports && linkedOcrExports.length > 0 ? linkedOcrExports[0].lon : undefined;
   const streetViewUrl = showStreetView && (customerAddress || (customerLat !== undefined && customerLon !== undefined))
-    ? getStreetViewUrl(customerAddress, customerLat, customerLon, 600, 300)
+    ? getStreetViewUrl(customerAddress || undefined, customerLat, customerLon, 600, 300)
     : null;
 
   // Get button color classes based on step
