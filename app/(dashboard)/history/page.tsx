@@ -1013,8 +1013,6 @@ export default function HistoryPage() {
                                         <button
                                           onClick={async (e) => {
                                             e.stopPropagation();
-                                            // Show Street View when Nav is clicked
-                                            setShowStreetViewForTransaction(transaction._id);
                                             if (navigator.share) {
                                               try {
                                                 await navigator.share({ text: formattedAddress });
