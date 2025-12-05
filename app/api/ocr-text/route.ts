@@ -40,27 +40,40 @@ export async function POST(request: NextRequest) {
 
       // Check for existing geocode data with exact address match
       let geocodeData: { lat: number; lon: number; displayName?: string } | null = null;
-      const existingEntry = await OcrExport.findOne({
-        customerAddress: processed.customerAddress,
-        lat: { $exists: true, $ne: null },
-        lon: { $exists: true, $ne: null },
-      }).lean();
+      let geocodeFailed = false;
+      
+      try {
+        const existingEntry = await OcrExport.findOne({
+          customerAddress: processed.customerAddress,
+          lat: { $exists: true, $ne: null },
+          lon: { $exists: true, $ne: null },
+        }).lean();
 
-      if (existingEntry && existingEntry.lat != null && existingEntry.lon != null) {
-        geocodeData = {
-          lat: existingEntry.lat,
-          lon: existingEntry.lon,
-          displayName: existingEntry.geocodeDisplayName,
-        };
-      } else {
-        // If not found in cache, geocode the address
-        geocodeData = await geocodeAddress(processed.customerAddress);
+        if (existingEntry && existingEntry.lat != null && existingEntry.lon != null) {
+          geocodeData = {
+            lat: existingEntry.lat,
+            lon: existingEntry.lon,
+            displayName: existingEntry.geocodeDisplayName,
+          };
+        } else {
+          // If not found in cache, geocode the address
+          geocodeData = await geocodeAddress(processed.customerAddress);
+          if (!geocodeData) {
+            geocodeFailed = true;
+          }
+        }
+      } catch (geocodeError) {
+        // If geocoding fails, still create the customer entry
+        console.error("Geocoding error for customer entry:", geocodeError);
+        geocodeFailed = true;
+        geocodeData = null;
       }
 
       // Get current EST time and convert to UTC (matches transaction log timezone logic)
       const { date: processedAtDate } = getCurrentESTAsUTC();
 
       // Save to ocrexports collection
+      // If geocoding failed, set geocodeDisplayName to "unknown" and leave lat/lon as null
       const exportEntry = await OcrExport.create({
         entryId,
         userId,
@@ -69,9 +82,9 @@ export async function POST(request: NextRequest) {
         customerAddress: processed.customerAddress,
         rawResponse: processed.rawResponse,
         metadata: processed.metadata,
-        lat: geocodeData?.lat,
-        lon: geocodeData?.lon,
-        geocodeDisplayName: geocodeData?.displayName,
+        lat: geocodeData?.lat ?? null,
+        lon: geocodeData?.lon ?? null,
+        geocodeDisplayName: geocodeFailed ? "unknown" : (geocodeData?.displayName ?? null),
         processedAt: processedAtDate,
         ...(userLat !== undefined && userLat !== null && { userLatitude: userLat }),
         ...(userLon !== undefined && userLon !== null && { userLongitude: userLon }),

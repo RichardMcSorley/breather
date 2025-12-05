@@ -91,17 +91,17 @@ export async function PATCH(request: NextRequest) {
           updateSet.lon = geocodeData.lon;
           updateSet.geocodeDisplayName = geocodeData.displayName || null;
         } else {
-          // Clear geocoding data if geocoding fails - explicitly set to null
+          // If geocoding fails, set geocodeDisplayName to "unknown" and lat/lon to null
           updateSet.lat = null;
           updateSet.lon = null;
-          updateSet.geocodeDisplayName = null;
+          updateSet.geocodeDisplayName = "unknown";
         }
       } catch (geocodeError) {
         console.error(`Error during geocoding:`, geocodeError);
-        // Clear geocoding data on error - explicitly set to null
+        // If geocoding fails, set geocodeDisplayName to "unknown" and lat/lon to null
         updateSet.lat = null;
         updateSet.lon = null;
-        updateSet.geocodeDisplayName = null;
+        updateSet.geocodeDisplayName = "unknown";
       }
     }
 
