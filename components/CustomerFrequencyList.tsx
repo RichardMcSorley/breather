@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { format } from "date-fns";
-import { Pencil, Trash2, User } from "lucide-react";
+import { Pencil, Trash2, User, MapPin } from "lucide-react";
 
 interface Customer {
   address: string;
@@ -197,7 +197,7 @@ export default function CustomerFrequencyList({
                 </div>
               </div>
 
-              {/* Customer name and address */}
+              {/* Address */}
               <div className="mb-1 min-w-0">
                 <button
                   onClick={() => {
@@ -207,22 +207,11 @@ export default function CustomerFrequencyList({
                   }}
                   className="text-sm text-gray-900 dark:text-white hover:underline flex items-center gap-1 text-left w-full min-w-0"
                 >
-                  <span className="flex-shrink-0"><User className="w-4 h-4" /></span>
+                  <span className="flex-shrink-0"><MapPin className="w-4 h-4" /></span>
                   <span className="truncate">
-                    {customer.customerName}
-                    {customer.address && (
-                      <>
-                        <span className="mx-1 text-gray-400 dark:text-gray-500">•</span>
-                        <span>{customer.address}</span>
-                      </>
-                    )}
+                    {customer.address}
                   </span>
                 </button>
-                {customer.customerNames && customer.customerNames.length > 1 && (
-                  <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                    +{customer.customerNames.length - 1} more name{customer.customerNames.length - 1 !== 1 ? "s" : ""}
-                  </div>
-                )}
                 <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">
                   Last: {formatDate(customer.lastVisitDate)} {formatDateTime(customer.lastVisitDate)}
                   {customer.firstVisitDate !== customer.lastVisitDate && (
@@ -231,31 +220,39 @@ export default function CustomerFrequencyList({
                 </div>
               </div>
 
-              {/* Bottom section: Edit/Delete buttons */}
-              <div className="flex items-center justify-end mt-auto pt-1 border-t border-gray-200 dark:border-gray-700 gap-2">
-                {onEditClick && (
+              {/* Bottom section: Customer names and Edit/Delete buttons */}
+              <div className="flex items-center justify-between mt-auto pt-1 border-t border-gray-200 dark:border-gray-700 gap-2 min-w-0">
+                {customer.customerNames && customer.customerNames.length > 0 && (
+                  <div className="text-xs text-gray-500 dark:text-gray-400 flex-1 min-w-0 flex items-center gap-1">
+                    <span className="flex-shrink-0"><User className="w-3 h-3" /></span>
+                    <span className="truncate">{customer.customerNames.join(" • ")}</span>
+                  </div>
+                )}
+                <div className="flex items-center gap-2 flex-shrink-0">
+                  {onEditClick && (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onEditClick(customer.address);
+                      }}
+                      className="p-2 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white min-w-[44px] min-h-[44px] flex items-center justify-center rounded-full bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600"
+                      title="Edit"
+                    >
+                      <Pencil className="w-5 h-5" />
+                    </button>
+                  )}
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
-                      onEditClick(customer.address);
+                      handleDeleteClick(customer.address);
                     }}
-                    className="p-2 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white min-w-[44px] min-h-[44px] flex items-center justify-center rounded-full bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600"
-                    title="Edit"
+                    disabled={deletingAddress === customer.address}
+                    className="p-2 text-red-600 dark:text-red-400 hover:text-red-900 dark:hover:text-red-300 min-w-[44px] min-h-[44px] flex items-center justify-center rounded-full bg-red-100 dark:bg-red-900/30 hover:bg-red-200 dark:hover:bg-red-900/50 disabled:opacity-50 disabled:cursor-not-allowed"
+                    title="Delete"
                   >
-                    <Pencil className="w-5 h-5" />
+                    <Trash2 className="w-5 h-5" />
                   </button>
-                )}
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    handleDeleteClick(customer.address);
-                  }}
-                  disabled={deletingAddress === customer.address}
-                  className="p-2 text-red-600 dark:text-red-400 hover:text-red-900 dark:hover:text-red-300 min-w-[44px] min-h-[44px] flex items-center justify-center rounded-full bg-red-100 dark:bg-red-900/30 hover:bg-red-200 dark:hover:bg-red-900/50 disabled:opacity-50 disabled:cursor-not-allowed"
-                  title="Delete"
-                >
-                  <Trash2 className="w-5 h-5" />
-                </button>
+                </div>
               </div>
             </div>
           ))}

@@ -195,8 +195,20 @@ export default function EditCustomerEntriesModal({
     }
   };
 
+  // App name to color mapping (matching logs screen)
+  const getAppTagColor = (appName: string) => {
+    const appColors: Record<string, { bg: string; text: string }> = {
+      "Uber Driver": { bg: "bg-black dark:bg-gray-800", text: "text-white dark:text-gray-100" },
+      "Dasher": { bg: "bg-red-100 dark:bg-red-900/30", text: "text-red-700 dark:text-red-300" },
+      "GH Drivers": { bg: "bg-orange-100 dark:bg-orange-900/30", text: "text-orange-700 dark:text-orange-300" },
+      "Shopper": { bg: "bg-purple-100 dark:bg-purple-900/30", text: "text-purple-700 dark:text-purple-300" },
+    };
+
+    return appColors[appName] || { bg: "bg-gray-100 dark:bg-gray-700", text: "text-gray-500 dark:text-gray-400" };
+  };
+
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title={`Edit Entries - ${address || ""}`}>
+    <Modal isOpen={isOpen} onClose={onClose} title={`Address: ${address || ""}`}>
       {loading && !data && (
         <div className="flex items-center justify-center min-h-[200px]">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900 dark:border-white"></div>
@@ -204,27 +216,26 @@ export default function EditCustomerEntriesModal({
       )}
 
       {error && (
-        <div className="p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg mb-4">
-          <div className="text-red-600 dark:text-red-400">Error: {error}</div>
+        <div className="p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg mb-4">
+          <div className="text-sm text-red-600 dark:text-red-400">{error}</div>
         </div>
       )}
 
       {data && !loading && (
         <div className="space-y-4">
-          <div className="text-sm text-gray-600 dark:text-gray-400">
-            {data.visitCount} {data.visitCount === 1 ? "entry" : "entries"} for this address
-          </div>
-
           <div className="space-y-3 max-h-[500px] overflow-y-auto">
+            <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">
+              ENTRIES ({data.visitCount})
+            </h3>
             {data.visits.map((visit) => (
               <div
                 key={visit._id}
                 className="p-4 bg-gray-50 dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-700"
               >
                 {editingId === visit._id ? (
-                  <div className="space-y-3">
+                  <div className="space-y-4">
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                         Customer Name
                       </label>
                       <input
@@ -236,11 +247,11 @@ export default function EditCustomerEntriesModal({
                             customerName: e.target.value,
                           }))
                         }
-                        className="w-full rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 px-3 py-2 text-sm text-gray-900 dark:text-white"
+                        className="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 px-3 py-2 text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                       />
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                         Address
                       </label>
                       <div className="flex gap-2">
@@ -252,7 +263,7 @@ export default function EditCustomerEntriesModal({
                               customerAddress: e.target.value,
                             }))
                           }
-                          className="flex-1 rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 px-3 py-2 text-sm text-gray-900 dark:text-white"
+                          className="flex-1 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 px-3 py-2 text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                           rows={2}
                         />
                         {formValues.customerAddress && (
@@ -284,7 +295,7 @@ export default function EditCustomerEntriesModal({
                       </div>
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                         App Name
                       </label>
                       <input
@@ -296,75 +307,56 @@ export default function EditCustomerEntriesModal({
                             appName: e.target.value,
                           }))
                         }
-                        className="w-full rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 px-3 py-2 text-sm text-gray-900 dark:text-white"
+                        className="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 px-3 py-2 text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                       />
                     </div>
-                    <div className="flex gap-2">
+                    <div className="flex justify-end gap-2 pt-2">
+                      <button
+                        onClick={cancelEditing}
+                        className="px-4 py-2 text-sm font-medium rounded-lg border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 min-h-[40px] transition-colors"
+                      >
+                        Cancel
+                      </button>
                       <button
                         onClick={() => handleSave(visit._id)}
                         disabled={saving}
-                        className="px-3 py-1 text-sm rounded bg-green-600 text-white hover:bg-green-700 disabled:opacity-50"
+                        className="px-6 py-2 text-sm font-medium rounded-lg bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 min-h-[40px] transition-colors"
                       >
                         {saving ? "Saving..." : "Save"}
-                      </button>
-                      <button
-                        onClick={cancelEditing}
-                        className="px-3 py-1 text-sm rounded border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
-                      >
-                        Cancel
                       </button>
                     </div>
                   </div>
                 ) : (
                   <div>
-                    <div className="flex items-start justify-between mb-2">
-                      <div className="flex-1">
-                        <div className="text-sm font-medium text-gray-900 dark:text-white">
-                          {formatDate(visit.processedAt || visit.createdAt)}
-                        </div>
-                        <div className="text-sm text-gray-700 dark:text-gray-300 mt-1">
-                          {visit.customerName}
-                        </div>
-                        <div className="flex items-center gap-2 mt-1">
-                          <div className="text-xs text-gray-600 dark:text-gray-400">
-                            {visit.customerAddress}
-                          </div>
-                          {visit.customerAddress && (
-                            <button
-                              onClick={async () => {
-                                if (navigator.share) {
-                                  try {
-                                    await navigator.share({
-                                      text: visit.customerAddress,
-                                    });
-                                  } catch (err) {
-                                    console.log("Share cancelled or failed:", err);
-                                  }
-                                } else {
-                                  try {
-                                    await navigator.clipboard.writeText(visit.customerAddress);
-                                    alert("Address copied to clipboard");
-                                  } catch (err) {
-                                    console.error("Failed to copy address:", err);
-                                  }
-                                }
-                              }}
-                              className="p-1 text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 min-w-[44px] min-h-[44px] flex items-center justify-center"
-                              title="Share Address"
-                            >
-                              📤
-                            </button>
-                          )}
-                        </div>
-                      </div>
-                      {visit.appName && (
-                        <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400">
-                          {visit.appName}
-                        </span>
-                      )}
+                    {/* Customer Name at top - left aligned */}
+                    <div className="font-bold text-base text-gray-900 dark:text-white mb-2 text-left">
+                      {visit.customerName}
                     </div>
+                    
+                    {/* Date below customer name - left aligned */}
+                    <div className="text-sm text-gray-700 dark:text-gray-300 mb-2 text-left">
+                      {formatDate(visit.processedAt || visit.createdAt)}
+                    </div>
+                    
+                    {/* Address below date - left aligned */}
+                    <div className="text-sm text-gray-700 dark:text-gray-300 mb-2 text-left">
+                      {visit.customerAddress}
+                    </div>
+                    
+                    {/* App name badge - left aligned */}
+                    {visit.appName && (() => {
+                      const appColor = getAppTagColor(visit.appName);
+                      return (
+                        <div className="flex items-center gap-1 text-xs text-gray-500 dark:text-gray-400 mb-3 text-left">
+                          <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${appColor.bg} ${appColor.text}`}>
+                            {visit.appName}
+                          </span>
+                        </div>
+                      );
+                    })()}
+                    
                     {visit.screenshot && typeof visit.screenshot === 'string' && visit.screenshot.trim().length > 0 && (
-                      <div className="mt-3">
+                      <div className="mt-3 mb-3">
                         <div className="text-xs text-gray-500 dark:text-gray-400 mb-1">Screenshot</div>
                         <div className="rounded-lg border border-gray-300 dark:border-gray-600 overflow-hidden">
                           <img
@@ -383,17 +375,18 @@ export default function EditCustomerEntriesModal({
                       userAltitude={visit.userAltitude}
                       userAddress={visit.userAddress}
                     />
-                    <div className="flex gap-2 mt-3">
+                    {/* Action buttons right-aligned */}
+                    <div className="flex justify-end gap-2 mt-4">
                       <button
                         onClick={() => startEditing(visit)}
-                        className="px-3 py-1 text-sm rounded border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
+                        className="px-4 py-2 text-sm font-medium rounded-lg border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 min-h-[40px] transition-colors"
                       >
                         Edit
                       </button>
                       <button
                         onClick={() => handleDelete(visit._id)}
                         disabled={deletingId === visit._id}
-                        className="px-3 py-1 text-sm rounded bg-red-600 text-white hover:bg-red-700 disabled:opacity-50"
+                        className="px-6 py-2 text-sm font-medium rounded-lg bg-red-600 text-white hover:bg-red-700 disabled:opacity-50 min-h-[40px] transition-colors"
                       >
                         {deletingId === visit._id ? "Deleting..." : "Delete"}
                       </button>

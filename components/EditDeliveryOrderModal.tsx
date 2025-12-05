@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Search } from "lucide-react";
+import { Search, Utensils, MapPin, Package } from "lucide-react";
 import Modal from "./ui/Modal";
 import { format } from "date-fns";
 import MetadataViewer from "./MetadataViewer";
@@ -177,6 +177,18 @@ export default function EditDeliveryOrderModal({
     }
   };
 
+  // App name to color mapping (matching logs screen)
+  const getAppTagColor = (appName: string) => {
+    const appColors: Record<string, { bg: string; text: string }> = {
+      "Uber Driver": { bg: "bg-black dark:bg-gray-800", text: "text-white dark:text-gray-100" },
+      "Dasher": { bg: "bg-red-100 dark:bg-red-900/30", text: "text-red-700 dark:text-red-300" },
+      "GH Drivers": { bg: "bg-orange-100 dark:bg-orange-900/30", text: "text-orange-700 dark:text-orange-300" },
+      "Shopper": { bg: "bg-purple-100 dark:bg-purple-900/30", text: "text-purple-700 dark:text-purple-300" },
+    };
+
+    return appColors[appName] || { bg: "bg-gray-100 dark:bg-gray-700", text: "text-gray-500 dark:text-gray-400" };
+  };
+
   return (
     <Modal isOpen={isOpen} onClose={onClose} title="Edit Delivery Order">
       {loading && !order && (
@@ -186,16 +198,13 @@ export default function EditDeliveryOrderModal({
       )}
 
       {error && (
-        <div className="p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg mb-4">
-          <div className="text-red-600 dark:text-red-400">Error: {error}</div>
+        <div className="p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg mb-4">
+          <div className="text-sm text-red-600 dark:text-red-400">{error}</div>
         </div>
       )}
 
       {order && !loading && (
         <div className="space-y-4">
-          <div className="text-sm text-gray-600 dark:text-gray-400">
-            Processed: {formatDate(order.processedAt)}
-          </div>
 
           {/* Screenshot Display */}
           {order.screenshot && typeof order.screenshot === 'string' && order.screenshot.trim().length > 0 && (
@@ -223,7 +232,7 @@ export default function EditDeliveryOrderModal({
           />
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
               App Name
             </label>
             <input
@@ -235,12 +244,13 @@ export default function EditDeliveryOrderModal({
                   appName: e.target.value,
                 }))
               }
-              className="w-full rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 px-3 py-2 text-sm text-gray-900 dark:text-white"
+              className="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 px-3 py-2 text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             />
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+            <label className="flex items-center gap-1 text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+              <Utensils className="w-4 h-4" />
               Restaurant Name
             </label>
             <input
@@ -252,12 +262,13 @@ export default function EditDeliveryOrderModal({
                   restaurantName: e.target.value,
                 }))
               }
-              className="w-full rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 px-3 py-2 text-sm text-gray-900 dark:text-white"
+              className="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 px-3 py-2 text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             />
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+            <label className="flex items-center gap-1 text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+              <MapPin className="w-4 h-4" />
               Restaurant Address
             </label>
             <div className="flex gap-2">
@@ -270,7 +281,7 @@ export default function EditDeliveryOrderModal({
                     restaurantAddress: e.target.value,
                   }))
                 }
-                className="flex-1 rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 px-3 py-2 text-sm text-gray-900 dark:text-white"
+                className="flex-1 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 px-3 py-2 text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 placeholder="e.g., 123 Main St, City, State"
               />
               <button
@@ -311,7 +322,8 @@ export default function EditDeliveryOrderModal({
 
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+              <label className="flex items-center gap-1 text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                <Package className="w-4 h-4" />
                 Miles
               </label>
               <input
@@ -325,11 +337,11 @@ export default function EditDeliveryOrderModal({
                     miles: e.target.value,
                   }))
                 }
-                className="w-full rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 px-3 py-2 text-sm text-gray-900 dark:text-white"
+                className="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 px-3 py-2 text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                 Money ($)
               </label>
               <input
@@ -343,7 +355,7 @@ export default function EditDeliveryOrderModal({
                     money: e.target.value,
                   }))
                 }
-                className="w-full rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 px-3 py-2 text-sm text-gray-900 dark:text-white"
+                className="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 px-3 py-2 text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               />
             </div>
           </div>
@@ -357,7 +369,7 @@ export default function EditDeliveryOrderModal({
           )}
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
               Time
             </label>
             <input
@@ -369,37 +381,27 @@ export default function EditDeliveryOrderModal({
                   time: e.target.value,
                 }))
               }
-              className="w-full rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 px-3 py-2 text-sm text-gray-900 dark:text-white"
+              className="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 px-3 py-2 text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               placeholder="e.g., 2:30 PM"
             />
           </div>
 
           {/* Linked Transactions */}
           <div className="pt-4 border-t border-gray-200 dark:border-gray-700">
-            <div className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
-              Linked Income Transactions
+            <div className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">
+              LINKED TRANSACTIONS
             </div>
             {order.linkedTransactions && order.linkedTransactions.length > 0 ? (
-              <div className="space-y-2">
+              <div className="space-y-3">
                 {order.linkedTransactions.map((transaction) => (
                   <div
                     key={transaction._id}
-                    className="p-3 bg-gray-50 dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-700 flex items-center justify-between"
+                    className="p-4 bg-gray-50 dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-700"
                   >
-                    <div className="flex-1">
-                      <div className="font-semibold text-gray-900 dark:text-white">
+                    <div className="flex items-start justify-between mb-2">
+                      <div className="font-bold text-base text-gray-900 dark:text-white">
                         ${transaction.amount.toFixed(2)}
                       </div>
-                      <div className="text-xs text-gray-600 dark:text-gray-400">
-                        {format(new Date(transaction.date), "MMM d, yyyy")} at {transaction.time}
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      {transaction.tag && (
-                        <span className="text-xs px-2 py-0.5 rounded bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400">
-                          {transaction.tag}
-                        </span>
-                      )}
                       <button
                         onClick={async () => {
                           if (!orderId) return;
@@ -431,11 +433,24 @@ export default function EditDeliveryOrderModal({
                           }
                         }}
                         disabled={saving}
-                        className="px-3 py-1 text-xs rounded bg-red-600 text-white hover:bg-red-700 disabled:opacity-50"
+                        className="px-4 py-2 text-sm font-medium rounded-lg bg-red-600 text-white hover:bg-red-700 disabled:opacity-50 min-h-[40px] transition-colors"
                       >
                         Unlink
                       </button>
                     </div>
+                    <div className="text-sm text-gray-700 dark:text-gray-300 mb-2">
+                      {format(new Date(transaction.date), "MMM d, yyyy")} at {transaction.time}
+                    </div>
+                    {transaction.tag && (() => {
+                      const appColor = getAppTagColor(transaction.tag);
+                      return (
+                        <div className="flex items-center gap-1 text-xs text-gray-500 dark:text-gray-400">
+                          <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${appColor.bg} ${appColor.text}`}>
+                            {transaction.tag}
+                          </span>
+                        </div>
+                      );
+                    })()}
                   </div>
                 ))}
               </div>
@@ -446,19 +461,19 @@ export default function EditDeliveryOrderModal({
             )}
           </div>
 
-          <div className="flex gap-2 pt-4">
+          <div className="flex justify-end gap-2 pt-4">
+            <button
+              onClick={onClose}
+              className="px-4 py-2 text-sm font-medium rounded-lg border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 min-h-[40px] transition-colors"
+            >
+              Cancel
+            </button>
             <button
               onClick={handleSave}
               disabled={saving}
-              className="px-4 py-2 text-sm rounded bg-green-600 text-white hover:bg-green-700 disabled:opacity-50"
+              className="px-6 py-2 text-sm font-medium rounded-lg bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 min-h-[40px] transition-colors"
             >
               {saving ? "Saving..." : "Save"}
-            </button>
-            <button
-              onClick={onClose}
-              className="px-4 py-2 text-sm rounded border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
-            >
-              Cancel
             </button>
           </div>
         </div>

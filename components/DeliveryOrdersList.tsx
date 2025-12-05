@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import Card from "./ui/Card";
 import { format } from "date-fns";
-import { Pencil, Trash2 } from "lucide-react";
+import { Pencil, Trash2, Utensils, Package } from "lucide-react";
 
 interface DeliveryOrder {
   id: string;
@@ -215,6 +215,18 @@ export default function DeliveryOrdersList({
     }).format(amount);
   };
 
+  // App name to color mapping (matching logs screen)
+  const getAppTagColor = (appName: string) => {
+    const appColors: Record<string, { bg: string; text: string }> = {
+      "Uber Driver": { bg: "bg-black dark:bg-gray-800", text: "text-white dark:text-gray-100" },
+      "Dasher": { bg: "bg-red-100 dark:bg-red-900/30", text: "text-red-700 dark:text-red-300" },
+      "GH Drivers": { bg: "bg-orange-100 dark:bg-orange-900/30", text: "text-orange-700 dark:text-orange-300" },
+      "Shopper": { bg: "bg-purple-100 dark:bg-purple-900/30", text: "text-purple-700 dark:text-purple-300" },
+    };
+
+    return appColors[appName] || { bg: "bg-gray-100 dark:bg-gray-700", text: "text-gray-500 dark:text-gray-400" };
+  };
+
   // Get unique app names for filter dropdown (from all orders we've seen)
   const [uniqueAppNames, setUniqueAppNames] = useState<string[]>([]);
   
@@ -336,76 +348,81 @@ export default function DeliveryOrdersList({
         <>
           {/* Mobile-friendly card layout */}
           <div className="p-4 sm:p-6 space-y-4">
-            {orders.map((order) => (
-              <div
-                key={order.id}
-                className="rounded-lg p-4 border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
-              >
-                {/* Header: Restaurant name and app */}
-                <div className="flex items-start justify-between mb-3 gap-2">
-                  <div className="flex-1 min-w-0">
-                    <h4 className="text-base font-semibold text-gray-900 dark:text-white truncate">
-                      {order.restaurantName}
-                    </h4>
-                    <div className="flex items-center gap-2 mt-1">
-                      <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400">
-                        {order.appName}
-                      </span>
+            {orders.map((order) => {
+              const appColor = getAppTagColor(order.appName);
+              return (
+                <div
+                  key={order.id}
+                  className="rounded-lg p-4 border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900"
+                >
+                  {/* Restaurant name and money amount */}
+                  <div className="flex items-start justify-between mb-2 gap-2">
+                    <div className="font-bold text-base text-gray-900 dark:text-white text-left flex-1 min-w-0 flex items-center gap-1">
+                      <span className="flex-shrink-0"><Utensils className="w-4 h-4" /></span>
+                      <span className="truncate">{order.restaurantName}</span>
                     </div>
-                  </div>
-                  <div className="text-right flex-shrink-0">
-                    <div className="text-lg font-bold text-gray-900 dark:text-white">
+                    <div className="text-lg font-bold text-gray-900 dark:text-white flex-shrink-0">
                       {formatCurrency(order.money)}
                     </div>
                   </div>
-                </div>
-
-                {/* Details: Date, miles, ratio */}
-                <div className="space-y-2 mb-3">
-                  <div className="text-sm text-gray-600 dark:text-gray-400">
+                  
+                  {/* Date below restaurant name - left aligned */}
+                  <div className="text-sm text-gray-700 dark:text-gray-300 mb-2 text-left">
                     {formatDate(order.processedAt)}
                     {order.time && (
-                      <span className="ml-2">• Order time: {order.time}</span>
+                      <span className="ml-2">• {order.time}</span>
                     )}
                   </div>
-                  <div className="flex items-center gap-4 text-sm">
-                    <div className="text-gray-700 dark:text-gray-300">
-                      <span className="font-medium">{order.miles.toFixed(1)}</span> mi
+                  
+                  {/* Miles and ratio - left aligned */}
+                  <div className="flex items-center gap-4 text-sm text-gray-700 dark:text-gray-300 mb-2 text-left">
+                    <div className="flex items-center gap-1">
+                      <Package className="w-3 h-3" />
+                      <span>
+                        <span className="font-medium">{order.miles.toFixed(1)}</span> mi
+                      </span>
                     </div>
-                    <div className="text-gray-700 dark:text-gray-300">
+                    <div>
                       <span className="font-medium">${order.milesToMoneyRatio.toFixed(2)}</span>/mi
                     </div>
                   </div>
-                </div>
-
-                {/* Actions */}
-                <div className="flex gap-2 pt-3 border-t border-gray-200 dark:border-gray-700">
-                  {onEditClick && (
+                  
+                  {/* App name badge - left aligned */}
+                  <div className="flex items-center gap-1 text-xs text-gray-500 dark:text-gray-400 mb-3 text-left">
+                    <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${appColor.bg} ${appColor.text}`}>
+                      {order.appName}
+                    </span>
+                  </div>
+                  
+                  {/* Action buttons right-aligned */}
+                  <div className="flex items-center justify-end gap-2 pt-3 border-t border-gray-200 dark:border-gray-700">
+                    {onEditClick && (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onEditClick(order.id);
+                        }}
+                        className="p-2 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white min-w-[44px] min-h-[44px] flex items-center justify-center rounded-full bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600"
+                        title="Edit"
+                      >
+                        <Pencil className="w-5 h-5" />
+                      </button>
+                    )}
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
-                        onEditClick(order.id);
+                        handleDeleteClick(order.id);
                       }}
-                      className="flex items-center gap-2 px-3 py-2 text-sm rounded bg-blue-600 text-white hover:bg-blue-700 min-h-[44px]"
+                      disabled={deletingId === order.id}
+                      className="p-2 text-red-600 dark:text-red-400 hover:text-red-900 dark:hover:text-red-300 min-w-[44px] min-h-[44px] flex items-center justify-center rounded-full bg-red-100 dark:bg-red-900/30 hover:bg-red-200 dark:hover:bg-red-900/50 disabled:opacity-50 disabled:cursor-not-allowed"
+                      title="Delete"
                     >
-                      <Pencil className="w-4 h-4" />
-                      Edit
+                      <Trash2 className="w-5 h-5" />
                     </button>
-                  )}
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleDeleteClick(order.id);
-                    }}
-                    disabled={deletingId === order.id}
-                    className="flex items-center gap-2 px-3 py-2 text-sm rounded bg-red-600 text-white hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed min-h-[44px]"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                    {deletingId === order.id ? "Deleting..." : "Delete"}
-                  </button>
+                  </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
 
           {/* Pagination */}
