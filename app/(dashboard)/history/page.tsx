@@ -678,15 +678,6 @@ export default function HistoryPage() {
         <div className="flex justify-end gap-2">
           <button
             onClick={() => {
-              setShowAddOrderModal(true);
-            }}
-            className="px-4 py-2 rounded-lg text-sm font-medium bg-purple-600 text-white hover:bg-purple-700 min-h-[44px] flex items-center gap-2"
-          >
-            <ShoppingBag className="w-5 h-5" />
-            Order
-          </button>
-          <button
-            onClick={() => {
               setEditingTransaction(null);
               setSelectedOrderForTransaction(null);
               setShowAddModal(true);
@@ -708,6 +699,15 @@ export default function HistoryPage() {
           >
             <ArrowDownCircle className="w-5 h-5" />
             Expense
+          </button>
+          <button
+            onClick={() => {
+              setShowAddOrderModal(true);
+            }}
+            className="px-4 py-2 rounded-lg text-sm font-medium bg-purple-600 text-white hover:bg-purple-700 min-h-[44px] flex items-center gap-2"
+          >
+            <ShoppingBag className="w-5 h-5" />
+            Order
           </button>
         </div>
       </div>
