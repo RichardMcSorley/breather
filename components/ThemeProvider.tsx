@@ -1,55 +1,23 @@
 "use client";
 
-import { createContext, useContext, useEffect, useState, ReactNode } from "react";
+import { createContext, useContext, useEffect, ReactNode } from "react";
 
-type Theme = "light" | "dark";
+type Theme = "dark";
 
 interface ThemeContextType {
   theme: Theme;
-  toggleTheme: () => void;
 }
 
 const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
 
 export function ThemeProvider({ children }: { children: ReactNode }) {
-  const [theme, setTheme] = useState<Theme>("light");
-  const [mounted, setMounted] = useState(false);
-
   useEffect(() => {
-    setMounted(true);
-    // Check localStorage first, then system preference
-    const savedTheme = localStorage.getItem("theme") as Theme | null;
-    const prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
-    
-    const initialTheme = savedTheme || (prefersDark ? "dark" : "light");
-    setTheme(initialTheme);
-    
-    if (initialTheme === "dark") {
-      document.documentElement.classList.add("dark");
-    } else {
-      document.documentElement.classList.remove("dark");
-    }
+    // Always apply dark mode
+    document.documentElement.classList.add("dark");
   }, []);
 
-  const toggleTheme = () => {
-    const newTheme = theme === "light" ? "dark" : "light";
-    setTheme(newTheme);
-    localStorage.setItem("theme", newTheme);
-    
-    if (newTheme === "dark") {
-      document.documentElement.classList.add("dark");
-    } else {
-      document.documentElement.classList.remove("dark");
-    }
-  };
-
-  // Prevent hydration mismatch by not rendering until mounted
-  if (!mounted) {
-    return <>{children}</>;
-  }
-
   return (
-    <ThemeContext.Provider value={{ theme, toggleTheme }}>
+    <ThemeContext.Provider value={{ theme: "dark" }}>
       {children}
     </ThemeContext.Provider>
   );
@@ -60,10 +28,7 @@ export function useTheme() {
   // During SSR or when not within ThemeProvider, return default values
   if (context === undefined) {
     return {
-      theme: "light" as Theme,
-      toggleTheme: () => {
-        // No-op during SSR
-      },
+      theme: "dark" as Theme,
     };
   }
   return context;

@@ -4,9 +4,8 @@ import { useSession, signOut } from "next-auth/react";
 import { usePathname, useRouter } from "next/navigation";
 import Link from "next/link";
 import { ReactNode, useState } from "react";
-import { BarChart3, Clock, FileText, Car, Menu, Sun, Moon, Settings } from "lucide-react";
+import { BarChart3, Clock, FileText, Car, Menu, Settings } from "lucide-react";
 import OfflineIndicator from "./OfflineIndicator";
-import { useTheme } from "./ThemeProvider";
 import ToastContainer from "./ui/Toast";
 import HamburgerMenu from "./HamburgerMenu";
 
@@ -18,7 +17,6 @@ export default function Layout({ children }: LayoutProps) {
   const { data: session } = useSession();
   const pathname = usePathname();
   const router = useRouter();
-  const { theme, toggleTheme } = useTheme();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
 
   const navItems = [
@@ -45,13 +43,6 @@ export default function Layout({ children }: LayoutProps) {
             <h1 className="text-xl font-bold text-gray-900 dark:text-white">Breather</h1>
           </div>
           <div className="flex items-center gap-2">
-            <button
-              onClick={toggleTheme}
-              className="p-2 text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white min-w-[44px] min-h-[44px] flex items-center justify-center"
-              aria-label="Toggle dark mode"
-            >
-              {theme === "dark" ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
-            </button>
             <button
               onClick={() => router.push("/configuration")}
               className="p-2 text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white min-w-[44px] min-h-[44px] flex items-center justify-center"
