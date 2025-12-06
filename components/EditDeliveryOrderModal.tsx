@@ -631,11 +631,13 @@ export default function EditDeliveryOrderModal({
               userLatitude={additionalRestaurants[editingAdditionalRestaurantIndex].userLatitude}
               userLongitude={additionalRestaurants[editingAdditionalRestaurantIndex].userLongitude}
               userAddress={additionalRestaurants[editingAdditionalRestaurantIndex].userAddress}
-              onAddressSaved={async (address?: string, placeId?: string, lat?: number, lon?: number) => {
+              skipSave={true}
+              onAddressSaved={async (address?: string, placeId?: string, lat?: number, lon?: number, restaurantName?: string) => {
                 if (editingAdditionalRestaurantIndex !== null) {
                   const updatedRestaurants = [...additionalRestaurants];
                   updatedRestaurants[editingAdditionalRestaurantIndex] = {
                     ...updatedRestaurants[editingAdditionalRestaurantIndex],
+                    name: restaurantName || updatedRestaurants[editingAdditionalRestaurantIndex].name,
                     address: address || updatedRestaurants[editingAdditionalRestaurantIndex].address,
                     placeId: placeId || updatedRestaurants[editingAdditionalRestaurantIndex].placeId,
                     lat: lat !== undefined ? lat : updatedRestaurants[editingAdditionalRestaurantIndex].lat,
