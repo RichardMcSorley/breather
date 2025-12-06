@@ -88,6 +88,20 @@ interface SelectedDeliveryOrder {
   processedAt: string;
 }
 
+interface RouteSegment {
+  fromLat: number;
+  fromLon: number;
+  toLat: number;
+  toLon: number;
+  distanceMiles?: number;
+  durationText?: string;
+  loading?: boolean;
+  error?: boolean;
+  type: 'restaurant-to-restaurant' | 'restaurant-to-customer' | 'customer-to-customer';
+  fromIndex: number;
+  toIndex: number;
+}
+
 /**
  * Parses a date string (YYYY-MM-DD) and time string (HH:MM) as LOCAL time.
  * The time string represents the user's local time, not UTC.
@@ -490,6 +504,7 @@ export default function HistoryPage() {
   const [isMarkingDelivered, setIsMarkingDelivered] = useState(false);
   const [showStreetViewForTransaction, setShowStreetViewForTransaction] = useState<string | null>(null);
   const [editingAdditionalRestaurant, setEditingAdditionalRestaurant] = useState<{ orderId: string; restaurantIndex: number; restaurant: AdditionalRestaurant } | null>(null);
+  const [routeSegments, setRouteSegments] = useState<Record<string, RouteSegment[]>>({});
   
   const { data, isLoading: loading } = useTransactions("all", "all", page, limit);
   // Fetch all transactions for date totals calculation
@@ -599,6 +614,158 @@ export default function HistoryPage() {
       userAddress: order.userAddress,
     });
   };
+
+  // Calculate route segments for a transaction
+  const calculateRouteSegments = async (transaction: Transaction) => {
+    if (!transaction.linkedDeliveryOrders || transaction.linkedDeliveryOrders.length === 0) {
+      return;
+    }
+
+    const transactionId = transaction._id;
+    const segments: RouteSegment[] = [];
+
+    // Get all restaurants (main + additional) with their indices
+    const allRestaurants: Array<{ lat?: number; lon?: number; name: string; orderIndex: number; restaurantIndex: number }> = [];
+    transaction.linkedDeliveryOrders.forEach((order, orderIdx) => {
+      if (order.restaurantLat !== undefined && order.restaurantLon !== undefined) {
+        allRestaurants.push({
+          lat: order.restaurantLat,
+          lon: order.restaurantLon,
+          name: order.restaurantName,
+          orderIndex: orderIdx,
+          restaurantIndex: -1, // -1 means main restaurant
+        });
+      }
+      // Add additional restaurants
+      if (order.additionalRestaurants) {
+        order.additionalRestaurants.forEach((restaurant, restaurantIdx) => {
+          if (restaurant.lat !== undefined && restaurant.lon !== undefined) {
+            allRestaurants.push({
+              lat: restaurant.lat,
+              lon: restaurant.lon,
+              name: restaurant.name,
+              orderIndex: orderIdx,
+              restaurantIndex: restaurantIdx,
+            });
+          }
+        });
+      }
+    });
+
+    // Get all customers
+    const allCustomers = transaction.linkedOcrExports || [];
+
+    // Calculate segments between restaurants
+    for (let i = 0; i < allRestaurants.length - 1; i++) {
+      const from = allRestaurants[i];
+      const to = allRestaurants[i + 1];
+      if (from.lat !== undefined && from.lon !== undefined && to.lat !== undefined && to.lon !== undefined) {
+        segments.push({
+          fromLat: from.lat,
+          fromLon: from.lon,
+          toLat: to.lat,
+          toLon: to.lon,
+          loading: true,
+          type: 'restaurant-to-restaurant',
+          fromIndex: i,
+          toIndex: i + 1,
+        });
+      }
+    }
+
+    // Calculate segment from last restaurant to first customer
+    if (allRestaurants.length > 0 && allCustomers.length > 0) {
+      const lastRestaurant = allRestaurants[allRestaurants.length - 1];
+      const firstCustomer = allCustomers[0];
+      if (lastRestaurant.lat !== undefined && lastRestaurant.lon !== undefined && firstCustomer.lat !== undefined && firstCustomer.lon !== undefined) {
+        segments.push({
+          fromLat: lastRestaurant.lat,
+          fromLon: lastRestaurant.lon,
+          toLat: firstCustomer.lat,
+          toLon: firstCustomer.lon,
+          loading: true,
+          type: 'restaurant-to-customer',
+          fromIndex: allRestaurants.length - 1,
+          toIndex: 0,
+        });
+      }
+    }
+
+    // Calculate segments between customers
+    for (let i = 0; i < allCustomers.length - 1; i++) {
+      const from = allCustomers[i];
+      const to = allCustomers[i + 1];
+      if (from.lat !== undefined && from.lon !== undefined && to.lat !== undefined && to.lon !== undefined) {
+        segments.push({
+          fromLat: from.lat,
+          fromLon: from.lon,
+          toLat: to.lat,
+          toLon: to.lon,
+          loading: true,
+          type: 'customer-to-customer',
+          fromIndex: i,
+          toIndex: i + 1,
+        });
+      }
+    }
+
+    // Set initial loading state
+    setRouteSegments((prev) => ({
+      ...prev,
+      [transactionId]: segments,
+    }));
+
+    // Fetch distances for all segments
+    const updatedSegments = await Promise.all(
+      segments.map(async (segment) => {
+        try {
+          const response = await fetch(
+            `/api/distance-matrix?originLat=${segment.fromLat}&originLon=${segment.fromLon}&destinationLat=${segment.toLat}&destinationLon=${segment.toLon}`
+          );
+          if (!response.ok) {
+            throw new Error("Failed to fetch distance");
+          }
+          const data = await response.json();
+          return {
+            ...segment,
+            distanceMiles: data.distanceMiles,
+            durationText: data.durationText,
+            loading: false,
+            error: false,
+          };
+        } catch (error) {
+          console.error("Error calculating route segment:", error);
+          return {
+            ...segment,
+            loading: false,
+            error: true,
+          };
+        }
+      })
+    );
+
+    setRouteSegments((prev) => ({
+      ...prev,
+      [transactionId]: updatedSegments,
+    }));
+  };
+
+  // Calculate route segments when transactions load
+  useEffect(() => {
+    if (transactions.length > 0) {
+      transactions.forEach((transaction) => {
+        if (
+          transaction.type === "income" &&
+          transaction.linkedDeliveryOrders &&
+          transaction.linkedDeliveryOrders.length > 0 &&
+          !routeSegments[transaction._id]
+        ) {
+          calculateRouteSegments(transaction);
+        }
+      });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [transactions]);
 
   const handleShareRestaurantAddress = async (address: string) => {
     if (navigator.share) {
@@ -1217,6 +1384,36 @@ export default function HistoryPage() {
                             ))}
                           </div>
                         )}
+                        
+                        {/* Route segments between restaurants */}
+                        {isIncome && transaction.linkedDeliveryOrders && transaction.linkedDeliveryOrders.length > 0 && routeSegments[transaction._id] && (
+                          <div className="mt-2 space-y-1">
+                            {routeSegments[transaction._id]
+                              .filter((segment) => segment.type === 'restaurant-to-restaurant')
+                              .map((segment, idx) => (
+                                <div key={idx} className="relative py-2">
+                                  <div className="absolute inset-0 flex items-center">
+                                    <div className="w-full border-t border-gray-200 dark:border-gray-700"></div>
+                                  </div>
+                                  <div className="relative flex justify-center">
+                                    {segment.loading ? (
+                                      <span className="bg-white dark:bg-gray-800 px-2 text-xs text-gray-400 dark:text-gray-500">
+                                        Calculating...
+                                      </span>
+                                    ) : segment.error ? (
+                                      <span className="bg-white dark:bg-gray-800 px-2 text-xs text-gray-400 dark:text-gray-500">
+                                        Error
+                                      </span>
+                                    ) : segment.distanceMiles !== undefined && segment.durationText ? (
+                                      <span className="bg-white dark:bg-gray-800 px-2 text-xs text-gray-500 dark:text-gray-400">
+                                        {segment.distanceMiles.toFixed(1)} mi • {segment.durationText}
+                                      </span>
+                                    ) : null}
+                                  </div>
+                                </div>
+                              ))}
+                          </div>
+                        )}
                         {transaction.notes && (
                           <div className="text-sm text-gray-600 dark:text-gray-300 break-words">
                             {transaction.notes}
@@ -1224,31 +1421,98 @@ export default function HistoryPage() {
                         )}
                       </div>
                       
+                      {/* Route segment between last restaurant and first customer */}
+                      {isIncome && 
+                       transaction.linkedDeliveryOrders && 
+                       transaction.linkedDeliveryOrders.length > 0 &&
+                       transaction.linkedOcrExports && 
+                       transaction.linkedOcrExports.length > 0 &&
+                       routeSegments[transaction._id] && (() => {
+                         const segment = routeSegments[transaction._id].find((s) => s.type === 'restaurant-to-customer');
+                         
+                         if (!segment) return null;
+                         
+                         return (
+                           <div className="relative py-2">
+                             <div className="absolute inset-0 flex items-center">
+                               <div className="w-full border-t border-gray-200 dark:border-gray-700"></div>
+                             </div>
+                             <div className="relative flex justify-center">
+                               {segment.loading ? (
+                                 <span className="bg-white dark:bg-gray-800 px-2 text-xs text-gray-400 dark:text-gray-500">
+                                   Calculating...
+                                 </span>
+                               ) : segment.error ? (
+                                 <span className="bg-white dark:bg-gray-800 px-2 text-xs text-gray-400 dark:text-gray-500">
+                                   Error
+                                 </span>
+                               ) : segment.distanceMiles !== undefined && segment.durationText ? (
+                                 <span className="bg-white dark:bg-gray-800 px-2 text-xs text-gray-500 dark:text-gray-400">
+                                   {segment.distanceMiles.toFixed(1)} mi • {segment.durationText}
+                                 </span>
+                               ) : null}
+                             </div>
+                           </div>
+                         );
+                       })()}
+                      
                       {/* Customer and Edit/Delete at Bottom */}
                       <div className="flex items-center justify-between mt-auto pt-1 border-t border-gray-200 dark:border-gray-700 gap-2">
                         <div className="flex-1 min-w-0">
                           {isIncome && transaction.linkedOcrExports && transaction.linkedOcrExports.length > 0 && (
                             <div className="flex flex-col gap-1">
-                              {transaction.linkedOcrExports.map((customer) => (
-                                <button
-                                  key={customer.id}
-                                  onClick={() => {
-                                    setEditingCustomerAddress(customer.customerAddress);
-                                    setEditingCustomerEntryId(customer.entryId || null);
-                                  }}
-                                  className="text-sm text-gray-900 dark:text-white hover:underline flex items-center gap-1 text-left break-words"
-                                >
-                                  <span className="flex-shrink-0"><User className="w-4 h-4" /></span>
-                                  <span className="truncate">
-                                    {customer.customerName}
-                                    {customer.customerAddress && (
-                                      <>
-                                        <span className="mx-1 text-gray-400 dark:text-gray-500">•</span>
-                                        <span>{formatAddress(customer.customerAddress)}</span>
-                                      </>
-                                    )}
-                                  </span>
-                                </button>
+                              {transaction.linkedOcrExports.map((customer, customerIdx) => (
+                                <div key={customer.id}>
+                                  <button
+                                    onClick={() => {
+                                      setEditingCustomerAddress(customer.customerAddress);
+                                      setEditingCustomerEntryId(customer.entryId || null);
+                                    }}
+                                    className="text-sm text-gray-900 dark:text-white hover:underline flex items-center gap-1 text-left break-words"
+                                  >
+                                    <span className="flex-shrink-0"><User className="w-4 h-4" /></span>
+                                    <span className="truncate">
+                                      {customer.customerName}
+                                      {customer.customerAddress && (
+                                        <>
+                                          <span className="mx-1 text-gray-400 dark:text-gray-500">•</span>
+                                          <span>{formatAddress(customer.customerAddress)}</span>
+                                        </>
+                                      )}
+                                    </span>
+                                  </button>
+                                  {/* Route segment between customers */}
+                                  {customerIdx < transaction.linkedOcrExports!.length - 1 && routeSegments[transaction._id] && (() => {
+                                    const segment = routeSegments[transaction._id].find(
+                                      (s) => s.type === 'customer-to-customer' && s.fromIndex === customerIdx
+                                    );
+                                    
+                                    if (!segment) return null;
+                                    
+                                    return (
+                                      <div className="relative py-2">
+                                        <div className="absolute inset-0 flex items-center">
+                                          <div className="w-full border-t border-gray-200 dark:border-gray-700"></div>
+                                        </div>
+                                        <div className="relative flex justify-center">
+                                          {segment.loading ? (
+                                            <span className="bg-white dark:bg-gray-800 px-2 text-xs text-gray-400 dark:text-gray-500">
+                                              Calculating...
+                                            </span>
+                                          ) : segment.error ? (
+                                            <span className="bg-white dark:bg-gray-800 px-2 text-xs text-gray-400 dark:text-gray-500">
+                                              Error
+                                            </span>
+                                          ) : segment.distanceMiles !== undefined && segment.durationText ? (
+                                            <span className="bg-white dark:bg-gray-800 px-2 text-xs text-gray-500 dark:text-gray-400">
+                                              {segment.distanceMiles.toFixed(1)} mi • {segment.durationText}
+                                            </span>
+                                          ) : null}
+                                        </div>
+                                      </div>
+                                    );
+                                  })()}
+                                </div>
                               ))}
                             </div>
                           )}
