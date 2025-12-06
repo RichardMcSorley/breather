@@ -1181,7 +1181,7 @@ export default function HistoryPage() {
                                   </span>
                                 </button>
                                 {/* Additional restaurants */}
-                                {order.additionalRestaurants && order.additionalRestaurants.length > 0 && (
+                                {order.additionalRestaurants && Array.isArray(order.additionalRestaurants) && order.additionalRestaurants.length > 0 && (
                                   <div className="ml-5 flex flex-col gap-1 mt-1">
                                     {order.additionalRestaurants.map((restaurant, idx) => (
                                       <button

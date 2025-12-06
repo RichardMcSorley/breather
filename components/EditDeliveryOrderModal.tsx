@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Search, Utensils, MapPin, Package, Pencil } from "lucide-react";
+import { Search, Utensils, MapPin, Package, Pencil, Trash2 } from "lucide-react";
 import Modal from "./ui/Modal";
 import { format } from "date-fns";
 import MetadataViewer from "./MetadataViewer";
@@ -74,6 +74,7 @@ export default function EditDeliveryOrderModal({
   const [showShareModal, setShowShareModal] = useState(false);
   const [editingAdditionalRestaurantIndex, setEditingAdditionalRestaurantIndex] = useState<number | null>(null);
   const [showAdditionalRestaurantModal, setShowAdditionalRestaurantModal] = useState(false);
+  const [deletingRestaurantIndex, setDeletingRestaurantIndex] = useState<number | null>(null);
   const [formValues, setFormValues] = useState({
     appName: "",
     miles: "",
@@ -429,16 +430,61 @@ export default function EditDeliveryOrderModal({
                           </div>
                         )}
                       </div>
-                      <button
-                        onClick={() => {
-                          setEditingAdditionalRestaurantIndex(index);
-                          setShowAdditionalRestaurantModal(true);
-                        }}
-                        className="p-2 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white min-w-[44px] min-h-[44px] flex items-center justify-center rounded-full bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600"
-                        title="Edit Restaurant"
-                      >
-                        <Pencil className="w-4 h-4" />
-                      </button>
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => {
+                            setEditingAdditionalRestaurantIndex(index);
+                            setShowAdditionalRestaurantModal(true);
+                          }}
+                          className="p-2 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white min-w-[44px] min-h-[44px] flex items-center justify-center rounded-full bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600"
+                          title="Edit Restaurant"
+                        >
+                          <Pencil className="w-4 h-4" />
+                        </button>
+                        <button
+                          onClick={async () => {
+                            if (!confirm(`Are you sure you want to delete "${restaurant.name}"?`)) {
+                              return;
+                            }
+                            try {
+                              setDeletingRestaurantIndex(index);
+                              const updatedRestaurants = additionalRestaurants.filter((_, i) => i !== index);
+                              setAdditionalRestaurants(updatedRestaurants);
+                              
+                              // Save to backend
+                              const response = await fetch("/api/delivery-orders", {
+                                method: "PATCH",
+                                headers: {
+                                  "Content-Type": "application/json",
+                                },
+                                body: JSON.stringify({
+                                  id: orderId,
+                                  additionalRestaurants: updatedRestaurants,
+                                }),
+                              });
+
+                              if (!response.ok) {
+                                const errorData = await response.json();
+                                throw new Error(errorData.error || "Failed to delete restaurant");
+                              }
+                              
+                              await fetchOrder();
+                              onUpdate?.();
+                            } catch (err) {
+                              setError(err instanceof Error ? err.message : "Failed to delete restaurant");
+                              // Restore the restaurant if deletion failed
+                              await fetchOrder();
+                            } finally {
+                              setDeletingRestaurantIndex(null);
+                            }
+                          }}
+                          disabled={deletingRestaurantIndex === index}
+                          className="p-2 text-red-600 dark:text-red-400 hover:text-red-900 dark:hover:text-red-300 min-w-[44px] min-h-[44px] flex items-center justify-center rounded-full bg-red-100 dark:bg-red-900/30 hover:bg-red-200 dark:hover:bg-red-900/50 disabled:opacity-50 disabled:cursor-not-allowed"
+                          title="Delete Restaurant"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
                     </div>
                   </div>
                 ))}
