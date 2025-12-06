@@ -42,6 +42,8 @@ interface LinkedOrder {
   id: string;
   restaurantName: string;
   restaurantAddress?: string;
+  restaurantLat?: number;
+  restaurantLon?: number;
   appName: string;
   miles: number;
   money: number;
