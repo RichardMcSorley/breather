@@ -185,7 +185,7 @@ interface ParsedRestaurant {
   Address: string;
 }
 
-const RESTAURANT_YAML_PROMPT = `Extract the restaurant information from this image. Return in YAML format with the following keys: "Restaurant Name" (string), Address (string). The address should include street address, city, state, and zip code if available.`
+const RESTAURANT_YAML_PROMPT = `Extract the restaurant information from this image. In YAML, with keys "Restaurant Name" and "Address".`
 
 function parseRestaurantYamlResponse(rawText: string): { restaurant: ParsedRestaurant | null; error: string | null } {
   rawText = rawText.trim();
@@ -262,7 +262,7 @@ async function requestRestaurantYaml(
 
   for (let attempt = 0; attempt < maxAttempts; attempt++) {
     if (attempt > 0) {
-      const retryPrompt = `${RESTAURANT_YAML_PROMPT}\n\nThe previous response was invalid because ${lastError || "it could not be parsed"}. Please return valid YAML with exactly "Restaurant Name" (string) and "Address" (string) fields.`;
+      const retryPrompt = `${RESTAURANT_YAML_PROMPT}\n\nThe previous response was invalid because ${lastError || "it could not be parsed"}. Please return valid YAML with exactly "Restaurant Name" and "Address" fields.`;
       currentPrompt = ocrText ? `${retryPrompt}\n\nEXTRACTED TEXT:\n${ocrText}` : retryPrompt;
     } else {
       currentPrompt = basePrompt;

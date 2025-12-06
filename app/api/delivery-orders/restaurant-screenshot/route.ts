@@ -56,9 +56,10 @@ export async function POST(request: NextRequest) {
     }
 
     // Find the active order for this user and appName
+    // Only update orders with active = true and matching appName
     const activeOrder = await DeliveryOrder.findOne({
       userId,
-      appName,
+      appName: appName.trim(),
       active: true,
     }).sort({ processedAt: -1 });
 
