@@ -173,6 +173,7 @@ export async function GET(request: NextRequest) {
           processedAt: order.processedAt.toISOString(),
           createdAt: order.createdAt.toISOString(),
           linkedTransactions: transactions,
+          additionalRestaurants: order.additionalRestaurants || [],
         },
       });
     }
@@ -224,13 +225,24 @@ export async function GET(request: NextRequest) {
     if (searchQuery && searchQuery.trim()) {
       const queryLower = searchQuery.trim().toLowerCase();
       orders = orders.filter((order) => {
-        // Search in restaurant name
+        // Search in main restaurant name
         if (order.restaurantName && order.restaurantName.toLowerCase().includes(queryLower)) {
           return true;
         }
-        // Search in restaurant address
+        // Search in main restaurant address
         if (order.restaurantAddress && order.restaurantAddress.toLowerCase().includes(queryLower)) {
           return true;
+        }
+        // Search in additional restaurants
+        if (order.additionalRestaurants && Array.isArray(order.additionalRestaurants)) {
+          for (const additionalRestaurant of order.additionalRestaurants) {
+            if (additionalRestaurant.name && additionalRestaurant.name.toLowerCase().includes(queryLower)) {
+              return true;
+            }
+            if (additionalRestaurant.address && additionalRestaurant.address.toLowerCase().includes(queryLower)) {
+              return true;
+            }
+          }
         }
         return false;
       });
@@ -302,6 +314,7 @@ export async function GET(request: NextRequest) {
         processedAt: order.processedAt.toISOString(),
         createdAt: order.createdAt.toISOString(),
         linkedTransactions: transactionsByOrderId.get(order._id.toString()) || [],
+        additionalRestaurants: order.additionalRestaurants || [],
       })),
       pagination: {
         page,
@@ -349,14 +362,14 @@ export async function PATCH(request: NextRequest) {
     await connectDB();
 
     const body = await request.json();
-    const { id, appName, miles, money, restaurantName, restaurantAddress, restaurantPlaceId, restaurantLat, restaurantLon, time, step } = body;
+    const { id, appName, miles, money, restaurantName, restaurantAddress, restaurantPlaceId, restaurantLat, restaurantLon, time, step, additionalRestaurants, updateAdditionalRestaurant } = body;
 
     if (!id) {
       return NextResponse.json({ error: "Missing id" }, { status: 400 });
     }
 
     // Verify the order exists
-    const existingOrder = await DeliveryOrder.findById(id).lean();
+    const existingOrder = await DeliveryOrder.findById(id);
     if (!existingOrder) {
       return NextResponse.json({ error: "Order not found" }, { status: 404 });
     }
@@ -392,6 +405,24 @@ export async function PATCH(request: NextRequest) {
     }
     if (typeof step === "string") {
       updateSet.step = step;
+    }
+    if (Array.isArray(additionalRestaurants)) {
+      updateSet.additionalRestaurants = additionalRestaurants;
+    }
+    // Support updating a single additional restaurant by index
+    if (updateAdditionalRestaurant && typeof updateAdditionalRestaurant.index === "number" && updateAdditionalRestaurant.data) {
+      const index = updateAdditionalRestaurant.index;
+      const restaurantData = updateAdditionalRestaurant.data;
+      if (!existingOrder.additionalRestaurants) {
+        existingOrder.additionalRestaurants = [];
+      }
+      if (index >= 0 && index < existingOrder.additionalRestaurants.length) {
+        existingOrder.additionalRestaurants[index] = {
+          ...existingOrder.additionalRestaurants[index],
+          ...restaurantData,
+        };
+        updateSet.additionalRestaurants = existingOrder.additionalRestaurants;
+      }
     }
 
     // Recalculate ratio if miles or money changed
@@ -437,6 +468,7 @@ export async function PATCH(request: NextRequest) {
         active: result.active !== undefined ? result.active : true,
         processedAt: result.processedAt.toISOString(),
         createdAt: result.createdAt.toISOString(),
+        additionalRestaurants: result.additionalRestaurants || [],
       },
     });
   } catch (error) {

@@ -27,6 +27,14 @@ interface LinkedCustomer {
   lon?: number;
 }
 
+interface AdditionalRestaurant {
+  name: string;
+  address?: string;
+  placeId?: string;
+  lat?: number;
+  lon?: number;
+}
+
 interface LinkedOrder {
   id: string;
   restaurantName: string;
@@ -40,6 +48,7 @@ interface LinkedOrder {
   userAddress?: string;
   step?: string;
   active?: boolean;
+  additionalRestaurants?: AdditionalRestaurant[];
 }
 
 interface Transaction {
@@ -1153,24 +1162,50 @@ export default function HistoryPage() {
                         {isIncome && transaction.linkedDeliveryOrders && transaction.linkedDeliveryOrders.length > 0 && (
                           <div className="flex flex-col gap-1">
                             {transaction.linkedDeliveryOrders.map((order) => (
-                              <button
-                                key={order.id}
-                                onClick={() => {
-                                  setEditingOrderId(order.id);
-                                }}
-                                className="text-sm text-gray-900 dark:text-white hover:underline flex items-center gap-1 text-left break-words"
-                              >
-                                <span className="flex-shrink-0"><Utensils className="w-4 h-4" /></span>
-                                <span className="truncate">
-                                  {order.restaurantName}
-                                  {order.restaurantAddress && (
-                                    <>
-                                      <span className="mx-1 text-gray-400 dark:text-gray-500">•</span>
-                                      <span>{formatAddress(order.restaurantAddress)}</span>
-                                    </>
-                                  )}
-                                </span>
-                              </button>
+                              <div key={order.id} className="flex flex-col gap-1">
+                                <button
+                                  onClick={() => {
+                                    setEditingOrderId(order.id);
+                                  }}
+                                  className="text-sm text-gray-900 dark:text-white hover:underline flex items-center gap-1 text-left break-words"
+                                >
+                                  <span className="flex-shrink-0"><Utensils className="w-4 h-4" /></span>
+                                  <span className="truncate">
+                                    {order.restaurantName}
+                                    {order.restaurantAddress && (
+                                      <>
+                                        <span className="mx-1 text-gray-400 dark:text-gray-500">•</span>
+                                        <span>{formatAddress(order.restaurantAddress)}</span>
+                                      </>
+                                    )}
+                                  </span>
+                                </button>
+                                {/* Additional restaurants */}
+                                {order.additionalRestaurants && order.additionalRestaurants.length > 0 && (
+                                  <div className="ml-5 flex flex-col gap-1">
+                                    {order.additionalRestaurants.map((restaurant, idx) => (
+                                      <button
+                                        key={idx}
+                                        onClick={() => {
+                                          setEditingOrderId(order.id);
+                                        }}
+                                        className="text-sm text-gray-700 dark:text-gray-300 hover:underline flex items-center gap-1 text-left break-words"
+                                      >
+                                        <span className="flex-shrink-0"><Utensils className="w-3 h-3" /></span>
+                                        <span className="truncate">
+                                          {restaurant.name}
+                                          {restaurant.address && (
+                                            <>
+                                              <span className="mx-1 text-gray-400 dark:text-gray-500">•</span>
+                                              <span>{formatAddress(restaurant.address)}</span>
+                                            </>
+                                          )}
+                                        </span>
+                                      </button>
+                                    ))}
+                                  </div>
+                                )}
+                              </div>
                             ))}
                           </div>
                         )}

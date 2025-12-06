@@ -4,6 +4,14 @@ import { useState, useEffect } from "react";
 import { format } from "date-fns";
 import { Pencil, Trash2, Utensils, Package, Search } from "lucide-react";
 
+interface AdditionalRestaurant {
+  name: string;
+  address?: string;
+  placeId?: string;
+  lat?: number;
+  lon?: number;
+}
+
 interface DeliveryOrder {
   id: string;
   entryId: string;
@@ -12,9 +20,11 @@ interface DeliveryOrder {
   money: number;
   milesToMoneyRatio: number;
   restaurantName: string;
+  restaurantAddress?: string;
   time: string;
   processedAt: string;
   createdAt: string;
+  additionalRestaurants?: AdditionalRestaurant[];
 }
 
 interface DeliveryOrdersListProps {
@@ -228,6 +238,27 @@ export default function DeliveryOrdersList({
                       {order.restaurantName}
                     </span>
                   </div>
+                  {order.restaurantAddress && (
+                    <div className="text-xs text-gray-600 dark:text-gray-400 mt-1 truncate">
+                      {order.restaurantAddress}
+                    </div>
+                  )}
+                  {/* Additional restaurants */}
+                  {order.additionalRestaurants && order.additionalRestaurants.length > 0 && (
+                    <div className="mt-2 space-y-1">
+                      {order.additionalRestaurants.map((restaurant, idx) => (
+                        <div key={idx} className="text-sm text-gray-700 dark:text-gray-300 flex items-center gap-1 text-left w-full min-w-0">
+                          <span className="flex-shrink-0"><Utensils className="w-3 h-3" /></span>
+                          <span className="truncate">
+                            {restaurant.name}
+                            {restaurant.address && (
+                              <> • <span className="text-xs text-gray-500 dark:text-gray-400">{restaurant.address}</span></>
+                            )}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                   <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">
                     {formatDate(order.processedAt)} {formatDateTime(order.processedAt)}
                     {order.time && (

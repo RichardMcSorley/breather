@@ -88,6 +88,7 @@ export async function GET(
           userLatitude: order.userLatitude,
           userLongitude: order.userLongitude,
           userAddress: order.userAddress,
+          additionalRestaurants: order.additionalRestaurants || [],
         }));
     }
 
