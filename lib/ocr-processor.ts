@@ -74,19 +74,20 @@ function parseYamlResponse(rawText: string): { row: ParsedRow | null; error: str
 
 async function requestYamlRow(
   imageBase64: string,
-  maxAttempts: number = 3,
   ocrText?: string
 ): Promise<{ row: ParsedRow; rawResponse: string }> {
   if (!MOONDREAM_API_KEY) {
-    throw new Error("MOONDREAM_API_KEY environment variable is not set");
+    // Return unknown values instead of throwing
+    return {
+      row: {
+        "Customer Name": "unknown",
+        "Customer Address": "unknown",
+      },
+      rawResponse: "MOONDREAM_API_KEY not set",
+    };
   }
 
-  let lastError: string | null = null;
-  let basePrompt = YAML_PROMPT;
-  if (ocrText) {
-    basePrompt = `${YAML_PROMPT}\n\nEXTRACTED TEXT:\n${ocrText}`;
-  }
-  let currentPrompt = basePrompt;
+  const basePrompt = ocrText ? `${YAML_PROMPT}\n\nEXTRACTED TEXT:\n${ocrText}` : YAML_PROMPT;
 
   // Ensure the image is in data URL format
   let imageUrl = imageBase64;
@@ -95,46 +96,60 @@ async function requestYamlRow(
     imageUrl = `data:image/png;base64,${imageUrl}`;
   }
 
-  for (let attempt = 0; attempt < maxAttempts; attempt++) {
-    if (attempt > 0) {
-      const retryPrompt = `${YAML_PROMPT}\n\nThe previous response was invalid because ${lastError || "it could not be parsed"}. Please return valid YAML with exactly "Customer Name" and "Customer Address" fields.`;
-      currentPrompt = ocrText ? `${retryPrompt}\n\nEXTRACTED TEXT:\n${ocrText}` : retryPrompt;
-    } else {
-      currentPrompt = basePrompt;
-    }
+  try {
+    const response = await fetch(MOONDREAM_API_URL, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Moondream-Auth": MOONDREAM_API_KEY,
+      },
+      body: JSON.stringify({
+        image_url: imageUrl,
+        question: basePrompt,
+      }),
+    });
 
-    try {
-      const response = await fetch(MOONDREAM_API_URL, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "X-Moondream-Auth": MOONDREAM_API_KEY,
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error(`Moondream API error: ${response.status} - ${errorText}`);
+      // Return unknown values instead of throwing
+      return {
+        row: {
+          "Customer Name": "unknown",
+          "Customer Address": "unknown",
         },
-        body: JSON.stringify({
-          image_url: imageUrl,
-          question: currentPrompt,
-        }),
-      });
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error(`Moondream API error: ${response.status} - ${errorText}`);
-      }
-
-      const data = await response.json();
-      const rawResponse = (data.answer || "").trim();
-
-      const { row, error } = parseYamlResponse(rawResponse);
-      if (row && !error) {
-        return { row, rawResponse };
-      }
-      lastError = error || "unknown parsing error";
-    } catch (error) {
-      lastError = error instanceof Error ? error.message : "unknown error";
+        rawResponse: `API error: ${response.status} - ${errorText}`,
+      };
     }
-  }
 
-  throw new Error(`Failed to obtain valid YAML response after ${maxAttempts} attempts: ${lastError}`);
+    const data = await response.json();
+    const rawResponse = (data.answer || "").trim();
+
+    const { row, error } = parseYamlResponse(rawResponse);
+    if (row && !error) {
+      return { row, rawResponse };
+    }
+    
+    // If parsing failed, return unknown values
+    console.error(`Failed to parse YAML response: ${error}`);
+    return {
+      row: {
+        "Customer Name": "unknown",
+        "Customer Address": "unknown",
+      },
+      rawResponse,
+    };
+  } catch (error) {
+    console.error("Moondream API request failed:", error);
+    // Return unknown values instead of throwing
+    return {
+      row: {
+        "Customer Name": "unknown",
+        "Customer Address": "unknown",
+      },
+      rawResponse: error instanceof Error ? error.message : "unknown error",
+    };
+  }
 }
 
 export async function processOcrScreenshot(
@@ -146,37 +161,13 @@ export async function processOcrScreenshot(
   rawResponse: string;
   metadata: Record<string, any>;
 }> {
-  if (!MOONDREAM_API_KEY) {
-    throw new Error("MOONDREAM_API_KEY environment variable is not set");
-  }
-
-  // Try YAML extraction
-  let customerName = "";
-  let customerAddress = "";
-  let rawResponse = "";
-
-  try {
-    const yamlResult = await requestYamlRow(screenshot, 3, ocrText);
-    const { row } = yamlResult;
-    rawResponse = yamlResult.rawResponse;
-    customerName = row["Customer Name"] || "";
-    customerAddress = row["Customer Address"] || "";
-    
-    // If address is empty after parsing, use raw response as fallback
-    if (!customerAddress && rawResponse) {
-      customerAddress = rawResponse;
-    }
-  } catch (yamlError) {
-    console.warn("YAML extraction failed, using raw response as address:", yamlError);
-    // If YAML parsing fails completely, use ocrText or raw response as address
-    if (ocrText) {
-      rawResponse = ocrText;
-      customerAddress = ocrText;
-    } else {
-      // If we have no ocrText, we can't extract address - this will be handled by caller
-      rawResponse = yamlError instanceof Error ? yamlError.message : "Failed to extract";
-    }
-  }
+  // Call YAML extraction (no retries, returns unknown on failure)
+  const yamlResult = await requestYamlRow(screenshot, ocrText);
+  const { row, rawResponse } = yamlResult;
+  
+  // Use extracted values, which will be "unknown" if extraction failed
+  const customerName = row["Customer Name"] || "unknown";
+  const customerAddress = row["Customer Address"] || "unknown";
 
   // Use ocrText as metadata instead of calling extractJsonMetadata
   const metadata: Record<string, any> = ocrText ? { extractedText: ocrText } : {};
