@@ -4,6 +4,7 @@ import { SessionProvider } from "next-auth/react";
 import { ReactNode, useState } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { ThemeProvider } from "@/components/ThemeProvider";
+import { PrivacyModeProvider } from "@/components/PrivacyModeProvider";
 
 export default function Providers({ children }: { children: ReactNode }) {
   const [queryClient] = useState(
@@ -23,7 +24,9 @@ export default function Providers({ children }: { children: ReactNode }) {
   return (
     <QueryClientProvider client={queryClient}>
       <SessionProvider>
-        <ThemeProvider>{children}</ThemeProvider>
+        <ThemeProvider>
+          <PrivacyModeProvider>{children}</PrivacyModeProvider>
+        </ThemeProvider>
       </SessionProvider>
     </QueryClientProvider>
   );

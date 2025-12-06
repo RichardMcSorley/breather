@@ -16,6 +16,7 @@ import ShareOrderModal from "@/components/ShareOrderModal";
 import DeliveryConfirmationModal from "@/components/DeliveryConfirmationModal";
 import { useTransactions, useDeleteTransaction, useUpdateTransaction, queryKeys } from "@/hooks/useQueries";
 import { useQueryClient, useQuery } from "@tanstack/react-query";
+import { usePrivacyMode } from "@/components/PrivacyModeProvider";
 
 interface LinkedCustomer {
   id: string;
@@ -540,6 +541,7 @@ const CompletionLog = ({ stepLog, currentStep, actionButton, actionButtonColor, 
 export default function HistoryPage() {
   const { data: session } = useSession();
   const queryClient = useQueryClient();
+  const { isPrivacyModeEnabled } = usePrivacyMode();
   const [showAddModal, setShowAddModal] = useState(false);
   const [editingTransaction, setEditingTransaction] = useState<string | null>(null);
   const [transactionType, setTransactionType] = useState<"income" | "expense">("income");
@@ -1786,7 +1788,7 @@ export default function HistoryPage() {
                                     <span className="truncate">
                                       Accepted
                                       <span className="mx-1 text-gray-400 dark:text-gray-500">•</span>
-                                      <span>{formatAddress(order.userAddress)}</span>
+                                      <span>{isPrivacyModeEnabled ? "**** Address Redacted ****" : formatAddress(order.userAddress)}</span>
                                     </span>
                                   </div>
                                 )}
@@ -1842,7 +1844,7 @@ export default function HistoryPage() {
                                     {order.restaurantAddress && (
                                       <>
                                         <span className="mx-1 text-gray-400 dark:text-gray-500">•</span>
-                                        <span>{formatAddress(order.restaurantAddress)}</span>
+                                        <span>{isPrivacyModeEnabled ? "**** Address Redacted ****" : formatAddress(order.restaurantAddress)}</span>
                                       </>
                                     )}
                                   </span>
@@ -1868,7 +1870,7 @@ export default function HistoryPage() {
                                           {restaurant.address && (
                                             <>
                                               <span className="mx-1 text-gray-400 dark:text-gray-500">•</span>
-                                              <span>{formatAddress(restaurant.address)}</span>
+                                              <span>{isPrivacyModeEnabled ? "**** Address Redacted ****" : formatAddress(restaurant.address)}</span>
                                             </>
                                           )}
                                         </span>
@@ -1975,7 +1977,7 @@ export default function HistoryPage() {
                                     {customer.customerAddress && (
                                       <>
                                         <span className="mx-1 text-gray-400 dark:text-gray-500">•</span>
-                                        <span>{formatAddress(customer.customerAddress)}</span>
+                                        <span>{isPrivacyModeEnabled ? "**** Address Redacted ****" : formatAddress(customer.customerAddress)}</span>
                                       </>
                                     )}
                                   </span>

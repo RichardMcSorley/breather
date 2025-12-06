@@ -4,10 +4,11 @@ import { useSession, signOut } from "next-auth/react";
 import { usePathname, useRouter } from "next/navigation";
 import Link from "next/link";
 import { ReactNode, useState } from "react";
-import { BarChart3, Clock, FileText, Car, Menu, Settings } from "lucide-react";
+import { BarChart3, Clock, FileText, Car, Menu, Settings, Eye, EyeOff } from "lucide-react";
 import OfflineIndicator from "./OfflineIndicator";
 import ToastContainer from "./ui/Toast";
 import HamburgerMenu from "./HamburgerMenu";
+import { usePrivacyMode } from "./PrivacyModeProvider";
 
 interface LayoutProps {
   children: ReactNode;
@@ -18,6 +19,7 @@ export default function Layout({ children }: LayoutProps) {
   const pathname = usePathname();
   const router = useRouter();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const { isPrivacyModeEnabled, togglePrivacyMode } = usePrivacyMode();
 
   const navItems = [
     { href: "/dashboard", label: "Dashboard", icon: BarChart3 },
@@ -43,6 +45,22 @@ export default function Layout({ children }: LayoutProps) {
             <h1 className="text-xl font-bold text-gray-900 dark:text-white">Breather</h1>
           </div>
           <div className="flex items-center gap-2">
+            <button
+              onClick={togglePrivacyMode}
+              className={`p-2 min-w-[44px] min-h-[44px] flex items-center justify-center ${
+                isPrivacyModeEnabled
+                  ? "text-blue-600 dark:text-blue-400 hover:text-blue-900 dark:hover:text-blue-300"
+                  : "text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white"
+              }`}
+              aria-label={isPrivacyModeEnabled ? "Disable privacy mode" : "Enable privacy mode"}
+              title={isPrivacyModeEnabled ? "Privacy mode: ON" : "Privacy mode: OFF"}
+            >
+              {isPrivacyModeEnabled ? (
+                <EyeOff className="w-5 h-5" />
+              ) : (
+                <Eye className="w-5 h-5" />
+              )}
+            </button>
             <button
               onClick={() => router.push("/configuration")}
               className="p-2 text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white min-w-[44px] min-h-[44px] flex items-center justify-center"
