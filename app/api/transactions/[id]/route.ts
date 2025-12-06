@@ -52,7 +52,7 @@ export async function GET(
       tag: transaction.tag,
       dueDate: transaction.dueDate ? formatDateAsUTC(new Date(transaction.dueDate)) : undefined,
       step: transaction.step || "CREATED",
-      active: transaction.active !== undefined ? transaction.active : true,
+      active: transaction.active !== undefined ? transaction.active : false,
       stepLog: transaction.stepLog || [],
       createdAt: transaction.createdAt.toISOString(),
       updatedAt: transaction.updatedAt.toISOString(),
@@ -252,7 +252,7 @@ export async function PUT(
       date: formattedDate || transactionObj.date,
       dueDate: formattedDueDate,
       step: transactionObj.step || "CREATED",
-      active: transactionObj.active !== undefined ? transactionObj.active : true,
+      active: transactionObj.active !== undefined ? transactionObj.active : false,
       stepLog: transactionObj.stepLog || [],
     });
   } catch (error) {

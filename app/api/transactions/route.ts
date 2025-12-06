@@ -200,7 +200,7 @@ export async function POST(request: NextRequest) {
       tag,
       dueDate: parsedDueDate,
       step: step || "CREATED",
-      active: active !== undefined ? active : true,
+      active: active !== undefined ? active : false,
       stepLog: [{
         fromStep: null,
         toStep: step || "CREATED",
@@ -236,7 +236,7 @@ export async function POST(request: NextRequest) {
       date: formattedDate || transactionObj.date,
       dueDate: formattedDueDate,
       step: transactionObj.step || "CREATED",
-      active: transactionObj.active !== undefined ? transactionObj.active : true,
+      active: transactionObj.active !== undefined ? transactionObj.active : false,
       stepLog: transactionObj.stepLog || [],
     }, { status: 201 });
   } catch (error) {

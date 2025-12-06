@@ -171,10 +171,13 @@ export async function POST(request: NextRequest) {
           }
         }
 
-        // Update transaction - add to array
+        // Update transaction - add to array and set active to true
         await Transaction.findByIdAndUpdate(
           transactionId,
-          { $addToSet: { linkedDeliveryOrderIds: deliveryOrder._id } },
+          { 
+            $addToSet: { linkedDeliveryOrderIds: deliveryOrder._id },
+            $set: { active: true }
+          },
           { new: true }
         );
 
@@ -217,11 +220,21 @@ export async function POST(request: NextRequest) {
           { new: true }
         );
 
-        await Transaction.findByIdAndUpdate(
+        // Unlink the order and check if there are any remaining linked orders
+        const updatedTransaction = await Transaction.findByIdAndUpdate(
           transactionId,
           { $pull: { linkedDeliveryOrderIds: deliveryOrderId } },
           { new: true }
         );
+
+        // If no more linked delivery orders, set active to false
+        if (updatedTransaction && (!updatedTransaction.linkedDeliveryOrderIds || updatedTransaction.linkedDeliveryOrderIds.length === 0)) {
+          await Transaction.findByIdAndUpdate(
+            transactionId,
+            { $set: { active: false } },
+            { new: true }
+          );
+        }
       }
     }
 

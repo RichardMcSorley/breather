@@ -79,7 +79,7 @@ const TransactionSchema: Schema = new Schema(
     },
     active: {
       type: Boolean,
-      default: true,
+      default: false,
     },
     stepLog: [{
       fromStep: String,
