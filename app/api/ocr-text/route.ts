@@ -9,7 +9,6 @@ import { processOcrScreenshot } from "@/lib/ocr-processor";
 import { geocodeAddress } from "@/lib/geocode-helper";
 import { isSameAddress } from "@/lib/ocr-analytics";
 import { randomBytes } from "crypto";
-import { attemptAutoLinkCustomerToTransaction, attemptAutoLinkCustomerToActiveOrders } from "@/lib/auto-link-helper";
 import { getCurrentESTAsUTC } from "@/lib/date-utils";
 
 export async function POST(request: NextRequest) {
@@ -92,26 +91,9 @@ export async function POST(request: NextRequest) {
         ...(userAddr !== undefined && userAddr !== null && { userAddress: userAddr }),
       });
 
-      // Attempt auto-linking to matching transaction
-      try {
-        await attemptAutoLinkCustomerToTransaction(exportEntry, userId);
-      } catch (autoLinkError) {
-        // Silently fail auto-linking - don't break customer creation
-        console.error("Auto-linking error:", autoLinkError);
-      }
-
-      // Attempt auto-linking to active orders
-      try {
-        const linkedOrderIds = await attemptAutoLinkCustomerToActiveOrders(exportEntry, userId);
-        if (linkedOrderIds.length > 0) {
-          console.log(`Successfully auto-linked customer ${exportEntry._id} to ${linkedOrderIds.length} active order(s):`, linkedOrderIds);
-        } else {
-          console.log(`No active orders found to link for customer ${exportEntry._id} (appName: ${exportEntry.appName || 'none'})`);
-        }
-      } catch (autoLinkOrdersError) {
-        // Log error but don't break customer creation
-        console.error("Auto-linking to active orders error:", autoLinkOrdersError);
-      }
+      // NOTE: Auto-linking disabled - users must manually click "Link" to link customer address
+      // This ensures the step log properly shows the linking action instead of auto-linking
+      // Auto-linking removed to enforce proper customer linking workflow
 
       // Check for repeat customers by address (address is the unique identifier)
       const allUserEntries = await OcrExport.find({ userId }).lean();
