@@ -172,12 +172,26 @@ export async function POST(request: NextRequest) {
         }
 
         // Update transaction - add to array and set active to true
+        // Also add steplog if this is an income transaction without one (steplogs only for transactions linked with orders)
+        const updateData: any = {
+          $addToSet: { linkedDeliveryOrderIds: deliveryOrder._id },
+          $set: { active: true }
+        };
+        
+        // Add steplog if transaction doesn't have one yet (income transactions created without orders won't have steplogs)
+        if (transaction.type === "income" && (!transaction.stepLog || transaction.stepLog.length === 0)) {
+          updateData.$push = {
+            stepLog: {
+              fromStep: null,
+              toStep: transaction.step || "CREATED",
+              time: new Date(),
+            }
+          };
+        }
+        
         await Transaction.findByIdAndUpdate(
           transactionId,
-          { 
-            $addToSet: { linkedDeliveryOrderIds: deliveryOrder._id },
-            $set: { active: true }
-          },
+          updateData,
           { new: true }
         );
 
