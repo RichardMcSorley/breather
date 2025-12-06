@@ -216,32 +216,6 @@ export default function LinkCustomerModal({
     }
   };
 
-  const handleSkip = async () => {
-    if (!transactionId) return;
-
-    try {
-      setError(null);
-      const response = await fetch(`/api/transactions/${transactionId}`, {
-        method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          step: "NAV_TO_CUSTOMER",
-        }),
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ error: "Failed to skip step" }));
-        throw new Error(errorData.error || "Failed to skip step");
-      }
-
-      onLink?.();
-      onClose();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to skip step");
-    }
-  };
 
   return (
     <Modal isOpen={isOpen} onClose={onClose} title="Link Customer">
@@ -402,18 +376,6 @@ export default function LinkCustomerModal({
                 </div>
               );
             })}
-          </div>
-        )}
-
-        {/* Skip Step button at bottom */}
-        {transactionId && (
-          <div className="flex justify-end pt-4 border-t border-gray-200 dark:border-gray-700">
-            <button
-              onClick={handleSkip}
-              className="px-6 py-2 text-base font-medium rounded-lg bg-orange-500 text-white hover:bg-orange-600 transition-colors shadow-md min-h-[44px]"
-            >
-              Skip Step
-            </button>
           </div>
         )}
       </div>
