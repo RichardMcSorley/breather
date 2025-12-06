@@ -114,10 +114,13 @@ export async function attemptAutoLinkTransactionToOrder(
 
   const order = amountMatchedOrders[0];
 
-  // Perform the bidirectional link
+  // Perform the bidirectional link and set active to true
   await Transaction.findByIdAndUpdate(
     transaction._id,
-    { $addToSet: { linkedDeliveryOrderIds: order._id } },
+    { 
+      $addToSet: { linkedDeliveryOrderIds: order._id },
+      $set: { active: true }
+    },
     { new: true }
   );
 
@@ -223,10 +226,13 @@ export async function attemptAutoLinkOrderToTransaction(
 
   const transaction = amountMatchedTransactions[0];
 
-  // Perform the bidirectional link
+  // Perform the bidirectional link and set active to true
   await Transaction.findByIdAndUpdate(
     transaction._id,
-    { $addToSet: { linkedDeliveryOrderIds: order._id } },
+    { 
+      $addToSet: { linkedDeliveryOrderIds: order._id },
+      $set: { active: true }
+    },
     { new: true }
   );
 
