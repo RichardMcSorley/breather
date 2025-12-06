@@ -359,14 +359,14 @@ export default function LinkCustomerModal({
                   className="p-4 bg-gray-50 dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-700 flex items-center justify-between gap-4"
                 >
                   {/* Left side: All text content */}
-                  <div className="flex-1 text-left">
+                  <div className="flex-1 text-left min-w-0 overflow-hidden">
                     {/* Customer Name */}
-                    <div className="font-bold text-base text-gray-900 dark:text-white mb-2">
+                    <div className="font-bold text-base text-gray-900 dark:text-white mb-2 truncate">
                       {customer.customerName}
                     </div>
                     
                     {/* Address */}
-                    <div className="text-sm text-gray-700 dark:text-gray-300 mb-2">
+                    <div className="text-sm text-gray-700 dark:text-gray-300 mb-2 truncate">
                       {formattedAddress}
                     </div>
                     

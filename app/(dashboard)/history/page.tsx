@@ -1470,10 +1470,10 @@ export default function HistoryPage() {
                                       setEditingCustomerAddress(customer.customerAddress);
                                       setEditingCustomerEntryId(customer.entryId || null);
                                     }}
-                                    className="text-sm text-gray-900 dark:text-white hover:underline flex items-center gap-1 text-left break-words"
+                                    className="text-sm text-gray-900 dark:text-white hover:underline flex items-center gap-1 text-left w-full min-w-0 overflow-hidden"
                                   >
                                     <span className="flex-shrink-0"><User className="w-4 h-4" /></span>
-                                    <span className="truncate">
+                                    <span className="truncate min-w-0">
                                       {customer.customerName}
                                       {customer.customerAddress && (
                                         <>

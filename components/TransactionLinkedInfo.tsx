@@ -40,14 +40,14 @@ export default function TransactionLinkedInfo({
         <div className="mb-3 space-y-2">
           {transactionData.linkedOcrExports.map((customer: any) => (
             <div key={customer.id} className="p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
-              <div className="flex items-center justify-between">
-                <div>
+              <div className="flex items-center justify-between gap-2 min-w-0">
+                <div className="flex-1 min-w-0 overflow-hidden">
                   <div className="text-xs text-blue-600 dark:text-blue-400 mb-1">Linked Customer</div>
-                  <div className="text-sm font-semibold text-gray-900 dark:text-white flex items-center gap-1">
-                    <User className="w-4 h-4" />
-                    {customer.customerName}
+                  <div className="text-sm font-semibold text-gray-900 dark:text-white flex items-center gap-1 min-w-0">
+                    <User className="w-4 h-4 flex-shrink-0" />
+                    <span className="truncate">{customer.customerName}</span>
                   </div>
-                  <div className="text-xs text-gray-600 dark:text-gray-400 mt-1">
+                  <div className="text-xs text-gray-600 dark:text-gray-400 mt-1 truncate">
                     {customer.customerAddress}
                   </div>
                   {customer.appName && (

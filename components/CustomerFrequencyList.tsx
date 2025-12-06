@@ -237,10 +237,10 @@ export default function CustomerFrequencyList({
                       onCustomerClick(customer.address);
                     }
                   }}
-                  className="text-sm text-gray-900 dark:text-white hover:underline flex items-center gap-1 text-left w-full min-w-0"
+                  className="text-sm text-gray-900 dark:text-white hover:underline flex items-center gap-1 text-left w-full min-w-0 overflow-hidden"
                 >
                   <span className="flex-shrink-0"><MapPin className="w-4 h-4" /></span>
-                  <span className="truncate">
+                  <span className="truncate min-w-0">
                     {customer.address}
                   </span>
                 </button>
