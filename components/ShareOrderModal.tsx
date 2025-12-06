@@ -20,8 +20,9 @@ interface ShareOrderModalProps {
   userLatitude?: number;
   userLongitude?: number;
   userAddress?: string;
-  onAddressSaved?: (address?: string, placeId?: string, lat?: number, lon?: number) => void;
+  onAddressSaved?: (address?: string, placeId?: string, lat?: number, lon?: number, restaurantName?: string) => void;
   shouldUpdateStep?: boolean; // Only update step when true (e.g., from "Link Restaurant" button)
+  skipSave?: boolean; // Skip saving to main order when true (useful for editing additional restaurants)
 }
 
 interface AddressResult {
@@ -45,6 +46,7 @@ export default function ShareOrderModal({
   userAddress,
   onAddressSaved,
   shouldUpdateStep = false,
+  skipSave = false,
 }: ShareOrderModalProps) {
   const [searching, setSearching] = useState(false);
   const [addresses, setAddresses] = useState<AddressResult[]>([]);
@@ -314,8 +316,8 @@ export default function ShareOrderModal({
     const lat = addressResult.lat ? parseFloat(addressResult.lat) : undefined;
     const lon = addressResult.lon ? parseFloat(addressResult.lon) : undefined;
     
-    // Save address, place_id, lat, lon and restaurant name to order if orderId is provided
-    if (orderId) {
+    // Save address, place_id, lat, lon and restaurant name to order if orderId is provided and skipSave is false
+    if (orderId && !skipSave) {
       try {
         const response = await fetch("/api/delivery-orders", {
           method: "PATCH",
@@ -356,7 +358,7 @@ export default function ShareOrderModal({
         
         // Notify parent that address was saved
         if (onAddressSaved) {
-          onAddressSaved(formattedAddress, addressResult.place_id, lat, lon);
+          onAddressSaved(formattedAddress, addressResult.place_id, lat, lon, extractedRestaurantName);
         } else {
           // Close the modal only if no custom handler
           onClose();
@@ -365,9 +367,9 @@ export default function ShareOrderModal({
         console.error("Error saving restaurant address:", err);
       }
     } else {
-      // If no orderId, just call the callback with the address info
+      // If no orderId or skipSave is true, just call the callback with the address info
       if (onAddressSaved) {
-        onAddressSaved(formattedAddress, addressResult.place_id, lat, lon);
+        onAddressSaved(formattedAddress, addressResult.place_id, lat, lon, extractedRestaurantName);
       }
     }
   };

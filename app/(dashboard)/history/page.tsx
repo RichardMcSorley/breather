@@ -486,6 +486,7 @@ export default function HistoryPage() {
   const [deliveryConfirmation, setDeliveryConfirmation] = useState<{ transactionId: string; customerAddress: string; customerName?: string } | null>(null);
   const [isMarkingDelivered, setIsMarkingDelivered] = useState(false);
   const [showStreetViewForTransaction, setShowStreetViewForTransaction] = useState<string | null>(null);
+  const [editingAdditionalRestaurant, setEditingAdditionalRestaurant] = useState<{ orderId: string; restaurantIndex: number; restaurant: AdditionalRestaurant } | null>(null);
   
   const { data, isLoading: loading } = useTransactions("all", "all", page, limit);
   // Fetch all transactions for date totals calculation
@@ -1182,12 +1183,16 @@ export default function HistoryPage() {
                                 </button>
                                 {/* Additional restaurants */}
                                 {order.additionalRestaurants && Array.isArray(order.additionalRestaurants) && order.additionalRestaurants.length > 0 && (
-                                  <div className="ml-5 flex flex-col gap-1 mt-1">
+                                  <div className="flex flex-col gap-1 mt-1">
                                     {order.additionalRestaurants.map((restaurant, idx) => (
                                       <button
                                         key={idx}
                                         onClick={() => {
-                                          setEditingOrderId(order.id);
+                                          setEditingAdditionalRestaurant({
+                                            orderId: order.id,
+                                            restaurantIndex: idx,
+                                            restaurant: restaurant,
+                                          });
                                         }}
                                         className="text-sm text-gray-700 dark:text-gray-300 hover:underline flex items-center gap-1 text-left break-words w-full"
                                       >
@@ -1498,6 +1503,87 @@ export default function HistoryPage() {
         }}
         isMarking={isMarkingDelivered}
       />
+
+      {editingAdditionalRestaurant && (() => {
+        // Find the order to get its details
+        const order = transactions
+          .flatMap((t: Transaction) => t.linkedDeliveryOrders || [])
+          .find((o: LinkedOrder) => o.id === editingAdditionalRestaurant.orderId);
+        
+        return order ? (
+          <ShareOrderModal
+            isOpen={true}
+            onClose={() => setEditingAdditionalRestaurant(null)}
+            restaurantName={editingAdditionalRestaurant.restaurant.name}
+            orderId={editingAdditionalRestaurant.orderId}
+            orderDetails={{
+              miles: order.miles,
+              money: order.money,
+              milesToMoneyRatio: order.miles > 0 ? order.money / order.miles : 0,
+              appName: order.appName,
+            }}
+            userLatitude={editingAdditionalRestaurant.restaurant.userLatitude}
+            userLongitude={editingAdditionalRestaurant.restaurant.userLongitude}
+            userAddress={editingAdditionalRestaurant.restaurant.userAddress}
+            skipSave={true}
+            onAddressSaved={async (address?: string, placeId?: string, lat?: number, lon?: number, restaurantName?: string) => {
+              if (!editingAdditionalRestaurant) return;
+              
+              try {
+                // Fetch the current order to get its additionalRestaurants array
+                const orderResponse = await fetch(`/api/delivery-orders?userId=${session?.user?.id}&id=${editingAdditionalRestaurant.orderId}`);
+                if (!orderResponse.ok) {
+                  throw new Error("Failed to fetch order");
+                }
+                const orderData = await orderResponse.json();
+                const currentOrder = orderData.order;
+                
+                if (!currentOrder || !currentOrder.additionalRestaurants) {
+                  throw new Error("Order or additional restaurants not found");
+                }
+                
+                // Update the specific additional restaurant
+                const updatedRestaurants = [...currentOrder.additionalRestaurants];
+                updatedRestaurants[editingAdditionalRestaurant.restaurantIndex] = {
+                  ...updatedRestaurants[editingAdditionalRestaurant.restaurantIndex],
+                  name: restaurantName || updatedRestaurants[editingAdditionalRestaurant.restaurantIndex].name,
+                  address: address || updatedRestaurants[editingAdditionalRestaurant.restaurantIndex].address,
+                  placeId: placeId || updatedRestaurants[editingAdditionalRestaurant.restaurantIndex].placeId,
+                  lat: lat !== undefined ? lat : updatedRestaurants[editingAdditionalRestaurant.restaurantIndex].lat,
+                  lon: lon !== undefined ? lon : updatedRestaurants[editingAdditionalRestaurant.restaurantIndex].lon,
+                };
+                
+                // Save the updated additional restaurants array
+                const saveResponse = await fetch("/api/delivery-orders", {
+                  method: "PATCH",
+                  headers: {
+                    "Content-Type": "application/json",
+                  },
+                  body: JSON.stringify({
+                    id: editingAdditionalRestaurant.orderId,
+                    updateAdditionalRestaurant: {
+                      index: editingAdditionalRestaurant.restaurantIndex,
+                      data: updatedRestaurants[editingAdditionalRestaurant.restaurantIndex],
+                    },
+                  }),
+                });
+                
+                if (!saveResponse.ok) {
+                  const errorData = await saveResponse.json();
+                  throw new Error(errorData.error || "Failed to update restaurant");
+                }
+                
+                // Refresh transactions to show updated data
+                queryClient.invalidateQueries({ queryKey: ["transactions"] });
+                setEditingAdditionalRestaurant(null);
+              } catch (err) {
+                console.error("Error updating additional restaurant:", err);
+                alert(err instanceof Error ? err.message : "Failed to update restaurant");
+              }
+            }}
+          />
+        ) : null;
+      })()}
     </Layout>
   );
 }
