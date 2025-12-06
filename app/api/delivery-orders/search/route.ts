@@ -37,8 +37,21 @@ export async function GET(request: NextRequest) {
       .sort({ processedAt: -1 })
       .lean();
 
-    // Filter by search query (app name or restaurant name)
+    // Filter by search query (app name, restaurant name, or pay amount)
+    // Try to parse as a number for amount search
+    const queryAsNumber = parseFloat(searchQuery);
+    const isNumericSearch = !isNaN(queryAsNumber) && isFinite(queryAsNumber);
+    
     const filteredOrders = orders.filter((order) => {
+      // Search by pay amount (money field) if query is numeric
+      if (isNumericSearch && order.money != null) {
+        // Match if the order's money field equals the search amount (with tolerance for floating point)
+        if (Math.abs(order.money - queryAsNumber) < 0.01) {
+          return true;
+        }
+      }
+      
+      // Search by app name or restaurant name
       const appName = (order.appName || "").toLowerCase();
       const restaurantName = (order.restaurantName || "").toLowerCase();
       return appName.includes(searchQuery) || restaurantName.includes(searchQuery);

@@ -221,10 +221,22 @@ export async function GET(request: NextRequest) {
       });
     }
 
-    // Apply search filter if provided (search by restaurant name or address)
+    // Apply search filter if provided (search by restaurant name, address, or pay amount)
     if (searchQuery && searchQuery.trim()) {
       const queryLower = searchQuery.trim().toLowerCase();
+      // Try to parse as a number for amount search
+      const queryAsNumber = parseFloat(queryLower);
+      const isNumericSearch = !isNaN(queryAsNumber) && isFinite(queryAsNumber);
+      
       orders = orders.filter((order) => {
+        // Search by pay amount (money field) if query is numeric
+        if (isNumericSearch && order.money != null) {
+          // Match if the order's money field equals the search amount (with tolerance for floating point)
+          if (Math.abs(order.money - queryAsNumber) < 0.01) {
+            return true;
+          }
+        }
+        
         // Search in main restaurant name
         if (order.restaurantName && order.restaurantName.toLowerCase().includes(queryLower)) {
           return true;

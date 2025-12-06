@@ -409,8 +409,21 @@ export default function EditDeliveryOrderModal({
 
           {/* Additional Restaurants */}
           <div className="pt-4 border-t border-gray-200 dark:border-gray-700">
-            <div className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">
-              ADDITIONAL RESTAURANTS
+            <div className="flex items-center justify-between mb-3">
+              <div className="text-sm font-semibold text-gray-700 dark:text-gray-300">
+                ADDITIONAL RESTAURANTS
+              </div>
+              <button
+                onClick={() => {
+                  setEditingAdditionalRestaurantIndex(-1); // Use -1 to indicate adding new
+                  setShowAdditionalRestaurantModal(true);
+                }}
+                className="px-3 py-1.5 text-xs rounded bg-green-600 text-white hover:bg-green-700 transition-colors flex items-center gap-1"
+                title="Add Restaurant"
+              >
+                <Utensils className="w-3 h-3" />
+                Add Restaurant
+              </button>
             </div>
             {additionalRestaurants.length > 0 ? (
               <div className="space-y-3">
@@ -613,14 +626,18 @@ export default function EditDeliveryOrderModal({
               setShowShareModal(false);
             }}
           />
-          {editingAdditionalRestaurantIndex !== null && additionalRestaurants[editingAdditionalRestaurantIndex] && (
+          {editingAdditionalRestaurantIndex !== null && (
             <ShareOrderModal
               isOpen={showAdditionalRestaurantModal}
               onClose={() => {
                 setShowAdditionalRestaurantModal(false);
                 setEditingAdditionalRestaurantIndex(null);
               }}
-              restaurantName={additionalRestaurants[editingAdditionalRestaurantIndex].name}
+              restaurantName={
+                editingAdditionalRestaurantIndex >= 0 && additionalRestaurants[editingAdditionalRestaurantIndex]
+                  ? additionalRestaurants[editingAdditionalRestaurantIndex].name
+                  : ""
+              }
               orderId={orderId || undefined}
               orderDetails={{
                 miles: order.miles,
@@ -628,12 +645,65 @@ export default function EditDeliveryOrderModal({
                 milesToMoneyRatio: order.milesToMoneyRatio,
                 appName: order.appName,
               }}
-              userLatitude={additionalRestaurants[editingAdditionalRestaurantIndex].userLatitude}
-              userLongitude={additionalRestaurants[editingAdditionalRestaurantIndex].userLongitude}
-              userAddress={additionalRestaurants[editingAdditionalRestaurantIndex].userAddress}
+              userLatitude={
+                editingAdditionalRestaurantIndex >= 0 && additionalRestaurants[editingAdditionalRestaurantIndex]
+                  ? additionalRestaurants[editingAdditionalRestaurantIndex].userLatitude
+                  : order.userLatitude || undefined
+              }
+              userLongitude={
+                editingAdditionalRestaurantIndex >= 0 && additionalRestaurants[editingAdditionalRestaurantIndex]
+                  ? additionalRestaurants[editingAdditionalRestaurantIndex].userLongitude
+                  : order.userLongitude || undefined
+              }
+              userAddress={
+                editingAdditionalRestaurantIndex >= 0 && additionalRestaurants[editingAdditionalRestaurantIndex]
+                  ? additionalRestaurants[editingAdditionalRestaurantIndex].userAddress
+                  : order.userAddress || undefined
+              }
               skipSave={true}
               onAddressSaved={async (address?: string, placeId?: string, lat?: number, lon?: number, restaurantName?: string) => {
-                if (editingAdditionalRestaurantIndex !== null) {
+                if (editingAdditionalRestaurantIndex === -1) {
+                  // Adding a new restaurant
+                  if (!restaurantName || restaurantName.trim() === "") {
+                    setError("Restaurant name is required");
+                    return;
+                  }
+                  
+                  const newRestaurant: AdditionalRestaurant = {
+                    name: restaurantName.trim(),
+                    address: address,
+                    placeId: placeId,
+                    lat: lat,
+                    lon: lon,
+                    userLatitude: order.userLatitude || undefined,
+                    userLongitude: order.userLongitude || undefined,
+                    userAddress: order.userAddress || undefined,
+                  };
+                  
+                  const updatedRestaurants = [...additionalRestaurants, newRestaurant];
+                  setAdditionalRestaurants(updatedRestaurants);
+                  
+                  // Save to backend
+                  const response = await fetch("/api/delivery-orders", {
+                    method: "PATCH",
+                    headers: {
+                      "Content-Type": "application/json",
+                    },
+                    body: JSON.stringify({
+                      id: orderId,
+                      additionalRestaurants: updatedRestaurants,
+                    }),
+                  });
+
+                  if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(errorData.error || "Failed to add restaurant");
+                  }
+                  
+                  await fetchOrder();
+                  onUpdate?.();
+                } else if (editingAdditionalRestaurantIndex !== null && editingAdditionalRestaurantIndex >= 0) {
+                  // Editing an existing restaurant
                   const updatedRestaurants = [...additionalRestaurants];
                   updatedRestaurants[editingAdditionalRestaurantIndex] = {
                     ...updatedRestaurants[editingAdditionalRestaurantIndex],

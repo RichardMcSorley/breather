@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { useSession } from "next-auth/react";
 import { format, isToday, isYesterday } from "date-fns";
-import { Sparkles, MapPin, User, Car, Package, Check, Utensils, Pencil, Trash2, ShoppingBag, ArrowUpCircle, ArrowDownCircle } from "lucide-react";
+import { Sparkles, MapPin, User, Car, Package, Check, Utensils, Pencil, Trash2, ShoppingBag, ArrowUpCircle, ArrowDownCircle, XCircle } from "lucide-react";
 import { formatAddress } from "@/lib/address-formatter";
 import Layout from "@/components/Layout";
 import AddTransactionModal from "@/components/AddTransactionModal";
@@ -14,7 +14,7 @@ import LinkCustomerModal from "@/components/LinkCustomerModal";
 import LinkOrderModal from "@/components/LinkOrderModal";
 import ShareOrderModal from "@/components/ShareOrderModal";
 import DeliveryConfirmationModal from "@/components/DeliveryConfirmationModal";
-import { useTransactions, useDeleteTransaction, queryKeys } from "@/hooks/useQueries";
+import { useTransactions, useDeleteTransaction, useUpdateTransaction, queryKeys } from "@/hooks/useQueries";
 import { useQueryClient, useQuery } from "@tanstack/react-query";
 
 interface LinkedCustomer {
@@ -573,6 +573,7 @@ export default function HistoryPage() {
     },
   });
   const deleteTransaction = useDeleteTransaction();
+  const updateTransaction = useUpdateTransaction();
   
   // Define formatDate before using it
   const formatDate = (dateString: string, timeString?: string) => {
@@ -621,6 +622,13 @@ export default function HistoryPage() {
       return;
     }
     deleteTransaction.mutate(id);
+  };
+
+  const handleMarkAsNotActive = (id: string) => {
+    if (!confirm("Mark this transaction as not active?")) {
+      return;
+    }
+    updateTransaction.mutate({ id, active: false });
   };
 
   const formatCurrency = (amount: number) => {
@@ -771,87 +779,180 @@ export default function HistoryPage() {
     }
 
     // Calculate segments between restaurants
-    for (let i = 0; i < allRestaurants.length - 1; i++) {
-      const from = allRestaurants[i];
-      const to = allRestaurants[i + 1];
-      if (
-        from.lat != null &&
-        from.lon != null &&
-        to.lat != null &&
-        to.lon != null &&
-        !isNaN(from.lat) &&
-        !isNaN(from.lon) &&
-        !isNaN(to.lat) &&
-        !isNaN(to.lon)
-      ) {
-        const segmentHash = createSegmentHash(
-          from.lat,
-          from.lon,
-          to.lat,
-          to.lon,
-          'restaurant-to-restaurant',
-          i,
-          i + 1
-        );
-        const persisted = persistedSegmentsMap.get(segmentHash);
-        segments.push({
-          fromLat: from.lat,
-          fromLon: from.lon,
-          toLat: to.lat,
-          toLon: to.lon,
-          loading: !persisted,
-          distanceMiles: persisted?.distanceMiles,
-          durationText: persisted?.durationText,
-          durationSeconds: persisted?.durationSeconds,
-          type: 'restaurant-to-restaurant',
-          fromIndex: i,
-          toIndex: i + 1,
-          segmentHash,
-          calculatedAt: persisted?.calculatedAt,
-        });
+    // Process each order explicitly to ensure correct segment calculation:
+    // 1. Main restaurant → first additional restaurant (if exists)
+    // 2. Between additional restaurants within the same order
+    // 3. Last additional restaurant → next order's main restaurant (if there's a next order)
+    // 4. Last additional restaurant → first customer (if this is the last order)
+    
+    // Group restaurants by order to process them explicitly
+    const restaurantsByOrder: Array<Array<typeof allRestaurants[0]>> = [];
+    let currentOrderIndex = -1;
+    let currentOrderRestaurants: Array<typeof allRestaurants[0]> = [];
+    
+    allRestaurants.forEach((restaurant) => {
+      if (restaurant.orderIndex !== currentOrderIndex) {
+        // New order - save previous order's restaurants and start new group
+        if (currentOrderRestaurants.length > 0) {
+          restaurantsByOrder.push(currentOrderRestaurants);
+        }
+        currentOrderRestaurants = [restaurant];
+        currentOrderIndex = restaurant.orderIndex;
+      } else {
+        // Same order - add to current group
+        currentOrderRestaurants.push(restaurant);
       }
+    });
+    // Don't forget the last order
+    if (currentOrderRestaurants.length > 0) {
+      restaurantsByOrder.push(currentOrderRestaurants);
     }
-
-    // Calculate segment from last restaurant to first customer
-    if (allRestaurants.length > 0 && allCustomers.length > 0) {
-      const lastRestaurant = allRestaurants[allRestaurants.length - 1];
-      const firstCustomer = allCustomers[0];
-      if (
-        lastRestaurant.lat != null &&
-        lastRestaurant.lon != null &&
-        firstCustomer.lat != null &&
-        firstCustomer.lon != null &&
-        !isNaN(lastRestaurant.lat) &&
-        !isNaN(lastRestaurant.lon) &&
-        !isNaN(firstCustomer.lat) &&
-        !isNaN(firstCustomer.lon)
-      ) {
-        const segmentHash = createSegmentHash(
-          lastRestaurant.lat,
-          lastRestaurant.lon,
-          firstCustomer.lat,
-          firstCustomer.lon,
-          'restaurant-to-customer',
-          allRestaurants.length - 1,
-          0
-        );
-        const persisted = persistedSegmentsMap.get(segmentHash);
-        segments.push({
-          fromLat: lastRestaurant.lat,
-          fromLon: lastRestaurant.lon,
-          toLat: firstCustomer.lat,
-          toLon: firstCustomer.lon,
-          loading: !persisted,
-          distanceMiles: persisted?.distanceMiles,
-          durationText: persisted?.durationText,
-          durationSeconds: persisted?.durationSeconds,
-          type: 'restaurant-to-customer',
-          fromIndex: allRestaurants.length - 1,
-          toIndex: 0,
-          segmentHash,
-          calculatedAt: persisted?.calculatedAt,
-        });
+    
+    // Calculate segments within each order and between orders
+    let globalRestaurantIndex = 0;
+    for (let orderIdx = 0; orderIdx < restaurantsByOrder.length; orderIdx++) {
+      const orderRestaurants = restaurantsByOrder[orderIdx];
+      
+      // Calculate segments within this order
+      // Main restaurant → first additional restaurant (if exists)
+      // Then between additional restaurants
+      for (let i = 0; i < orderRestaurants.length - 1; i++) {
+        const from = orderRestaurants[i];
+        const to = orderRestaurants[i + 1];
+        if (
+          from.lat != null &&
+          from.lon != null &&
+          to.lat != null &&
+          to.lon != null &&
+          !isNaN(from.lat) &&
+          !isNaN(from.lon) &&
+          !isNaN(to.lat) &&
+          !isNaN(to.lon)
+        ) {
+          const fromGlobalIndex = globalRestaurantIndex + i;
+          const toGlobalIndex = globalRestaurantIndex + i + 1;
+          const segmentHash = createSegmentHash(
+            from.lat,
+            from.lon,
+            to.lat,
+            to.lon,
+            'restaurant-to-restaurant',
+            fromGlobalIndex,
+            toGlobalIndex
+          );
+          const persisted = persistedSegmentsMap.get(segmentHash);
+          segments.push({
+            fromLat: from.lat,
+            fromLon: from.lon,
+            toLat: to.lat,
+            toLon: to.lon,
+            loading: !persisted,
+            distanceMiles: persisted?.distanceMiles,
+            durationText: persisted?.durationText,
+            durationSeconds: persisted?.durationSeconds,
+            type: 'restaurant-to-restaurant',
+            fromIndex: fromGlobalIndex,
+            toIndex: toGlobalIndex,
+            segmentHash,
+            calculatedAt: persisted?.calculatedAt,
+          });
+        }
       }
+      
+      // Calculate segment from last restaurant of this order to:
+      // - Next order's main restaurant (if there's a next order)
+      // - OR first customer (if this is the last order)
+      const lastRestaurantInOrder = orderRestaurants[orderRestaurants.length - 1];
+      const lastRestaurantGlobalIndex = globalRestaurantIndex + orderRestaurants.length - 1;
+      
+      if (orderIdx < restaurantsByOrder.length - 1) {
+        // There's a next order - calculate segment to next order's main restaurant
+        const nextOrderRestaurants = restaurantsByOrder[orderIdx + 1];
+        if (nextOrderRestaurants.length > 0) {
+          const nextOrderMainRestaurant = nextOrderRestaurants[0];
+          if (
+            lastRestaurantInOrder.lat != null &&
+            lastRestaurantInOrder.lon != null &&
+            nextOrderMainRestaurant.lat != null &&
+            nextOrderMainRestaurant.lon != null &&
+            !isNaN(lastRestaurantInOrder.lat) &&
+            !isNaN(lastRestaurantInOrder.lon) &&
+            !isNaN(nextOrderMainRestaurant.lat) &&
+            !isNaN(nextOrderMainRestaurant.lon)
+          ) {
+            const nextOrderMainGlobalIndex = globalRestaurantIndex + orderRestaurants.length;
+            const segmentHash = createSegmentHash(
+              lastRestaurantInOrder.lat,
+              lastRestaurantInOrder.lon,
+              nextOrderMainRestaurant.lat,
+              nextOrderMainRestaurant.lon,
+              'restaurant-to-restaurant',
+              lastRestaurantGlobalIndex,
+              nextOrderMainGlobalIndex
+            );
+            const persisted = persistedSegmentsMap.get(segmentHash);
+            segments.push({
+              fromLat: lastRestaurantInOrder.lat,
+              fromLon: lastRestaurantInOrder.lon,
+              toLat: nextOrderMainRestaurant.lat,
+              toLon: nextOrderMainRestaurant.lon,
+              loading: !persisted,
+              distanceMiles: persisted?.distanceMiles,
+              durationText: persisted?.durationText,
+              durationSeconds: persisted?.durationSeconds,
+              type: 'restaurant-to-restaurant',
+              fromIndex: lastRestaurantGlobalIndex,
+              toIndex: nextOrderMainGlobalIndex,
+              segmentHash,
+              calculatedAt: persisted?.calculatedAt,
+            });
+          }
+        }
+      } else {
+        // This is the last order - calculate segment from last restaurant to first customer
+        if (allCustomers.length > 0) {
+          const firstCustomer = allCustomers[0];
+          if (
+            lastRestaurantInOrder.lat != null &&
+            lastRestaurantInOrder.lon != null &&
+            firstCustomer.lat != null &&
+            firstCustomer.lon != null &&
+            !isNaN(lastRestaurantInOrder.lat) &&
+            !isNaN(lastRestaurantInOrder.lon) &&
+            !isNaN(firstCustomer.lat) &&
+            !isNaN(firstCustomer.lon)
+          ) {
+            const segmentHash = createSegmentHash(
+              lastRestaurantInOrder.lat,
+              lastRestaurantInOrder.lon,
+              firstCustomer.lat,
+              firstCustomer.lon,
+              'restaurant-to-customer',
+              lastRestaurantGlobalIndex,
+              0
+            );
+            const persisted = persistedSegmentsMap.get(segmentHash);
+            segments.push({
+              fromLat: lastRestaurantInOrder.lat,
+              fromLon: lastRestaurantInOrder.lon,
+              toLat: firstCustomer.lat,
+              toLon: firstCustomer.lon,
+              loading: !persisted,
+              distanceMiles: persisted?.distanceMiles,
+              durationText: persisted?.durationText,
+              durationSeconds: persisted?.durationSeconds,
+              type: 'restaurant-to-customer',
+              fromIndex: lastRestaurantGlobalIndex,
+              toIndex: 0,
+              segmentHash,
+              calculatedAt: persisted?.calculatedAt,
+            });
+          }
+        }
+      }
+      
+      // Update global index for next order
+      globalRestaurantIndex += orderRestaurants.length;
     }
 
     // Calculate segments between customers
@@ -1911,6 +2012,15 @@ export default function HistoryPage() {
                         >
                           <Pencil className="w-5 h-5" />
                         </button>
+                        {transaction.active && (
+                          <button
+                            onClick={() => handleMarkAsNotActive(transaction._id)}
+                            className="p-2 text-orange-600 dark:text-orange-400 hover:text-orange-900 dark:hover:text-orange-300 min-w-[44px] min-h-[44px] flex items-center justify-center rounded-full bg-orange-100 dark:bg-orange-900/30 hover:bg-orange-200 dark:hover:bg-orange-900/50"
+                            title="Mark as not active"
+                          >
+                            <XCircle className="w-5 h-5" />
+                          </button>
+                        )}
                         <button
                           onClick={() => handleDelete(transaction._id)}
                           className="p-2 text-red-600 dark:text-red-400 hover:text-red-900 dark:hover:text-red-300 min-w-[44px] min-h-[44px] flex items-center justify-center rounded-full bg-red-100 dark:bg-red-900/30 hover:bg-red-200 dark:hover:bg-red-900/50"
