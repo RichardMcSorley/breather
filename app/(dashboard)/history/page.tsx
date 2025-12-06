@@ -1450,13 +1450,37 @@ export default function HistoryPage() {
                             })()
                           )}
                           {isIncome && transaction.linkedDeliveryOrders && transaction.linkedDeliveryOrders.length > 0 && (
-                            <div className="text-xs text-gray-600 dark:text-gray-400 flex-shrink-0">
-                              {transaction.linkedDeliveryOrders[0].miles.toFixed(1)}mi
-                              {transaction.linkedDeliveryOrders[0].miles > 0 && (
-                                <span className="ml-1">
-                                  (${(transaction.linkedDeliveryOrders[0].money / transaction.linkedDeliveryOrders[0].miles).toFixed(2)}/mi)
-                                </span>
-                              )}
+                            <div className="text-xs text-gray-600 dark:text-gray-400 flex-shrink-0 flex flex-col">
+                              {(() => {
+                                const offerMiles = transaction.linkedDeliveryOrders[0].miles;
+                                // Calculate total segment miles
+                                const segments = routeSegments[transaction._id] || [];
+                                const totalSegmentMiles = segments
+                                  .filter(seg => seg.distanceMiles != null && !seg.error)
+                                  .reduce((sum, seg) => sum + (seg.distanceMiles || 0), 0);
+                                
+                                // Use consistent rounding for both
+                                const roundedOfferMiles = Math.round(offerMiles * 10) / 10;
+                                const roundedSegmentMiles = totalSegmentMiles > 0 ? Math.round(totalSegmentMiles * 10) / 10 : 0;
+                                
+                                return (
+                                  <>
+                                    <div>
+                                      {roundedOfferMiles.toFixed(1)}mi
+                                      {offerMiles > 0 && (
+                                        <span className="ml-1">
+                                          (${(transaction.linkedDeliveryOrders[0].money / offerMiles).toFixed(2)}/mi)
+                                        </span>
+                                      )}
+                                    </div>
+                                    {roundedSegmentMiles > 0 && (
+                                      <div className="text-[10px] text-gray-500 dark:text-gray-500">
+                                        est. {roundedSegmentMiles.toFixed(1)}mi (${(transaction.linkedDeliveryOrders[0].money / roundedSegmentMiles).toFixed(2)}/mi)
+                                      </div>
+                                    )}
+                                  </>
+                                );
+                              })()}
                             </div>
                           )}
                         </div>
