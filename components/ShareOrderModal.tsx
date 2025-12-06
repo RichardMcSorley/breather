@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { Coffee, Utensils, Pizza, Beer, ShoppingBag, Store } from "lucide-react";
+import { Coffee, Utensils, Pizza, Beer, ShoppingBag, Store, Search } from "lucide-react";
 import Modal from "./ui/Modal";
 import { formatAddress } from "@/lib/address-formatter";
 
@@ -91,7 +91,7 @@ export default function ShareOrderModal({
           try {
             const placesParams = new URLSearchParams({
               query,
-              type: "restaurant", // Filter for restaurants
+              // Removed type filter to allow stores and other business types
               ...(userLatitude !== undefined && userLongitude !== undefined && {
                 lat: userLatitude.toString(),
                 lon: userLongitude.toString(),
@@ -151,8 +151,26 @@ export default function ShareOrderModal({
         return;
       }
 
-      // Filter for restaurant/amenity types (API should already filter by location)
+      // Filter for restaurant/amenity types, but prioritize results matching the restaurant name
       const restaurantTypes = ['restaurant', 'cafe', 'fast_food', 'food_court', 'bar', 'pub'];
+      const restaurantNameLower = restaurantName.toLowerCase();
+      
+      // First, check if any results match the restaurant name exactly
+      const nameMatches = data.filter((result: any) => 
+        result.display_name.toLowerCase().includes(restaurantNameLower)
+      );
+      
+      if (nameMatches.length > 0) {
+        // If we have name matches, use those (prioritize exact matches)
+        const exactMatches = nameMatches.filter((result: any) => {
+          const displayParts = result.display_name.toLowerCase().split(',');
+          return displayParts[0].trim() === restaurantNameLower;
+        });
+        setAddresses((exactMatches.length > 0 ? exactMatches : nameMatches).slice(0, 10));
+        return;
+      }
+      
+      // Otherwise, filter by restaurant types
       const filteredResults = data
         .filter((result: any) => {
           const type = result.type || '';
@@ -161,8 +179,7 @@ export default function ShareOrderModal({
           return restaurantTypes.some(rt => 
             type.toLowerCase().includes(rt) || 
             category.toLowerCase().includes(rt) ||
-            classType.toLowerCase().includes(rt) ||
-            result.display_name.toLowerCase().includes(restaurantName.toLowerCase())
+            classType.toLowerCase().includes(rt)
           );
         })
         .slice(0, 10); // Limit to 10 results
@@ -199,7 +216,7 @@ export default function ShareOrderModal({
           try {
             const placesParams = new URLSearchParams({
               query: initialQuery,
-              type: "restaurant", // Filter for restaurants
+              // Removed type filter to allow stores and other business types
               ...(userLatitude !== undefined && userLongitude !== undefined && {
                 lat: userLatitude.toString(),
                 lon: userLongitude.toString(),
@@ -257,8 +274,27 @@ export default function ShareOrderModal({
             return;
           }
 
-          // Filter for restaurant/amenity types
+          // Filter for restaurant/amenity types, but prioritize results matching the restaurant name
           const restaurantTypes = ['restaurant', 'cafe', 'fast_food', 'food_court', 'bar', 'pub'];
+          const restaurantNameLower = restaurantName.toLowerCase();
+          
+          // First, check if any results match the restaurant name exactly
+          const nameMatches = data.filter((result: any) => 
+            result.display_name.toLowerCase().includes(restaurantNameLower)
+          );
+          
+          if (nameMatches.length > 0) {
+            // If we have name matches, use those (prioritize exact matches)
+            const exactMatches = nameMatches.filter((result: any) => {
+              const displayParts = result.display_name.toLowerCase().split(',');
+              return displayParts[0].trim() === restaurantNameLower;
+            });
+            setAddresses((exactMatches.length > 0 ? exactMatches : nameMatches).slice(0, 10));
+            setSearching(false);
+            return;
+          }
+          
+          // Otherwise, filter by restaurant types
           const filteredResults = data
             .filter((result: any) => {
               const type = result.type || '';
@@ -267,8 +303,7 @@ export default function ShareOrderModal({
               return restaurantTypes.some(rt => 
                 type.toLowerCase().includes(rt) || 
                 category.toLowerCase().includes(rt) ||
-                classType.toLowerCase().includes(rt) ||
-                result.display_name.toLowerCase().includes(restaurantName.toLowerCase())
+                classType.toLowerCase().includes(rt)
               );
             })
             .slice(0, 10);
@@ -458,6 +493,19 @@ export default function ShareOrderModal({
                 className="w-full pl-10 pr-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               />
             </div>
+            <button
+              onClick={() => {
+                if (!searching) {
+                  searchAddresses();
+                }
+              }}
+              disabled={searching}
+              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors min-h-[44px] flex items-center justify-center gap-2"
+              title="Search"
+            >
+              <Search className="w-5 h-5" />
+              <span className="hidden sm:inline">Search</span>
+            </button>
           </div>
         </div>
 

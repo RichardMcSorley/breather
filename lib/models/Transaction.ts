@@ -20,6 +20,21 @@ export interface ITransaction extends Document {
     toStep: string;
     time: Date;
   }>;
+  routeSegments?: Array<{
+    fromLat: number;
+    fromLon: number;
+    toLat: number;
+    toLon: number;
+    distanceMiles?: number;
+    durationText?: string;
+    durationSeconds?: number;
+    type: 'user-to-restaurant' | 'restaurant-to-restaurant' | 'restaurant-to-customer' | 'customer-to-customer';
+    fromIndex: number;
+    toIndex: number;
+    orderId?: string;
+    calculatedAt?: Date;
+    segmentHash: string;
+  }>;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -91,6 +106,46 @@ const TransactionSchema: Schema = new Schema(
         type: Date,
         required: true,
         default: Date.now,
+      },
+    }],
+    routeSegments: [{
+      fromLat: {
+        type: Number,
+        required: true,
+      },
+      fromLon: {
+        type: Number,
+        required: true,
+      },
+      toLat: {
+        type: Number,
+        required: true,
+      },
+      toLon: {
+        type: Number,
+        required: true,
+      },
+      distanceMiles: Number,
+      durationText: String,
+      durationSeconds: Number,
+      type: {
+        type: String,
+        enum: ['user-to-restaurant', 'restaurant-to-restaurant', 'restaurant-to-customer', 'customer-to-customer'],
+        required: true,
+      },
+      fromIndex: {
+        type: Number,
+        required: true,
+      },
+      toIndex: {
+        type: Number,
+        required: true,
+      },
+      orderId: String,
+      calculatedAt: Date,
+      segmentHash: {
+        type: String,
+        required: true,
       },
     }],
   },

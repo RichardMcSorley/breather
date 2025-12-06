@@ -220,6 +220,21 @@ export interface FormattedTransaction {
     toStep: string;
     time: Date | string;
   }>;
+  routeSegments?: Array<{
+    fromLat: number;
+    fromLon: number;
+    toLat: number;
+    toLon: number;
+    distanceMiles?: number;
+    durationText?: string;
+    durationSeconds?: number;
+    type: 'user-to-restaurant' | 'restaurant-to-restaurant' | 'restaurant-to-customer' | 'customer-to-customer';
+    fromIndex: number;
+    toIndex: number;
+    orderId?: string;
+    calculatedAt?: Date | string;
+    segmentHash: string;
+  }>;
   createdAt: string;
   updatedAt: string;
 }

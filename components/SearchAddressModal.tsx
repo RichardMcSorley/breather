@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { MapPin } from "lucide-react";
+import { MapPin, Search } from "lucide-react";
 import Modal from "./ui/Modal";
 import { formatAddress } from "@/lib/address-formatter";
 
@@ -281,6 +281,19 @@ export default function SearchAddressModal({
                 className="w-full pl-10 pr-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               />
             </div>
+            <button
+              onClick={() => {
+                if (!searching) {
+                  searchAddresses();
+                }
+              }}
+              disabled={searching}
+              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors min-h-[44px] flex items-center justify-center gap-2"
+              title="Search"
+            >
+              <Search className="w-5 h-5" />
+              <span className="hidden sm:inline">Search</span>
+            </button>
           </div>
         </div>
 

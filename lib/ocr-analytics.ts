@@ -88,10 +88,26 @@ export function normalizeAddress(address: string): string {
 }
 
 /**
+ * Extract street number from address (e.g., "105" from "105 Blackburn Ave")
+ */
+function extractStreetNumber(address: string): string | null {
+  if (!address) return null;
+  const match = address.trim().match(/^(\d+)/);
+  return match ? match[1] : null;
+}
+
+/**
  * Check if two addresses are likely the same (fuzzy match)
  */
 export function isSameAddress(address1: string, address2: string): boolean {
   if (!address1 || !address2) return false;
+  
+  // Extract and compare street numbers - if they differ, addresses are definitely different
+  const streetNum1 = extractStreetNumber(address1);
+  const streetNum2 = extractStreetNumber(address2);
+  if (streetNum1 && streetNum2 && streetNum1 !== streetNum2) {
+    return false;
+  }
   
   const normalized1 = normalizeAddress(address1);
   const normalized2 = normalizeAddress(address2);

@@ -16,7 +16,9 @@
     "test:ui": "vitest --ui",
     "test:coverage": "vitest run --coverage",
     "test:watch": "vitest",
-    "test:ci": "vitest run --coverage --reporter=verbose"
+    "test:ci": "vitest run --coverage --reporter=verbose",
+    "diagnose:distance-matrix": "tsx --env-file=.env.local scripts/diagnose-distance-matrix.ts",
+    "backfill:distance-matrix": "tsx --env-file=.env.local scripts/backfill-distance-matrix.ts"
   },
   "dependencies": {
     "@tanstack/react-query": "^5.56.0",
@@ -58,6 +60,7 @@
     "msw": "^2.0.11",
     "postcss": "^8.4.33",
     "tailwindcss": "^3.4.1",
+    "tsx": "^4.7.0",
     "typescript": "^5.9.3",
     "vitest": "^4.0.14"
   }

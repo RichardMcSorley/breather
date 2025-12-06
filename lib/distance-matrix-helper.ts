@@ -138,3 +138,56 @@ export async function getDistanceAndDuration(
     throw error;
   }
 }
+
+/**
+ * Create a hash for a route segment based on its coordinates
+ * Used to detect if addresses have changed
+ */
+export function createSegmentHash(
+  fromLat: number,
+  fromLon: number,
+  toLat: number,
+  toLon: number,
+  type: string,
+  fromIndex: number,
+  toIndex: number
+): string {
+  // Round coordinates to 6 decimal places (same as cache precision)
+  const roundedFromLat = Math.round(fromLat * 1000000) / 1000000;
+  const roundedFromLon = Math.round(fromLon * 1000000) / 1000000;
+  const roundedToLat = Math.round(toLat * 1000000) / 1000000;
+  const roundedToLon = Math.round(toLon * 1000000) / 1000000;
+  
+  // Create hash string from coordinates and segment metadata
+  const hashString = `${roundedFromLat},${roundedFromLon}|${roundedToLat},${roundedToLon}|${type}|${fromIndex}|${toIndex}`;
+  
+  // Simple hash function (can be improved with crypto if needed)
+  let hash = 0;
+  for (let i = 0; i < hashString.length; i++) {
+    const char = hashString.charCodeAt(i);
+    hash = ((hash << 5) - hash) + char;
+    hash = hash & hash; // Convert to 32-bit integer
+  }
+  
+  return hash.toString(36);
+}
+
+/**
+ * Check if a segment needs recalculation by comparing its hash
+ */
+export function segmentNeedsRecalculation(
+  persistedSegment: { segmentHash: string; fromLat: number; fromLon: number; toLat: number; toLon: number; type: string; fromIndex: number; toIndex: number },
+  currentSegment: { fromLat: number; fromLon: number; toLat: number; toLon: number; type: string; fromIndex: number; toIndex: number }
+): boolean {
+  const currentHash = createSegmentHash(
+    currentSegment.fromLat,
+    currentSegment.fromLon,
+    currentSegment.toLat,
+    currentSegment.toLon,
+    currentSegment.type,
+    currentSegment.fromIndex,
+    currentSegment.toIndex
+  );
+  
+  return persistedSegment.segmentHash !== currentHash;
+}

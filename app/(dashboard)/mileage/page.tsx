@@ -450,7 +450,7 @@ export default function MileagePage() {
                     )}
                   </div>
                   {milesDifference !== null && index < entries.length - 1 && (
-                    <div className="relative py-2">
+                    <div className="relative py-1">
                       <div className="absolute inset-0 flex items-center">
                         <div className="w-full border-t border-gray-200 dark:border-gray-700"></div>
                       </div>

@@ -54,6 +54,7 @@ export async function GET(
       step: transaction.step || "CREATED",
       active: transaction.active !== undefined ? transaction.active : false,
       stepLog: transaction.stepLog || [],
+      routeSegments: transaction.routeSegments || [],
       createdAt: transaction.createdAt.toISOString(),
       updatedAt: transaction.updatedAt.toISOString(),
     };
