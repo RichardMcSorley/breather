@@ -755,7 +755,7 @@ export default function HistoryPage() {
   // Calculate route segments when transactions load
   useEffect(() => {
     if (transactions.length > 0) {
-      transactions.forEach((transaction) => {
+      transactions.forEach((transaction: Transaction) => {
         if (
           transaction.type === "income" &&
           transaction.linkedDeliveryOrders &&
