@@ -73,7 +73,7 @@ export async function GET(request: NextRequest) {
 
     const transactions = await Transaction.find(query)
       .populate("linkedOcrExportIds", "customerName customerAddress appName entryId lat lon")
-      .populate("linkedDeliveryOrderIds", "restaurantName restaurantAddress appName miles money entryId userLatitude userLongitude userAddress step active")
+      .populate("linkedDeliveryOrderIds", "restaurantName restaurantAddress appName miles money entryId userLatitude userLongitude userAddress step active additionalRestaurants")
       .sort({ date: -1, createdAt: -1 })
       .skip((page - 1) * limit)
       .limit(limit)
