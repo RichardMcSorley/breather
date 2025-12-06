@@ -1182,17 +1182,17 @@ export default function HistoryPage() {
                                 </button>
                                 {/* Additional restaurants */}
                                 {order.additionalRestaurants && order.additionalRestaurants.length > 0 && (
-                                  <div className="ml-5 flex flex-col gap-1">
+                                  <div className="ml-5 flex flex-col gap-1 mt-1">
                                     {order.additionalRestaurants.map((restaurant, idx) => (
                                       <button
                                         key={idx}
                                         onClick={() => {
                                           setEditingOrderId(order.id);
                                         }}
-                                        className="text-sm text-gray-700 dark:text-gray-300 hover:underline flex items-center gap-1 text-left break-words"
+                                        className="text-sm text-gray-700 dark:text-gray-300 hover:underline flex items-center gap-1 text-left break-words w-full"
                                       >
                                         <span className="flex-shrink-0"><Utensils className="w-3 h-3" /></span>
-                                        <span className="truncate">
+                                        <span className="break-words">
                                           {restaurant.name}
                                           {restaurant.address && (
                                             <>
