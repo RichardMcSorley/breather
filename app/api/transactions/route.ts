@@ -123,6 +123,7 @@ export async function GET(request: NextRequest) {
             userLatitude: order.userLatitude,
             userLongitude: order.userLongitude,
             userAddress: order.userAddress,
+            additionalRestaurants: order.additionalRestaurants || [],
           }));
       }
 

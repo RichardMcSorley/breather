@@ -20,7 +20,7 @@ interface ShareOrderModalProps {
   userLatitude?: number;
   userLongitude?: number;
   userAddress?: string;
-  onAddressSaved?: () => void;
+  onAddressSaved?: (address?: string, placeId?: string, lat?: number, lon?: number) => void;
   shouldUpdateStep?: boolean; // Only update step when true (e.g., from "Link Restaurant" button)
 }
 
@@ -356,13 +356,18 @@ export default function ShareOrderModal({
         
         // Notify parent that address was saved
         if (onAddressSaved) {
-          onAddressSaved();
+          onAddressSaved(formattedAddress, addressResult.place_id, lat, lon);
+        } else {
+          // Close the modal only if no custom handler
+          onClose();
         }
-        
-        // Close the modal
-        onClose();
       } catch (err) {
         console.error("Error saving restaurant address:", err);
+      }
+    } else {
+      // If no orderId, just call the callback with the address info
+      if (onAddressSaved) {
+        onAddressSaved(formattedAddress, addressResult.place_id, lat, lon);
       }
     }
   };

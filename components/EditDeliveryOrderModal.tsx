@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Search, Utensils, MapPin, Package } from "lucide-react";
+import { Search, Utensils, MapPin, Package, Pencil } from "lucide-react";
 import Modal from "./ui/Modal";
 import { format } from "date-fns";
 import MetadataViewer from "./MetadataViewer";
@@ -14,6 +14,20 @@ interface LinkedTransaction {
   time: string;
   tag?: string;
   notes?: string;
+}
+
+interface AdditionalRestaurant {
+  name: string;
+  address?: string;
+  placeId?: string;
+  lat?: number;
+  lon?: number;
+  screenshot?: string;
+  extractedText?: string;
+  userLatitude?: number;
+  userLongitude?: number;
+  userAltitude?: number;
+  userAddress?: string;
 }
 
 interface DeliveryOrder {
@@ -35,6 +49,7 @@ interface DeliveryOrder {
   processedAt: string;
   createdAt: string;
   linkedTransactions?: LinkedTransaction[];
+  additionalRestaurants?: AdditionalRestaurant[];
 }
 
 interface EditDeliveryOrderModalProps {
@@ -57,6 +72,8 @@ export default function EditDeliveryOrderModal({
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [showShareModal, setShowShareModal] = useState(false);
+  const [editingAdditionalRestaurantIndex, setEditingAdditionalRestaurantIndex] = useState<number | null>(null);
+  const [showAdditionalRestaurantModal, setShowAdditionalRestaurantModal] = useState(false);
   const [formValues, setFormValues] = useState({
     appName: "",
     miles: "",
@@ -65,6 +82,7 @@ export default function EditDeliveryOrderModal({
     restaurantAddress: "",
     time: "",
   });
+  const [additionalRestaurants, setAdditionalRestaurants] = useState<AdditionalRestaurant[]>([]);
 
   useEffect(() => {
     if (isOpen && orderId) {
@@ -107,6 +125,7 @@ export default function EditDeliveryOrderModal({
         restaurantAddress: foundOrder.restaurantAddress || "",
         time: foundOrder.time,
       });
+      setAdditionalRestaurants(foundOrder.additionalRestaurants || []);
     } catch (err) {
       setError(err instanceof Error ? err.message : "An error occurred");
     } finally {
@@ -151,6 +170,7 @@ export default function EditDeliveryOrderModal({
           restaurantName: formValues.restaurantName,
           restaurantAddress: cleanedAddress,
           time: formValues.time,
+          additionalRestaurants: additionalRestaurants,
         }),
       });
 
@@ -386,6 +406,50 @@ export default function EditDeliveryOrderModal({
             />
           </div>
 
+          {/* Additional Restaurants */}
+          <div className="pt-4 border-t border-gray-200 dark:border-gray-700">
+            <div className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">
+              ADDITIONAL RESTAURANTS
+            </div>
+            {additionalRestaurants.length > 0 ? (
+              <div className="space-y-3">
+                {additionalRestaurants.map((restaurant, index) => (
+                  <div
+                    key={index}
+                    className="p-4 bg-gray-50 dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-700"
+                  >
+                    <div className="flex items-start justify-between mb-2">
+                      <div className="flex-1">
+                        <div className="font-bold text-base text-gray-900 dark:text-white mb-1">
+                          {restaurant.name}
+                        </div>
+                        {restaurant.address && (
+                          <div className="text-sm text-gray-700 dark:text-gray-300 mb-2">
+                            {restaurant.address}
+                          </div>
+                        )}
+                      </div>
+                      <button
+                        onClick={() => {
+                          setEditingAdditionalRestaurantIndex(index);
+                          setShowAdditionalRestaurantModal(true);
+                        }}
+                        className="p-2 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white min-w-[44px] min-h-[44px] flex items-center justify-center rounded-full bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600"
+                        title="Edit Restaurant"
+                      >
+                        <Pencil className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="text-sm text-gray-500 dark:text-gray-400 p-3 bg-gray-50 dark:bg-gray-900 rounded-lg">
+                No additional restaurants
+              </div>
+            )}
+          </div>
+
           {/* Linked Transactions */}
           <div className="pt-4 border-t border-gray-200 dark:border-gray-700">
             <div className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">
@@ -480,28 +544,83 @@ export default function EditDeliveryOrderModal({
       )}
 
       {order && (
-        <ShareOrderModal
-          isOpen={showShareModal}
-          onClose={() => setShowShareModal(false)}
-          restaurantName={formValues.restaurantName || order.restaurantName}
-          orderId={orderId || undefined}
-          orderDetails={{
-            miles: parseFloat(formValues.miles) || order.miles,
-            money: parseFloat(formValues.money) || order.money,
-            milesToMoneyRatio: formValues.miles && formValues.money 
-              ? parseFloat(formValues.money) / parseFloat(formValues.miles)
-              : order.milesToMoneyRatio,
-            appName: formValues.appName || order.appName,
-          }}
-          userLatitude={order.userLatitude || undefined}
-          userLongitude={order.userLongitude || undefined}
-          userAddress={order.userAddress || undefined}
-          onAddressSaved={() => {
-            fetchOrder();
-            onUpdate?.();
-            setShowShareModal(false);
-          }}
-        />
+        <>
+          <ShareOrderModal
+            isOpen={showShareModal}
+            onClose={() => setShowShareModal(false)}
+            restaurantName={formValues.restaurantName || order.restaurantName}
+            orderId={orderId || undefined}
+            orderDetails={{
+              miles: parseFloat(formValues.miles) || order.miles,
+              money: parseFloat(formValues.money) || order.money,
+              milesToMoneyRatio: formValues.miles && formValues.money 
+                ? parseFloat(formValues.money) / parseFloat(formValues.miles)
+                : order.milesToMoneyRatio,
+              appName: formValues.appName || order.appName,
+            }}
+            userLatitude={order.userLatitude || undefined}
+            userLongitude={order.userLongitude || undefined}
+            userAddress={order.userAddress || undefined}
+            onAddressSaved={() => {
+              fetchOrder();
+              onUpdate?.();
+              setShowShareModal(false);
+            }}
+          />
+          {editingAdditionalRestaurantIndex !== null && additionalRestaurants[editingAdditionalRestaurantIndex] && (
+            <ShareOrderModal
+              isOpen={showAdditionalRestaurantModal}
+              onClose={() => {
+                setShowAdditionalRestaurantModal(false);
+                setEditingAdditionalRestaurantIndex(null);
+              }}
+              restaurantName={additionalRestaurants[editingAdditionalRestaurantIndex].name}
+              orderId={orderId || undefined}
+              orderDetails={{
+                miles: order.miles,
+                money: order.money,
+                milesToMoneyRatio: order.milesToMoneyRatio,
+                appName: order.appName,
+              }}
+              userLatitude={additionalRestaurants[editingAdditionalRestaurantIndex].userLatitude}
+              userLongitude={additionalRestaurants[editingAdditionalRestaurantIndex].userLongitude}
+              userAddress={additionalRestaurants[editingAdditionalRestaurantIndex].userAddress}
+              onAddressSaved={async (address?: string, placeId?: string, lat?: number, lon?: number) => {
+                if (editingAdditionalRestaurantIndex !== null) {
+                  const updatedRestaurants = [...additionalRestaurants];
+                  updatedRestaurants[editingAdditionalRestaurantIndex] = {
+                    ...updatedRestaurants[editingAdditionalRestaurantIndex],
+                    address: address || updatedRestaurants[editingAdditionalRestaurantIndex].address,
+                    placeId: placeId || updatedRestaurants[editingAdditionalRestaurantIndex].placeId,
+                    lat: lat !== undefined ? lat : updatedRestaurants[editingAdditionalRestaurantIndex].lat,
+                    lon: lon !== undefined ? lon : updatedRestaurants[editingAdditionalRestaurantIndex].lon,
+                  };
+                  setAdditionalRestaurants(updatedRestaurants);
+                  
+                  // Save to backend
+                  await fetch("/api/delivery-orders", {
+                    method: "PATCH",
+                    headers: {
+                      "Content-Type": "application/json",
+                    },
+                    body: JSON.stringify({
+                      id: orderId,
+                      updateAdditionalRestaurant: {
+                        index: editingAdditionalRestaurantIndex,
+                        data: updatedRestaurants[editingAdditionalRestaurantIndex],
+                      },
+                    }),
+                  });
+                  
+                  await fetchOrder();
+                  onUpdate?.();
+                }
+                setShowAdditionalRestaurantModal(false);
+                setEditingAdditionalRestaurantIndex(null);
+              }}
+            />
+          )}
+        </>
       )}
     </Modal>
   );

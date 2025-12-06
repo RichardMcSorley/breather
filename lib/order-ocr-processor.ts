@@ -180,3 +180,151 @@ export async function processOrderScreenshot(
   };
 }
 
+interface ParsedRestaurant {
+  "Restaurant Name": string;
+  Address: string;
+}
+
+const RESTAURANT_YAML_PROMPT = `Extract the restaurant information from this image. In YAML, with keys "Restaurant Name" and "Address".`
+
+function parseRestaurantYamlResponse(rawText: string): { restaurant: ParsedRestaurant | null; error: string | null } {
+  rawText = rawText.trim();
+  if (!rawText) {
+    return { restaurant: null, error: "empty response" };
+  }
+
+  console.log("📝 Raw Moondream restaurant response:", rawText);
+
+  let yamlText = rawText;
+  const yamlMatch = rawText.match(/```(?:yaml)?\s*([\s\S]*?)\s*```/) || rawText.match(/([\s\S]+)/);
+  if (yamlMatch) {
+    yamlText = yamlMatch[1].trim();
+  }
+
+  console.log("🔍 Extracted restaurant YAML text:", yamlText);
+
+  try {
+    const parsed = yaml.load(yamlText) as Record<string, any>;
+    
+    console.log("✅ Parsed restaurant YAML object:", JSON.stringify(parsed, null, 2));
+    
+    if (typeof parsed !== "object" || parsed === null) {
+      return { restaurant: null, error: "response is not a YAML object" };
+    }
+
+    const restaurantName = parsed["Restaurant Name"] ?? parsed.restaurantName ?? parsed.restaurant ?? parsed.name ?? "";
+    const address = parsed["Address"] ?? parsed.address ?? "";
+
+    const restaurant: ParsedRestaurant = {
+      "Restaurant Name": String(restaurantName).trim(),
+      Address: String(address).trim(),
+    };
+
+    console.log("📊 Extracted restaurant data:", JSON.stringify(restaurant, null, 2));
+
+    if (!restaurant["Restaurant Name"]) {
+      return { restaurant: null, error: "Restaurant Name is required" };
+    }
+    if (!restaurant.Address) {
+      return { restaurant: null, error: "Address is required" };
+    }
+
+    return { restaurant, error: null };
+  } catch (parseError) {
+    console.error("❌ Restaurant YAML parse error:", parseError);
+    return { 
+      restaurant: null, 
+      error: `YAML parse error: ${parseError instanceof Error ? parseError.message : "unknown error"}` 
+    };
+  }
+}
+
+async function requestRestaurantYaml(
+  imageBase64: string,
+  maxAttempts: number = 3,
+  ocrText?: string
+): Promise<{ restaurant: ParsedRestaurant; rawResponse: string }> {
+  if (!MOONDREAM_API_KEY) {
+    throw new Error("MOONDREAM_API_KEY environment variable is not set");
+  }
+
+  let lastError: string | null = null;
+  let basePrompt = RESTAURANT_YAML_PROMPT;
+  if (ocrText) {
+    basePrompt = `${RESTAURANT_YAML_PROMPT}\n\nEXTRACTED TEXT:\n${ocrText}`;
+  }
+  let currentPrompt = basePrompt;
+
+  let imageUrl = imageBase64;
+  if (!imageUrl.startsWith("data:image")) {
+    imageUrl = `data:image/png;base64,${imageUrl}`;
+  }
+
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    if (attempt > 0) {
+      const retryPrompt = `${RESTAURANT_YAML_PROMPT}\n\nThe previous response was invalid because ${lastError || "it could not be parsed"}. Please return valid YAML with exactly "Restaurant Name" and "Address" fields.`;
+      currentPrompt = ocrText ? `${retryPrompt}\n\nEXTRACTED TEXT:\n${ocrText}` : retryPrompt;
+    } else {
+      currentPrompt = basePrompt;
+    }
+
+    try {
+      const response = await fetch(MOONDREAM_API_URL, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Moondream-Auth": MOONDREAM_API_KEY,
+        },
+        body: JSON.stringify({
+          image_url: imageUrl,
+          question: currentPrompt,
+        }),
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`Moondream API error: ${response.status} - ${errorText}`);
+      }
+
+      const data = await response.json();
+      const rawResponse = (data.answer || "").trim();
+
+      const { restaurant, error } = parseRestaurantYamlResponse(rawResponse);
+      if (restaurant && !error) {
+        return { restaurant, rawResponse };
+      }
+      lastError = error || "unknown parsing error";
+    } catch (error) {
+      lastError = error instanceof Error ? error.message : "unknown error";
+    }
+  }
+
+  throw new Error(`Failed to obtain valid YAML response after ${maxAttempts} attempts: ${lastError}`);
+}
+
+export async function processRestaurantScreenshot(
+  screenshot: string,
+  ocrText?: string
+): Promise<{
+  restaurantName: string;
+  address: string;
+  rawResponse: string;
+  metadata: Record<string, any>;
+}> {
+  if (!MOONDREAM_API_KEY) {
+    throw new Error("MOONDREAM_API_KEY environment variable is not set");
+  }
+
+  const yamlResult = await requestRestaurantYaml(screenshot, 3, ocrText);
+  const { restaurant, rawResponse } = yamlResult;
+
+  const metadata: Record<string, any> = ocrText ? { extractedText: ocrText } : {};
+
+  return {
+    restaurantName: restaurant["Restaurant Name"],
+    address: restaurant.Address,
+    rawResponse,
+    metadata,
+  };
+}
+
