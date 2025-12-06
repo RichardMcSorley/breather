@@ -33,6 +33,9 @@ interface AdditionalRestaurant {
   placeId?: string;
   lat?: number;
   lon?: number;
+  userLatitude?: number;
+  userLongitude?: number;
+  userAddress?: string;
 }
 
 interface LinkedOrder {
