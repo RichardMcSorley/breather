@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { useSession } from "next-auth/react";
 import { format, isToday, isYesterday } from "date-fns";
-import { Sparkles, MapPin, User, Car, Package, Check, Utensils, Pencil, Trash2, ShoppingBag, ArrowUpCircle, ArrowDownCircle, XCircle, Search, X } from "lucide-react";
+import { Sparkles, MapPin, User, Car, Package, Check, Utensils, Pencil, Trash2, ShoppingBag, ArrowUpCircle, ArrowDownCircle, XCircle, Search, X, Plus } from "lucide-react";
 import { formatAddress } from "@/lib/address-formatter";
 import Layout from "@/components/Layout";
 import AddTransactionModal from "@/components/AddTransactionModal";
@@ -13,7 +13,9 @@ import EditDeliveryOrderModal from "@/components/EditDeliveryOrderModal";
 import LinkCustomerModal from "@/components/LinkCustomerModal";
 import LinkOrderModal from "@/components/LinkOrderModal";
 import ShareOrderModal from "@/components/ShareOrderModal";
+import SearchAddressModal from "@/components/SearchAddressModal";
 import DeliveryConfirmationModal from "@/components/DeliveryConfirmationModal";
+import CreateTransactionWithOrderAndCustomerModal from "@/components/CreateTransactionWithOrderAndCustomerModal";
 import { useTransactions, useDeleteTransaction, useUpdateTransaction, queryKeys } from "@/hooks/useQueries";
 import { useQueryClient, useQuery } from "@tanstack/react-query";
 import { usePrivacyMode } from "@/components/PrivacyModeProvider";
@@ -74,6 +76,8 @@ interface Transaction {
     fromStep?: string | null;
     toStep: string;
     time: Date | string;
+    restaurantIndex?: number; // -1 for main restaurant, 0+ for additional restaurants
+    customerIndex?: number; // 0+ for customers
   }>;
   linkedOcrExports?: LinkedCustomer[];
   linkedDeliveryOrders?: LinkedOrder[];
@@ -543,6 +547,7 @@ export default function HistoryPage() {
   const queryClient = useQueryClient();
   const { isPrivacyModeEnabled } = usePrivacyMode();
   const [showAddModal, setShowAddModal] = useState(false);
+  const [showCreateAllModal, setShowCreateAllModal] = useState(false);
   const [editingTransaction, setEditingTransaction] = useState<string | null>(null);
   const [transactionType, setTransactionType] = useState<"income" | "expense">("income");
   const [page, setPage] = useState(1);
@@ -556,14 +561,17 @@ export default function HistoryPage() {
   const [selectedOrderForTransaction, setSelectedOrderForTransaction] = useState<SelectedDeliveryOrder | null>(null);
   const [sharingOrder, setSharingOrder] = useState<{ orderId?: string; restaurantName: string; orderDetails?: { miles?: number; money?: number; milesToMoneyRatio?: number; appName?: string }; userLatitude?: number; userLongitude?: number; userAddress?: string } | null>(null);
   const [linkingRestaurantOrder, setLinkingRestaurantOrder] = useState<LinkedOrder | null>(null);
+  const [linkingAdditionalRestaurant, setLinkingAdditionalRestaurant] = useState<{ orderId: string; restaurantIndex: number } | null>(null);
+  const [navigatingRestaurantIndex, setNavigatingRestaurantIndex] = useState<Record<string, number>>({}); // transactionId -> restaurantIndex (-1 = main, 0+ = additional)
   const [deliveryConfirmation, setDeliveryConfirmation] = useState<{ transactionId: string; customerAddress: string; customerName?: string } | null>(null);
   const [isMarkingDelivered, setIsMarkingDelivered] = useState(false);
   const [showStreetViewForTransaction, setShowStreetViewForTransaction] = useState<string | null>(null);
   const [editingAdditionalRestaurant, setEditingAdditionalRestaurant] = useState<{ orderId: string; restaurantIndex: number; restaurant: AdditionalRestaurant } | null>(null);
   const [routeSegments, setRouteSegments] = useState<Record<string, RouteSegment[]>>({});
   const [searchQuery, setSearchQuery] = useState("");
+  const [searchInput, setSearchInput] = useState("");
   
-  const { data, isLoading: loading } = useTransactions("all", "all", page, limit);
+  const { data, isLoading: loading } = useTransactions("all", "all", page, limit, searchQuery);
   // Fetch all transactions for date totals calculation
   const { data: dateTotalsData } = useQuery({
     queryKey: ["dateTotals"],
@@ -639,70 +647,6 @@ export default function HistoryPage() {
       style: "currency",
       currency: "USD",
     }).format(amount);
-  };
-
-  // Search filter function
-  const matchesSearch = (transaction: Transaction, query: string): boolean => {
-    if (!query.trim()) return true;
-    
-    const searchLower = query.toLowerCase().trim();
-    
-    // Search by amount (exact match or partial string match)
-    const amountStr = transaction.amount.toString();
-    if (amountStr.includes(searchLower) || formatCurrency(transaction.amount).toLowerCase().includes(searchLower)) {
-      return true;
-    }
-    
-    // Search by app name (tag)
-    if (transaction.tag && transaction.tag.toLowerCase().includes(searchLower)) {
-      return true;
-    }
-    
-    // Search by restaurant name
-    if (transaction.linkedDeliveryOrders) {
-      for (const order of transaction.linkedDeliveryOrders) {
-        if (order.restaurantName && order.restaurantName.toLowerCase().includes(searchLower)) {
-          return true;
-        }
-        // Also check additional restaurants
-        if (order.additionalRestaurants) {
-          for (const restaurant of order.additionalRestaurants) {
-            if (restaurant.name && restaurant.name.toLowerCase().includes(searchLower)) {
-              return true;
-            }
-          }
-        }
-      }
-    }
-    
-    // Search by customer name
-    if (transaction.linkedOcrExports) {
-      for (const customer of transaction.linkedOcrExports) {
-        if (customer.customerName && customer.customerName.toLowerCase().includes(searchLower)) {
-          return true;
-        }
-      }
-    }
-    
-    // Search by app name from linked orders
-    if (transaction.linkedDeliveryOrders) {
-      for (const order of transaction.linkedDeliveryOrders) {
-        if (order.appName && order.appName.toLowerCase().includes(searchLower)) {
-          return true;
-        }
-      }
-    }
-    
-    // Search by app name from linked customers
-    if (transaction.linkedOcrExports) {
-      for (const customer of transaction.linkedOcrExports) {
-        if (customer.appName && customer.appName.toLowerCase().includes(searchLower)) {
-          return true;
-        }
-      }
-    }
-    
-    return false;
   };
 
 
@@ -1398,12 +1342,7 @@ export default function HistoryPage() {
     return iconColors[appName] || { bg: "bg-gray-500 dark:bg-gray-600", text: "text-white" };
   };
 
-  // Apply search filter to transactions
-  const filteredTransactions = searchQuery.trim()
-    ? transactions.filter((transaction: Transaction) => matchesSearch(transaction, searchQuery))
-    : transactions;
-
-  const groupedTransactions = filteredTransactions.reduce((acc: Record<string, Transaction[]>, transaction: Transaction) => {
+  const groupedTransactions = transactions.reduce((acc: Record<string, Transaction[]>, transaction: Transaction) => {
     const dateKey = formatDate(transaction.date, transaction.time);
     if (!acc[dateKey]) {
       acc[dateKey] = [];
@@ -1428,15 +1367,12 @@ export default function HistoryPage() {
         <div className="flex justify-end gap-2">
           <button
             onClick={() => {
-              setEditingTransaction(null);
-              setSelectedOrderForTransaction(null);
-              setShowAddModal(true);
-              setTransactionType("income");
+              setShowCreateAllModal(true);
             }}
             className="px-4 py-2 rounded-lg text-sm font-medium bg-green-600 text-white hover:bg-green-700 min-h-[44px] flex items-center gap-2"
           >
-            <ArrowUpCircle className="w-5 h-5" />
-            Income
+            <Plus className="w-5 h-5" />
+            <span>Income</span>
           </button>
           <button
             onClick={() => {
@@ -1462,30 +1398,49 @@ export default function HistoryPage() {
         </div>
         
         {/* Search Input */}
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 dark:text-gray-500 w-5 h-5" />
-          <input
-            type="text"
-            placeholder="Search by restaurant, customer, app, or amount..."
-            value={searchQuery}
-            onChange={(e) => {
-              setSearchQuery(e.target.value);
-              setPage(1); // Reset to page 1 when search changes
-            }}
-            className="w-full pl-10 pr-10 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent min-h-[44px]"
-          />
-          {searchQuery && (
-            <button
-              onClick={() => {
-                setSearchQuery("");
-                setPage(1);
+        <div className="relative flex gap-2">
+          <div className="relative flex-1">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 dark:text-gray-500 w-5 h-5" />
+            <input
+              type="text"
+              placeholder="Search by restaurant, customer, app, or amount..."
+              value={searchInput}
+              onChange={(e) => {
+                setSearchInput(e.target.value);
               }}
-              className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 min-w-[44px] min-h-[44px] flex items-center justify-center"
-              title="Clear search"
-            >
-              <X className="w-5 h-5" />
-            </button>
-          )}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" || e.key === "Return") {
+                  setSearchQuery(searchInput.trim());
+                  setPage(1);
+                }
+              }}
+              className="w-full pl-10 pr-10 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent min-h-[44px]"
+            />
+            {searchInput && (
+              <button
+                onClick={() => {
+                  setSearchInput("");
+                  setSearchQuery("");
+                  setPage(1);
+                }}
+                className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 min-w-[44px] min-h-[44px] flex items-center justify-center"
+                title="Clear search"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            )}
+          </div>
+          <button
+            onClick={() => {
+              setSearchQuery(searchInput.trim());
+              setPage(1);
+            }}
+            className="px-4 py-2 rounded-lg text-sm font-medium bg-blue-600 text-white hover:bg-blue-700 min-h-[44px] flex items-center gap-2"
+            title="Search"
+          >
+            <Search className="w-5 h-5" />
+            <span className="hidden sm:inline">Search</span>
+          </button>
         </div>
       </div>
 
@@ -1664,44 +1619,314 @@ export default function HistoryPage() {
                                   (() => {
                                     const order = transaction.linkedDeliveryOrders![0];
                                     const restaurantAddress = order.restaurantAddress;
-                                    if (restaurantAddress) {
-                                      const formattedAddress = formatAddress(restaurantAddress);
+                                    
+                                    // Check for additional restaurants that need linking
+                                    const additionalRestaurants = order.additionalRestaurants || [];
+                                    
+                                    // Check stepLog to see which restaurants have already been linked
+                                    const linkedRestaurantIndices = new Set<number>(
+                                      (transaction.stepLog || [])
+                                        .filter(log => log.toStep === "LINK_RESTAURANT" && log.restaurantIndex !== undefined)
+                                        .map(log => (log.restaurantIndex as number))
+                                    );
+                                    
+                                    // Find first unlinked additional restaurant (not in stepLog)
+                                    // Show Link button if restaurant hasn't been linked yet, regardless of whether it has an address
+                                    const firstUnlinkedAdditionalRestaurantIndex = additionalRestaurants.findIndex(
+                                      (restaurant, index) => !linkedRestaurantIndices.has(index)
+                                    );
+                                    
+                                    // If there's an unlinked additional restaurant, show Link button
+                                    if (firstUnlinkedAdditionalRestaurantIndex !== -1) {
                                       return (
                                         <button
-                                          onClick={async (e) => {
+                                          onClick={(e) => {
                                             e.stopPropagation();
-                                            if (navigator.share) {
-                                              try {
-                                                await navigator.share({ text: formattedAddress });
-                                                await fetch(`/api/transactions/${transaction._id}`, {
-                                                  method: "PUT",
-                                                  headers: { "Content-Type": "application/json" },
-                                                  body: JSON.stringify({ step: "LINK_CUSTOMER" }),
-                                                });
-                                                queryClient.invalidateQueries({ queryKey: ["transactions"] });
-                                              } catch (err) {
-                                                console.log("Share cancelled or failed:", err);
-                                              }
-                                            } else {
-                                              try {
-                                                await navigator.clipboard.writeText(formattedAddress);
-                                                alert("Address copied to clipboard");
-                                                await fetch(`/api/transactions/${transaction._id}`, {
-                                                  method: "PUT",
-                                                  headers: { "Content-Type": "application/json" },
-                                                  body: JSON.stringify({ step: "LINK_CUSTOMER" }),
-                                                });
-                                                queryClient.invalidateQueries({ queryKey: ["transactions"] });
-                                              } catch (err) {
-                                                console.error("Failed to copy address:", err);
-                                              }
-                                            }
+                                            setLinkingAdditionalRestaurant({
+                                              orderId: order.id,
+                                              restaurantIndex: firstUnlinkedAdditionalRestaurantIndex,
+                                            });
                                           }}
-                                          className="absolute inset-0 w-full h-full flex items-center justify-center text-xs font-medium px-4 py-2"
+                                          className="absolute inset-0 w-full h-full flex items-center justify-center text-sm font-medium px-4 py-2"
                                         >
-                                          Nav
+                                          Link
                                         </button>
                                       );
+                                    }
+                                    
+                                    // If main restaurant has address and all additional restaurants are linked, show Nav sequentially
+                                    if (restaurantAddress) {
+                                      // Check stepLog to see which restaurants have already been navigated to
+                                      const navigatedRestaurantIndices = new Set<number>(
+                                        (transaction.stepLog || [])
+                                          .filter(log => log.toStep === "NAV_RESTAURANT" && log.restaurantIndex !== undefined)
+                                          .map(log => (log.restaurantIndex as number))
+                                      );
+                                      
+                                      // Get current restaurant index to navigate to (-1 = main, 0+ = additional)
+                                      // Start with -1 (main) if not already navigated, otherwise find first un-navigated restaurant
+                                      let currentNavIndex = navigatingRestaurantIndex[transaction._id];
+                                      if (currentNavIndex === undefined) {
+                                        // Check if main restaurant has been navigated to
+                                        if (!navigatedRestaurantIndices.has(-1)) {
+                                          currentNavIndex = -1;
+                                        } else {
+                                          // Find first additional restaurant that hasn't been navigated to
+                                          currentNavIndex = additionalRestaurants.findIndex((r, i) => r.address && !navigatedRestaurantIndices.has(i));
+                                        }
+                                      }
+                                      
+                                      // If no restaurant to navigate to, don't show Nav button
+                                      if (currentNavIndex === undefined || currentNavIndex === -1 && navigatedRestaurantIndices.has(-1)) {
+                                        // Check if there are any un-navigated restaurants
+                                        const hasUnnavigatedMain = restaurantAddress && !navigatedRestaurantIndices.has(-1);
+                                        const hasUnnavigatedAdditional = additionalRestaurants.some((r, i) => r.address && !navigatedRestaurantIndices.has(i));
+                                        if (!hasUnnavigatedMain && !hasUnnavigatedAdditional) {
+                                          // All restaurants navigated, don't show Nav button
+                                          return null;
+                                        }
+                                      }
+                                      
+                                      // Determine which restaurant to navigate to
+                                      let restaurantToNav: { address: string; name: string } | null = null;
+                                      let actualNavIndex = currentNavIndex;
+                                      
+                                      if (currentNavIndex === -1) {
+                                        // Navigate to main restaurant
+                                        restaurantToNav = {
+                                          address: restaurantAddress,
+                                          name: order.restaurantName,
+                                        };
+                                      } else if (currentNavIndex < additionalRestaurants.length) {
+                                        // Navigate to additional restaurant at currentNavIndex
+                                        const additionalRestaurant = additionalRestaurants[currentNavIndex];
+                                        if (additionalRestaurant.address) {
+                                          restaurantToNav = {
+                                            address: additionalRestaurant.address,
+                                            name: additionalRestaurant.name,
+                                          };
+                                        } else {
+                                          // Skip restaurants without addresses - find next one with address
+                                          for (let i = currentNavIndex + 1; i < additionalRestaurants.length; i++) {
+                                            const addr = additionalRestaurants[i].address;
+                                            if (addr) {
+                                              restaurantToNav = {
+                                                address: addr,
+                                                name: additionalRestaurants[i].name,
+                                              };
+                                              actualNavIndex = i;
+                                              break;
+                                            }
+                                          }
+                                        }
+                                      }
+                                      
+                                      // If we have a restaurant to navigate to, show Nav button
+                                      if (restaurantToNav && restaurantToNav.address) {
+                                        const formattedAddress = formatAddress(restaurantToNav.address);
+                                        
+                                        // Determine if this is the last restaurant to navigate to
+                                        // Last restaurant is: if no additional restaurants, main is last; otherwise, last additional restaurant with address is last
+                                        // Find the last additional restaurant that has an address
+                                        let lastAdditionalRestaurantIndex = -1;
+                                        for (let i = additionalRestaurants.length - 1; i >= 0; i--) {
+                                          if (additionalRestaurants[i].address) {
+                                            lastAdditionalRestaurantIndex = i;
+                                            break;
+                                          }
+                                        }
+                                        
+                                        const isLastRestaurant = actualNavIndex === -1 
+                                          ? lastAdditionalRestaurantIndex === -1  // Main is last if no additional restaurants with addresses
+                                          : actualNavIndex === lastAdditionalRestaurantIndex; // Last additional restaurant with address
+                                        
+                                        return (
+                                          <button
+                                            onClick={async (e) => {
+                                              e.stopPropagation();
+                                              if (navigator.share) {
+                                                try {
+                                                  await navigator.share({ text: formattedAddress });
+                                                  
+                                                  // Add stepLog entry for navigating to this restaurant
+                                                  try {
+                                                    await fetch(`/api/transactions/${transaction._id}`, {
+                                                      method: "PUT",
+                                                      headers: { "Content-Type": "application/json" },
+                                                      body: JSON.stringify({
+                                                        stepLogEntry: {
+                                                          fromStep: transaction.step || "NAV_TO_RESTERAUNT",
+                                                          toStep: "NAV_RESTAURANT",
+                                                          restaurantIndex: actualNavIndex,
+                                                        },
+                                                      }),
+                                                    });
+                                                  } catch (err) {
+                                                    console.error("Error adding stepLog entry:", err);
+                                                    // Don't fail the whole operation if stepLog update fails
+                                                  }
+                                                  
+                                                  // If this is the last restaurant, proceed to LINK_CUSTOMER
+                                                  if (isLastRestaurant) {
+                                                    await fetch(`/api/transactions/${transaction._id}`, {
+                                                      method: "PUT",
+                                                      headers: { "Content-Type": "application/json" },
+                                                      body: JSON.stringify({ step: "LINK_CUSTOMER" }),
+                                                    });
+                                                    // Clear navigation index
+                                                    setNavigatingRestaurantIndex(prev => {
+                                                      const updated = { ...prev };
+                                                      delete updated[transaction._id];
+                                                      return updated;
+                                                    });
+                                                  } else {
+                                                    // Move to next restaurant
+                                                    // If currently on main (index -1), find first additional restaurant with address
+                                                    // Otherwise, find next additional restaurant with address
+                                                    let nextIndex: number;
+                                                    if (actualNavIndex === -1) {
+                                                      // Find first additional restaurant with address
+                                                      nextIndex = additionalRestaurants.findIndex(r => r.address);
+                                                      if (nextIndex === -1) {
+                                                        // No additional restaurants with addresses, proceed to LINK_CUSTOMER
+                                                        await fetch(`/api/transactions/${transaction._id}`, {
+                                                          method: "PUT",
+                                                          headers: { "Content-Type": "application/json" },
+                                                          body: JSON.stringify({ step: "LINK_CUSTOMER" }),
+                                                        });
+                                                        setNavigatingRestaurantIndex(prev => {
+                                                          const updated = { ...prev };
+                                                          delete updated[transaction._id];
+                                                          return updated;
+                                                        });
+                                                        queryClient.invalidateQueries({ queryKey: ["transactions"] });
+                                                        return;
+                                                      }
+                                                    } else {
+                                                      // Find next additional restaurant with address
+                                                      nextIndex = additionalRestaurants.findIndex((r, i) => i > actualNavIndex && r.address);
+                                                      if (nextIndex === -1) {
+                                                        // No more additional restaurants with addresses, proceed to LINK_CUSTOMER
+                                                        await fetch(`/api/transactions/${transaction._id}`, {
+                                                          method: "PUT",
+                                                          headers: { "Content-Type": "application/json" },
+                                                          body: JSON.stringify({ step: "LINK_CUSTOMER" }),
+                                                        });
+                                                        setNavigatingRestaurantIndex(prev => {
+                                                          const updated = { ...prev };
+                                                          delete updated[transaction._id];
+                                                          return updated;
+                                                        });
+                                                        queryClient.invalidateQueries({ queryKey: ["transactions"] });
+                                                        return;
+                                                      }
+                                                    }
+                                                    setNavigatingRestaurantIndex(prev => ({
+                                                      ...prev,
+                                                      [transaction._id]: nextIndex,
+                                                    }));
+                                                  }
+                                                  
+                                                  queryClient.invalidateQueries({ queryKey: ["transactions"] });
+                                                } catch (err) {
+                                                  console.log("Share cancelled or failed:", err);
+                                                }
+                                              } else {
+                                                try {
+                                                  await navigator.clipboard.writeText(formattedAddress);
+                                                  alert("Address copied to clipboard");
+                                                  
+                                                  // Add stepLog entry for navigating to this restaurant
+                                                  try {
+                                                    await fetch(`/api/transactions/${transaction._id}`, {
+                                                      method: "PUT",
+                                                      headers: { "Content-Type": "application/json" },
+                                                      body: JSON.stringify({
+                                                        stepLogEntry: {
+                                                          fromStep: transaction.step || "NAV_TO_RESTERAUNT",
+                                                          toStep: "NAV_RESTAURANT",
+                                                          restaurantIndex: actualNavIndex,
+                                                        },
+                                                      }),
+                                                    });
+                                                  } catch (err) {
+                                                    console.error("Error adding stepLog entry:", err);
+                                                    // Don't fail the whole operation if stepLog update fails
+                                                  }
+                                                  
+                                                  // If this is the last restaurant, proceed to LINK_CUSTOMER
+                                                  if (isLastRestaurant) {
+                                                    await fetch(`/api/transactions/${transaction._id}`, {
+                                                      method: "PUT",
+                                                      headers: { "Content-Type": "application/json" },
+                                                      body: JSON.stringify({ step: "LINK_CUSTOMER" }),
+                                                    });
+                                                    // Clear navigation index
+                                                    setNavigatingRestaurantIndex(prev => {
+                                                      const updated = { ...prev };
+                                                      delete updated[transaction._id];
+                                                      return updated;
+                                                    });
+                                                  } else {
+                                                    // Move to next restaurant
+                                                    // If currently on main (index -1), find first additional restaurant with address
+                                                    // Otherwise, find next additional restaurant with address
+                                                    let nextIndex: number;
+                                                    if (actualNavIndex === -1) {
+                                                      // Find first additional restaurant with address
+                                                      nextIndex = additionalRestaurants.findIndex(r => r.address);
+                                                      if (nextIndex === -1) {
+                                                        // No additional restaurants with addresses, proceed to LINK_CUSTOMER
+                                                        await fetch(`/api/transactions/${transaction._id}`, {
+                                                          method: "PUT",
+                                                          headers: { "Content-Type": "application/json" },
+                                                          body: JSON.stringify({ step: "LINK_CUSTOMER" }),
+                                                        });
+                                                        setNavigatingRestaurantIndex(prev => {
+                                                          const updated = { ...prev };
+                                                          delete updated[transaction._id];
+                                                          return updated;
+                                                        });
+                                                        queryClient.invalidateQueries({ queryKey: ["transactions"] });
+                                                        return;
+                                                      }
+                                                    } else {
+                                                      // Find next additional restaurant with address
+                                                      nextIndex = additionalRestaurants.findIndex((r, i) => i > actualNavIndex && r.address);
+                                                      if (nextIndex === -1) {
+                                                        // No more additional restaurants with addresses, proceed to LINK_CUSTOMER
+                                                        await fetch(`/api/transactions/${transaction._id}`, {
+                                                          method: "PUT",
+                                                          headers: { "Content-Type": "application/json" },
+                                                          body: JSON.stringify({ step: "LINK_CUSTOMER" }),
+                                                        });
+                                                        setNavigatingRestaurantIndex(prev => {
+                                                          const updated = { ...prev };
+                                                          delete updated[transaction._id];
+                                                          return updated;
+                                                        });
+                                                        queryClient.invalidateQueries({ queryKey: ["transactions"] });
+                                                        return;
+                                                      }
+                                                    }
+                                                    setNavigatingRestaurantIndex(prev => ({
+                                                      ...prev,
+                                                      [transaction._id]: nextIndex,
+                                                    }));
+                                                  }
+                                                  
+                                                  queryClient.invalidateQueries({ queryKey: ["transactions"] });
+                                                } catch (err) {
+                                                  console.error("Failed to copy address:", err);
+                                                }
+                                              }
+                                            }}
+                                            className="absolute inset-0 w-full h-full flex items-center justify-center text-xs font-medium px-4 py-2"
+                                          >
+                                            Nav
+                                          </button>
+                                        );
+                                      }
                                     } else {
                                       return (
                                         <button
@@ -1727,106 +1952,15 @@ export default function HistoryPage() {
                                     }
                                   })()
                                 ) : transaction.step === "LINK_CUSTOMER" ? (
-                                  (() => {
-                                    // If customer is already linked, allow skipping to next step
-                                    if (transaction.linkedOcrExports && transaction.linkedOcrExports.length > 0) {
-                                      return (
-                                        <button
-                                          onClick={async (e) => {
-                                            e.stopPropagation();
-                                            try {
-                                              await fetch(`/api/transactions/${transaction._id}`, {
-                                                method: "PUT",
-                                                headers: { "Content-Type": "application/json" },
-                                                body: JSON.stringify({ step: "NAV_TO_CUSTOMER" }),
-                                              });
-                                              queryClient.invalidateQueries({ queryKey: ["transactions"] });
-                                            } catch (err) {
-                                              console.error("Error transitioning step:", err);
-                                              alert("Failed to transition step");
-                                            }
-                                          }}
-                                          className="absolute inset-0 w-full h-full flex items-center justify-center text-xs font-medium px-4 py-2"
-                                        >
-                                          Skip
-                                        </button>
-                                      );
-                                    }
-                                    // Otherwise, show link button
-                                    return (
-                                      <button
-                                        onClick={(e) => {
-                                          e.stopPropagation();
-                                          setLinkingCustomerTransactionId(transaction._id);
-                                        }}
-                                        className="absolute inset-0 w-full h-full flex items-center justify-center text-xs font-medium px-4 py-2"
-                                      >
-                                        Link
-                                      </button>
-                                    );
-                                  })()
-                                ) : transaction.step === "NAV_TO_CUSTOMER" && transaction.linkedOcrExports && transaction.linkedOcrExports.length > 0 ? (
-                                  (() => {
-                                    const customer = transaction.linkedOcrExports![0];
-                                    const customerAddress = customer.customerAddress;
-                                    if (customerAddress) {
-                                      const formattedAddress = formatAddress(customerAddress);
-                                      return (
-                                        <button
-                                          onClick={async (e) => {
-                                            e.stopPropagation();
-                                            // First, try to share the address
-                                            if (navigator.share) {
-                                              try {
-                                                await navigator.share({ text: formattedAddress });
-                                              } catch (err) {
-                                                // User cancelled or error occurred - continue to modal anyway
-                                                console.log("Share cancelled or failed:", err);
-                                              }
-                                            } else {
-                                              // Fallback: copy to clipboard
-                                              try {
-                                                await navigator.clipboard.writeText(formattedAddress);
-                                              } catch (err) {
-                                                console.error("Failed to copy address:", err);
-                                              }
-                                            }
-                                            // Then open the modal
-                                            setDeliveryConfirmation({
-                                              transactionId: transaction._id,
-                                              customerAddress: customerAddress,
-                                              customerName: customer.customerName,
-                                            });
-                                          }}
-                                          className="absolute inset-0 w-full h-full flex items-center justify-center text-xs font-medium px-4 py-2"
-                                        >
-                                          Nav
-                                        </button>
-                                      );
-                                    } else {
-                                      return (
-                                        <button
-                                          onClick={async (e) => {
-                                            e.stopPropagation();
-                                            try {
-                                              await fetch(`/api/transactions/${transaction._id}`, {
-                                                method: "PUT",
-                                                headers: { "Content-Type": "application/json" },
-                                                body: JSON.stringify({ step: "DELIVERING" }),
-                                              });
-                                              queryClient.invalidateQueries({ queryKey: ["transactions"] });
-                                            } catch (err) {
-                                              console.error("Error skipping step:", err);
-                                              alert("Failed to skip step");
-                                            }
-                                          }}
-                                          className="absolute inset-0 w-full h-full flex items-center justify-center text-xs font-medium px-4 py-2"
-                                        >
-                                          Skip
-                                        </button>
-                                      );
-                                    }
-                                  })()
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setLinkingCustomerTransactionId(transaction._id);
+                                    }}
+                                    className="absolute inset-0 w-full h-full flex items-center justify-center text-xs font-medium px-4 py-2"
+                                  >
+                                    Link
+                                  </button>
                                 ) : transaction.step === "NAV_TO_CUSTOMER" ? (
                                   <button
                                     onClick={async (e) => {
@@ -2243,6 +2377,14 @@ export default function HistoryPage() {
         }}
       />
 
+      <CreateTransactionWithOrderAndCustomerModal
+        isOpen={showCreateAllModal}
+        onClose={() => setShowCreateAllModal(false)}
+        onSuccess={() => {
+          setShowCreateAllModal(false);
+        }}
+      />
+
       {(showAddModal || editingTransaction) && (
         <AddTransactionModal
           isOpen={showAddModal || !!editingTransaction}
@@ -2304,21 +2446,23 @@ export default function HistoryPage() {
 
       <LinkCustomerModal
         isOpen={linkingCustomerTransactionId !== null}
-        onClose={() => setLinkingCustomerTransactionId(null)}
+        onClose={() => {
+          setLinkingCustomerTransactionId(null);
+        }}
         transactionId={linkingCustomerTransactionId}
         userId={session?.user?.id}
-        onLink={() => {
+        onLink={async () => {
+          if (!linkingCustomerTransactionId) return;
+          
           // Clear route segments for this transaction so they recalculate with new customer data
-          if (linkingCustomerTransactionId) {
-            setRouteSegments((prev) => {
-              const updated = { ...prev };
-              delete updated[linkingCustomerTransactionId];
-              return updated;
-            });
-          }
-          // Refresh transactions to show updated links
+          setRouteSegments((prev) => {
+            const updated = { ...prev };
+            delete updated[linkingCustomerTransactionId];
+            return updated;
+          });
+          
+          // Refresh transactions to get updated customer data
           queryClient.invalidateQueries({ queryKey: ["transactions"] });
-          setLinkingCustomerTransactionId(null);
         }}
       />
 
@@ -2396,6 +2540,142 @@ export default function HistoryPage() {
             }}
           />
         ) : null;
+      })()}
+
+      {linkingAdditionalRestaurant && (() => {
+        // Find the transaction and order that contains this additional restaurant
+        const transaction = transactions.find((t: Transaction) => 
+          t.linkedDeliveryOrders?.some((o: LinkedOrder) => o.id === linkingAdditionalRestaurant.orderId)
+        );
+        if (!transaction) return null;
+        
+        const order = transaction.linkedDeliveryOrders?.find((o: LinkedOrder) => o.id === linkingAdditionalRestaurant.orderId);
+        if (!order || !order.additionalRestaurants) return null;
+        
+        const additionalRestaurant = order.additionalRestaurants[linkingAdditionalRestaurant.restaurantIndex];
+        if (!additionalRestaurant) return null;
+        
+        return (
+          <ShareOrderModal
+            isOpen={true}
+            onClose={() => setLinkingAdditionalRestaurant(null)}
+            restaurantName={additionalRestaurant.name}
+            orderId={linkingAdditionalRestaurant.orderId}
+            transactionId={transaction._id}
+            orderDetails={{
+              miles: order.miles,
+              money: order.money,
+              milesToMoneyRatio: order.miles > 0 ? order.money / order.miles : 0,
+              appName: order.appName,
+            }}
+            userLatitude={additionalRestaurant.userLatitude || order.userLatitude}
+            userLongitude={additionalRestaurant.userLongitude || order.userLongitude}
+            userAddress={additionalRestaurant.userAddress || order.userAddress}
+            shouldUpdateStep={false}
+            skipSave={true}
+            onAddressSaved={async (address?: string, placeId?: string, lat?: number, lon?: number, restaurantName?: string) => {
+              try {
+                // Update the specific additional restaurant
+                const response = await fetch("/api/delivery-orders", {
+                  method: "PATCH",
+                  headers: {
+                    "Content-Type": "application/json",
+                  },
+                  body: JSON.stringify({
+                    id: linkingAdditionalRestaurant.orderId,
+                    updateAdditionalRestaurant: {
+                      index: linkingAdditionalRestaurant.restaurantIndex,
+                      data: {
+                        address: address,
+                        placeId: placeId,
+                        lat: lat,
+                        lon: lon,
+                        ...(restaurantName && { name: restaurantName }),
+                      },
+                    },
+                  }),
+                });
+
+                if (!response.ok) {
+                  console.error("Failed to save additional restaurant address");
+                  return;
+                }
+
+                // Get the updated order from the response
+                const responseData = await response.json();
+                const updatedAdditionalRestaurants = responseData.order?.additionalRestaurants || [];
+                
+                // Add stepLog entry for linking this additional restaurant
+                try {
+                  await fetch(`/api/transactions/${transaction._id}`, {
+                    method: "PUT",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                      stepLogEntry: {
+                        fromStep: transaction.step || "NAV_TO_RESTERAUNT",
+                        toStep: "LINK_RESTAURANT",
+                        restaurantIndex: linkingAdditionalRestaurant.restaurantIndex,
+                      },
+                    }),
+                  });
+                } catch (err) {
+                  console.error("Error adding stepLog entry:", err);
+                  // Don't fail the whole operation if stepLog update fails
+                }
+                
+                // Refresh transactions to show updated restaurant address and stepLog
+                await queryClient.invalidateQueries({ queryKey: ["transactions"] });
+                
+                // Wait a moment for the stepLog to be updated, then refetch to get fresh data
+                await new Promise(resolve => setTimeout(resolve, 200));
+                
+                // Refetch transactions to get updated stepLog
+                const refreshedData = await queryClient.fetchQuery({
+                  queryKey: ["transactions", "all", "all", page, limit, searchQuery],
+                }) as { data?: { transactions?: Transaction[] } };
+                const refreshedTransactions = refreshedData?.data?.transactions || transactions;
+                
+                // Find the updated transaction with fresh stepLog
+                const refreshedTransaction = refreshedTransactions.find((t: Transaction) => 
+                  t.linkedDeliveryOrders?.some((o: LinkedOrder) => o.id === linkingAdditionalRestaurant.orderId)
+                );
+                
+                if (!refreshedTransaction) {
+                  setLinkingAdditionalRestaurant(null);
+                  return;
+                }
+                
+                // Check stepLog to see which restaurants have already been linked
+                const linkedRestaurantIndices = new Set<number>(
+                  (refreshedTransaction.stepLog || [])
+                    .filter((log: { toStep: string; restaurantIndex?: number }) => log.toStep === "LINK_RESTAURANT" && log.restaurantIndex !== undefined)
+                    .map((log: { restaurantIndex: number }) => log.restaurantIndex)
+                );
+                
+                // Find the next unlinked additional restaurant (not in stepLog)
+                // Use the updated restaurants from response, but check stepLog for what's been linked
+                const nextUnlinkedIndex = updatedAdditionalRestaurants.findIndex(
+                  (restaurant: AdditionalRestaurant, index: number) => 
+                    index > linkingAdditionalRestaurant.restaurantIndex && !linkedRestaurantIndices.has(index)
+                );
+                
+                if (nextUnlinkedIndex !== -1) {
+                  // Show next additional restaurant - keep modal open by updating state
+                  // The modal will re-render with the new restaurant index
+                  setLinkingAdditionalRestaurant({
+                    orderId: linkingAdditionalRestaurant.orderId,
+                    restaurantIndex: nextUnlinkedIndex,
+                  });
+                } else {
+                  // All additional restaurants are linked, close modal
+                  setLinkingAdditionalRestaurant(null);
+                }
+              } catch (err) {
+                console.error("Error saving additional restaurant address:", err);
+              }
+            }}
+          />
+        );
       })()}
 
       <DeliveryConfirmationModal

@@ -117,7 +117,7 @@ export async function PUT(
     }
 
     const body = await request.json();
-    const { amount, type, date, time, isBill, notes, tag, dueDate, step, active } = body;
+    const { amount, type, date, time, isBill, notes, tag, dueDate, step, active, stepLogEntry } = body;
 
     const existingTransaction = await Transaction.findOne({
       _id: id,
@@ -221,6 +221,19 @@ export async function PUT(
           toStep: step,
           time: new Date(),
         },
+      };
+    }
+    
+    // Add custom stepLog entry if provided (e.g., for restaurant linking/navigation)
+    if (stepLogEntry) {
+      if (!updateQuery.$push) {
+        updateQuery.$push = {};
+      }
+      updateQuery.$push.stepLog = {
+        fromStep: stepLogEntry.fromStep || existingTransaction.step || null,
+        toStep: stepLogEntry.toStep,
+        time: new Date(),
+        ...(stepLogEntry.restaurantIndex !== undefined && { restaurantIndex: stepLogEntry.restaurantIndex }),
       };
     }
 

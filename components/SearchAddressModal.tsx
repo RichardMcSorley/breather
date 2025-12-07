@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { MapPin, Search } from "lucide-react";
+import { MapPin, Search, Utensils, Coffee, Pizza, Beer, ShoppingBag, Store } from "lucide-react";
 import Modal from "./ui/Modal";
 import { formatAddress } from "@/lib/address-formatter";
 
@@ -13,7 +13,7 @@ interface SearchAddressModalProps {
   userLatitude?: number;
   userLongitude?: number;
   userAddress?: string;
-  onAddressSelected: (address: string, placeId?: string, lat?: number, lon?: number) => void;
+  onAddressSelected: (address: string, placeId?: string, lat?: number, lon?: number, name?: string) => void;
 }
 
 interface AddressResult {
@@ -242,13 +242,39 @@ export default function SearchAddressModal({
     }
   }, [isOpen, initialQuery, extractLocation, userLatitude, userLongitude]);
 
+  const getTypeIcon = (type: string) => {
+    const typeLower = type.toLowerCase();
+    if (typeLower.includes('cafe') || typeLower.includes('coffee')) {
+      return <Coffee className="w-4 h-4" />;
+    } else if (typeLower.includes('fast_food') || typeLower.includes('fast food')) {
+      return <Pizza className="w-4 h-4" />;
+    } else if (typeLower.includes('restaurant')) {
+      return <Utensils className="w-4 h-4" />;
+    } else if (typeLower.includes('bar') || typeLower.includes('pub')) {
+      return <Beer className="w-4 h-4" />;
+    } else if (typeLower.includes('shop') || typeLower.includes('store')) {
+      return <ShoppingBag className="w-4 h-4" />;
+    } else {
+      return <Store className="w-4 h-4" />;
+    }
+  };
+
+  const formatTypeText = (type: string): string => {
+    // Replace underscores with spaces and capitalize each word
+    return type
+      .replace(/_/g, ' ')
+      .split(' ')
+      .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+      .join(' ');
+  };
+
   const handleSelectAddress = (addressResult: AddressResult) => {
     // Format the address before returning
     const formattedAddress = formatAddress(addressResult.display_name);
     // Parse lat/lon from strings to numbers
     const lat = addressResult.lat ? parseFloat(addressResult.lat) : undefined;
     const lon = addressResult.lon ? parseFloat(addressResult.lon) : undefined;
-    onAddressSelected(formattedAddress, addressResult.place_id, lat, lon);
+    onAddressSelected(formattedAddress, addressResult.place_id, lat, lon, addressResult.name);
     onClose();
   };
 
@@ -318,19 +344,41 @@ export default function SearchAddressModal({
                 SEARCH RESULTS
               </h3>
               {addresses.map((address, index) => {
-                const formattedAddress = formatAddress(address.display_name);
+                // Extract business/place name - use name field if available, otherwise extract from display_name
+                const businessName = address.name || (() => {
+                  const displayParts = address.display_name.split(',').map(p => p.trim());
+                  return displayParts[0] || '';
+                })();
+                
+                // Format the address (skip business name if it's the first part of display_name)
+                let formattedAddress = formatAddress(address.display_name);
+                if (businessName && address.display_name.startsWith(businessName)) {
+                  // Remove business name from formatted address if it's at the start
+                  const addressWithoutName = address.display_name.substring(businessName.length).replace(/^,\s*/, '');
+                  formattedAddress = formatAddress(addressWithoutName);
+                }
                 
                 return (
                   <div
                     key={index}
                     className="p-4 bg-gray-50 dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-700"
                   >
-                    {/* Address - left aligned */}
-                    <div className="flex items-start gap-2 mb-3">
-                      <MapPin className="w-4 h-4 text-gray-500 dark:text-gray-400 mt-0.5 flex-shrink-0" />
-                      <div className="text-sm text-gray-700 dark:text-gray-300 text-left flex-1">
-                        {formattedAddress}
+                    {/* Business Name at top - if available */}
+                    {businessName && (
+                      <div className="font-bold text-base text-gray-900 dark:text-white mb-2 text-left">
+                        {businessName}
                       </div>
+                    )}
+                    
+                    {/* Address below business name - left aligned */}
+                    <div className="text-sm text-gray-700 dark:text-gray-300 mb-2 text-left">
+                      {formattedAddress}
+                    </div>
+                    
+                    {/* Icon and type - left aligned */}
+                    <div className="flex items-center gap-1 text-xs text-gray-500 dark:text-gray-400 mb-3 text-left">
+                      {getTypeIcon(address.type)}
+                      <span>{formatTypeText(address.type)}</span>
                     </div>
                     
                     {/* Select button right-aligned */}

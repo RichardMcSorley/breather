@@ -1,0 +1,143 @@
+import { NextRequest, NextResponse } from "next/server";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/app/api/auth/[...nextauth]/config";
+import { searchProducts } from "@/lib/kroger-api";
+import ShoppingList, { IShoppingListItem } from "@/lib/models/ShoppingList";
+import connectDB from "@/lib/mongodb";
+import { handleApiError } from "@/lib/api-error-handler";
+
+export async function POST(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const session = await getServerSession(authOptions);
+    if (!session?.user?.id) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const { id } = await params;
+
+    await connectDB();
+
+    const shoppingList = await ShoppingList.findOne({
+      _id: id,
+      userId: session.user.id,
+    });
+
+    if (!shoppingList) {
+      return NextResponse.json(
+        { error: "Shopping list not found" },
+        { status: 404 }
+      );
+    }
+
+    // Refresh each item with current Kroger data
+    const updatedItems: IShoppingListItem[] = await Promise.all(
+      shoppingList.items.map(async (item) => {
+        // Use searchTerm or productName to search
+        const searchTerm = item.searchTerm || item.productName;
+        
+        if (!searchTerm) {
+          return {
+            ...item,
+            customer: item.customer || "A",
+          } as IShoppingListItem;
+        }
+
+        try {
+          const result = await searchProducts({
+            term: searchTerm,
+            locationId: shoppingList.locationId,
+            limit: 1,
+          });
+
+          if (result.data && result.data.length > 0) {
+            const krogerProduct = result.data[0];
+            const krogerItem = krogerProduct.items?.[0];
+
+            // Get best image URL
+            let imageUrl: string | undefined;
+            if (krogerProduct.images && krogerProduct.images.length > 0) {
+              const frontImg = krogerProduct.images.find(img => img.perspective === "front");
+              const defaultImg = krogerProduct.images.find(img => img.default);
+              const imgToUse = frontImg || defaultImg || krogerProduct.images[0];
+              
+              if (imgToUse?.sizes && imgToUse.sizes.length > 0) {
+                const sizeOrder = ["xlarge", "large", "medium", "small", "thumbnail"];
+                for (const size of sizeOrder) {
+                  const found = imgToUse.sizes.find(s => s.size === size);
+                  if (found?.url) {
+                    imageUrl = found.url;
+                    break;
+                  }
+                }
+                if (!imageUrl && imgToUse.sizes[0]?.url) {
+                  imageUrl = imgToUse.sizes[0].url;
+                }
+              }
+            }
+
+            // Store all images
+            const images = krogerProduct.images?.map(img => ({
+              perspective: img.perspective,
+              default: img.default,
+              sizes: img.sizes?.map(s => ({ size: s.size, url: s.url })) || [],
+            })) || [];
+
+            // Store all Kroger aisle locations
+            const krogerAisles = krogerProduct.aisleLocations?.map(aisle => ({
+              aisleNumber: aisle.number,
+              shelfNumber: aisle.shelfNumber,
+              side: aisle.side,
+              description: aisle.description,
+              bayNumber: aisle.bayNumber,
+            })) || [];
+
+            return {
+              ...item,
+              customer: item.customer || "A",
+              productId: krogerProduct.productId,
+              upc: krogerProduct.upc || krogerItem?.itemId,
+              brand: krogerProduct.brand,
+              description: krogerProduct.description,
+              size: krogerItem?.size,
+              price: krogerItem?.price?.regular,
+              promoPrice: krogerItem?.price?.promo,
+              stockLevel: krogerItem?.inventory?.stockLevel,
+              imageUrl,
+              images,
+              krogerAisles,
+              productPageURI: krogerProduct.productPageURI,
+              categories: krogerProduct.categories,
+              found: true,
+            } as IShoppingListItem;
+          }
+
+          return {
+            ...item,
+            customer: item.customer || "A",
+            found: false,
+          } as IShoppingListItem;
+        } catch {
+          return {
+            ...item,
+            customer: item.customer || "A",
+          } as IShoppingListItem;
+        }
+      })
+    );
+
+    // Update the shopping list with refreshed items
+    shoppingList.items = updatedItems;
+    await shoppingList.save();
+
+    return NextResponse.json({
+      success: true,
+      itemCount: updatedItems.length,
+      foundCount: updatedItems.filter(i => i.found).length,
+    });
+  } catch (error) {
+    return handleApiError(error);
+  }
+}

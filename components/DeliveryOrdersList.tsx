@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { format } from "date-fns";
-import { Pencil, Trash2, Utensils, Package, Search } from "lucide-react";
+import { Pencil, Trash2, Utensils, Package, Search, X } from "lucide-react";
 
 interface AdditionalRestaurant {
   name: string;
@@ -31,12 +31,14 @@ interface DeliveryOrdersListProps {
   userId?: string;
   onRefresh?: () => void;
   onEditClick?: (orderId: string) => void;
+  refreshTrigger?: number;
 }
 
 export default function DeliveryOrdersList({
   userId,
   onRefresh,
   onEditClick,
+  refreshTrigger,
 }: DeliveryOrdersListProps) {
   const [orders, setOrders] = useState<DeliveryOrder[]>([]);
   const [loading, setLoading] = useState(true);
@@ -53,7 +55,7 @@ export default function DeliveryOrdersList({
     if (userId) {
       fetchOrders();
     }
-  }, [userId, page, activeSearchQuery]);
+  }, [userId, page, activeSearchQuery, refreshTrigger]);
 
   const fetchOrders = async () => {
     if (!userId) return;
@@ -179,28 +181,45 @@ export default function DeliveryOrdersList({
   return (
     <div className="space-y-2">
       {/* Search Input */}
-      <div className="mb-4 flex gap-2">
-        <input
-          type="text"
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter") {
-              setActiveSearchQuery(searchQuery);
-              setPage(1);
-            }
-          }}
-          placeholder="Search by restaurant name, address, or pay amount..."
-          className="flex-1 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 px-4 py-2 text-sm text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-        />
+      <div className="mb-4 relative flex gap-2">
+        <div className="relative flex-1">
+          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 dark:text-gray-500 w-5 h-5" />
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" || e.key === "Return") {
+                setActiveSearchQuery(searchQuery.trim());
+                setPage(1);
+              }
+            }}
+            placeholder="Search by restaurant name, address, or pay amount..."
+            className="w-full pl-10 pr-10 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent min-h-[44px]"
+          />
+          {searchQuery && (
+            <button
+              onClick={() => {
+                setSearchQuery("");
+                setActiveSearchQuery("");
+                setPage(1);
+              }}
+              className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 min-w-[44px] min-h-[44px] flex items-center justify-center"
+              title="Clear search"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          )}
+        </div>
         <button
           onClick={() => {
-            setActiveSearchQuery(searchQuery);
+            setActiveSearchQuery(searchQuery.trim());
             setPage(1);
           }}
-          className="px-4 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-700 min-h-[44px] flex items-center justify-center gap-2 transition-colors"
+          className="px-4 py-2 rounded-lg text-sm font-medium bg-blue-600 text-white hover:bg-blue-700 min-h-[44px] flex items-center gap-2"
+          title="Search"
         >
-          <Search className="w-4 h-4" />
+          <Search className="w-5 h-5" />
           <span className="hidden sm:inline">Search</span>
         </button>
       </div>

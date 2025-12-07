@@ -229,42 +229,51 @@ export async function GET(request: NextRequest) {
     }
 
     // Apply search filter if provided (search by restaurant name, address, or pay amount)
+    // Support multi-term search: split by spaces, all terms must match (AND logic)
     if (searchQuery && searchQuery.trim()) {
-      const queryLower = searchQuery.trim().toLowerCase();
-      // Try to parse as a number for amount search
-      const queryAsNumber = parseFloat(queryLower);
-      const isNumericSearch = !isNaN(queryAsNumber) && isFinite(queryAsNumber);
+      const searchTerms = searchQuery.trim().split(/\s+/).filter(term => term.length > 0);
       
-      orders = orders.filter((order) => {
-        // Search by pay amount (money field) if query is numeric
-        if (isNumericSearch && order.money != null) {
-          // Match if the order's money field equals the search amount (with tolerance for floating point)
-          if (Math.abs(order.money - queryAsNumber) < 0.01) {
-            return true;
-          }
-        }
-        
-        // Search in main restaurant name
-        if (order.restaurantName && order.restaurantName.toLowerCase().includes(queryLower)) {
-          return true;
-        }
-        // Search in main restaurant address
-        if (order.restaurantAddress && order.restaurantAddress.toLowerCase().includes(queryLower)) {
-          return true;
-        }
-        // Search in additional restaurants
-        if (order.additionalRestaurants && Array.isArray(order.additionalRestaurants)) {
-          for (const additionalRestaurant of order.additionalRestaurants) {
-            if (additionalRestaurant.name && additionalRestaurant.name.toLowerCase().includes(queryLower)) {
+      if (searchTerms.length > 0) {
+        orders = orders.filter((order) => {
+          // All search terms must match (AND logic)
+          return searchTerms.every((term) => {
+            const termLower = term.toLowerCase();
+            // Try to parse as a number for amount search
+            const termAsNumber = parseFloat(termLower);
+            const isNumericSearch = !isNaN(termAsNumber) && isFinite(termAsNumber);
+            
+            // Each term can match in any field (OR logic within term)
+            // Search by pay amount (money field) if term is numeric
+            if (isNumericSearch && order.money != null) {
+              // Match if the order's money field equals the search amount (with tolerance for floating point)
+              if (Math.abs(order.money - termAsNumber) < 0.01) {
+                return true;
+              }
+            }
+            
+            // Search in main restaurant name
+            if (order.restaurantName && order.restaurantName.toLowerCase().includes(termLower)) {
               return true;
             }
-            if (additionalRestaurant.address && additionalRestaurant.address.toLowerCase().includes(queryLower)) {
+            // Search in main restaurant address
+            if (order.restaurantAddress && order.restaurantAddress.toLowerCase().includes(termLower)) {
               return true;
             }
-          }
-        }
-        return false;
-      });
+            // Search in additional restaurants
+            if (order.additionalRestaurants && Array.isArray(order.additionalRestaurants)) {
+              for (const additionalRestaurant of order.additionalRestaurants) {
+                if (additionalRestaurant.name && additionalRestaurant.name.toLowerCase().includes(termLower)) {
+                  return true;
+                }
+                if (additionalRestaurant.address && additionalRestaurant.address.toLowerCase().includes(termLower)) {
+                  return true;
+                }
+              }
+            }
+            return false;
+          });
+        });
+      }
     }
 
     // Get all linked transactions for these orders

@@ -19,6 +19,8 @@ export interface ITransaction extends Document {
     fromStep?: string;
     toStep: string;
     time: Date;
+    restaurantIndex?: number; // -1 for main restaurant, 0+ for additional restaurants
+    customerIndex?: number; // 0+ for customers
   }>;
   routeSegments?: Array<{
     fromLat: number;
@@ -107,6 +109,8 @@ const TransactionSchema: Schema = new Schema(
         required: true,
         default: Date.now,
       },
+      restaurantIndex: Number, // -1 for main restaurant, 0+ for additional restaurants
+      customerIndex: Number, // 0+ for customers
     }],
     routeSegments: [{
       fromLat: {

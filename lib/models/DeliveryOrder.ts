@@ -17,7 +17,7 @@ export interface IAdditionalRestaurant {
 export interface IDeliveryOrder extends Document {
   entryId: string;
   userId: string;
-  appName: string;
+  appName?: string;
   miles?: number;
   money: number;
   milesToMoneyRatio?: number;
@@ -56,7 +56,7 @@ const DeliveryOrderSchema: Schema = new Schema(
     },
     appName: {
       type: String,
-      required: true,
+      required: false,
     },
     miles: {
       type: Number,

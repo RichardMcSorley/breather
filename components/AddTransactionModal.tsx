@@ -342,9 +342,9 @@ export default function AddTransactionModal({
     <Modal
       isOpen={isOpen}
       onClose={onClose}
-      title={transactionId ? "Edit Transaction" : `Add ${transactionType === "income" ? "Income" : "Expense"}`}
+      title={transactionId ? "Edit Transaction" : transactionType === "income" ? "Income" : "Expense"}
     >
-      <form onSubmit={handleSubmit} className="space-y-4">
+      <form onSubmit={handleSubmit} className="space-y-6">
         {transactionId && (
           <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
@@ -377,7 +377,7 @@ export default function AddTransactionModal({
           </div>
         )}
 
-        {selectedOrder && !transactionId && (
+        {selectedOrder && !transactionId && transactionType === "income" && (
           <div className="p-3 bg-purple-50 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-800 rounded-lg mb-4">
             <div className="text-sm font-medium text-purple-900 dark:text-purple-300 mb-1">
               Order Selected
@@ -388,152 +388,147 @@ export default function AddTransactionModal({
           </div>
         )}
 
-        <Input
-          label="Amount ($)"
-          type="number"
-          inputMode="decimal"
-          step="0.01"
-          required
-          ref={amountInputRef}
-          value={formData.amount}
-          onChange={(e) => setFormData({ ...formData, amount: e.target.value })}
-          placeholder="0.00"
-        />
-
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          <Input
-            label="Date"
-            type="date"
-            required
-            value={formData.date}
-            onChange={(e) => setFormData({ ...formData, date: e.target.value })}
-          />
-          <Input
-            label="Time"
-            type="time"
-            required
-            value={formData.time}
-            onChange={(e) => setFormData({ ...formData, time: e.target.value })}
-          />
+        <div className="space-y-3">
+          <div className="text-sm font-semibold text-gray-700 dark:text-gray-300 border-b border-gray-200 dark:border-gray-700 pb-2">
+            TRANSACTION *
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+              Amount ($) *
+            </label>
+            <input
+              type="number"
+              step="0.01"
+              min="0"
+              required
+              ref={amountInputRef}
+              value={formData.amount}
+              onChange={(e) => setFormData({ ...formData, amount: e.target.value })}
+              className="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 px-3 py-2 text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+              placeholder="0.00"
+            />
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                Date *
+              </label>
+              <input
+                type="date"
+                required
+                value={formData.date}
+                onChange={(e) => setFormData({ ...formData, date: e.target.value })}
+                className="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 px-3 py-2 text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                Time *
+              </label>
+              <input
+                type="text"
+                required
+                value={formData.time}
+                onChange={(e) => setFormData({ ...formData, time: e.target.value })}
+                className="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 px-3 py-2 text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                placeholder="e.g., 2:30 PM"
+              />
+            </div>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+              App Name
+            </label>
+            <select
+              value={customTag || formData.tag}
+              onChange={(e) => {
+                if (expenseSourceTags.includes(e.target.value) || incomeSourceTags.includes(e.target.value)) {
+                  setFormData({ ...formData, tag: e.target.value });
+                  setCustomTag("");
+                } else {
+                  setCustomTag(e.target.value);
+                  setFormData({ ...formData, tag: "" });
+                }
+              }}
+              className="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 px-3 py-2 text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              <option value="">None</option>
+              {transactionType === "expense" ? (
+                <>
+                  {expenseSourceTags.map((tag: string) => (
+                    <option key={tag} value={tag}>{tag}</option>
+                  ))}
+                </>
+              ) : (
+                <>
+                  {incomeSourceTags.map((tag: string) => (
+                    <option key={tag} value={tag}>{tag}</option>
+                  ))}
+                </>
+              )}
+            </select>
+            {transactionType === "expense" && (
+              <input
+                type="text"
+                value={customTag}
+                onChange={(e) => {
+                  setCustomTag(e.target.value);
+                  if (e.target.value) {
+                    setFormData({ ...formData, tag: "" });
+                  }
+                }}
+                className="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 px-3 py-2 text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 mt-2"
+                placeholder="Or enter custom expense source"
+              />
+            )}
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+              Notes
+            </label>
+            <textarea
+              value={formData.notes}
+              onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
+              className="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 px-3 py-2 text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+              placeholder="Optional notes"
+              rows={2}
+            />
+          </div>
         </div>
 
-        {transactionType === "income" && (
-          <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-              Income Source
-            </label>
-            <div className="flex flex-wrap gap-2 mb-2">
-              {incomeSourceTags.map((tag: string) => (
-                <button
-                  key={tag}
-                  type="button"
-                  onClick={() => {
-                    setFormData({ ...formData, tag });
-                    setCustomTag("");
-                  }}
-                  className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors min-h-[44px] ${
-                    formData.tag === tag && !customTag
-                      ? "bg-green-600 text-white"
-                      : "bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600"
-                  }`}
-                >
-                  {tag}
-                </button>
-              ))}
-            </div>
-            <Input
-              placeholder="Or enter custom source"
-              value={customTag}
-              onChange={(e) => {
-                setCustomTag(e.target.value);
-                if (e.target.value) {
-                  setFormData({ ...formData, tag: "" });
-                }
-              }}
-              aria-label="Or enter custom income source"
-            />
-          </div>
+        {transactionType === "income" && transactionId && (
+          <TransactionLinkedInfo
+            transactionId={transactionId}
+            transactionData={transactionData}
+            transactionType={transactionType}
+            onClose={onClose}
+            onShowLinkCustomerModal={() => setShowLinkCustomerModal(true)}
+            onShowLinkOrderModal={() => setShowLinkOrderModal(true)}
+            onEditCustomer={(address, entryId) => {
+              setEditingCustomerAddress(address);
+              setEditingCustomerEntryId(entryId || null);
+            }}
+            onEditOrder={(orderId) => {
+              setEditingOrderId(orderId);
+            }}
+          />
         )}
 
-        {transactionType === "expense" && (
-          <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-              Expense Source (optional)
-            </label>
-            <div className="flex flex-wrap gap-2 mb-2">
-              {expenseSourceTags.map((tag: string) => (
-                <button
-                  key={tag}
-                  type="button"
-                  onClick={() => {
-                    setFormData({ ...formData, tag });
-                    setCustomTag("");
-                  }}
-                  className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors min-h-[44px] ${
-                    formData.tag === tag && !customTag
-                      ? "bg-red-600 text-white"
-                      : "bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600"
-                  }`}
-                >
-                  {tag}
-                </button>
-              ))}
-            </div>
-            <Input
-              placeholder="Or enter custom source"
-              value={customTag}
-              onChange={(e) => {
-                setCustomTag(e.target.value);
-                if (e.target.value) {
-                  setFormData({ ...formData, tag: "" });
-                }
-              }}
-              aria-label="Or enter custom expense source"
-            />
-          </div>
-        )}
-
-        <Input
-          label="Notes (optional)"
-          type="text"
-          value={formData.notes}
-          onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-          placeholder="Add any notes..."
-        />
-
-        <TransactionLinkedInfo
-          transactionId={transactionId}
-          transactionData={transactionData}
-          transactionType={transactionType}
-          onClose={onClose}
-          onShowLinkCustomerModal={() => setShowLinkCustomerModal(true)}
-          onShowLinkOrderModal={() => setShowLinkOrderModal(true)}
-          onEditCustomer={(address, entryId) => {
-            setEditingCustomerAddress(address);
-            setEditingCustomerEntryId(entryId || null);
-          }}
-          onEditOrder={(orderId) => {
-            setEditingOrderId(orderId);
-          }}
-        />
-
-        <div className="flex gap-3 pt-4">
-          <Button
+        <div className="flex gap-2 pt-4 border-t border-gray-200 dark:border-gray-700">
+          <button
             type="button"
-            variant="outline"
-            className="flex-1"
             onClick={onClose}
+            className="px-4 py-2 text-sm rounded bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600 disabled:opacity-50 transition-colors min-h-[44px]"
           >
             Cancel
-          </Button>
-          <Button 
-            type="submit" 
-            variant="primary" 
-            className="flex-1" 
+          </button>
+          <button
+            type="submit"
             disabled={createTransaction.isPending || updateTransaction.isPending}
+            className="flex-1 px-4 py-2 text-sm rounded bg-green-600 text-white hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors min-h-[44px]"
           >
             {(createTransaction.isPending || updateTransaction.isPending) ? "Saving..." : transactionId ? "Update" : "Add"}
-          </Button>
+          </button>
         </div>
       </form>
     </Modal>

@@ -29,6 +29,8 @@ export interface TransactionResponse {
     fromStep?: string | null;
     toStep: string;
     time: Date | string;
+    restaurantIndex?: number; // -1 for main restaurant, 0+ for additional restaurants
+    customerIndex?: number; // 0+ for customers
   }>;
   createdAt: string;
   updatedAt: string;
@@ -66,6 +68,7 @@ export interface TransactionQuery {
   };
   type?: TransactionType;
   tag?: string;
+  $and?: Array<{ $or?: any[] }>;
 }
 
 export interface BillQuery {
@@ -219,6 +222,8 @@ export interface FormattedTransaction {
     fromStep?: string | null;
     toStep: string;
     time: Date | string;
+    restaurantIndex?: number; // -1 for main restaurant, 0+ for additional restaurants
+    customerIndex?: number; // 0+ for customers
   }>;
   routeSegments?: Array<{
     fromLat: number;

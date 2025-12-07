@@ -37,6 +37,7 @@ export async function GET(request: NextRequest) {
     const endDate = searchParams.get("endDate");
     const type = searchParams.get("type");
     const tag = searchParams.get("tag");
+    const search = searchParams.get("search");
     
     const pagination = validatePagination(
       searchParams.get("page"),
@@ -69,6 +70,83 @@ export async function GET(request: NextRequest) {
 
     if (tag) {
       query.tag = tag;
+    }
+
+    // Handle search query
+    if (search && search.trim()) {
+      // Split search query into individual terms (split by spaces)
+      const searchTerms = search.trim().split(/\s+/).filter(term => term.length > 0);
+      
+      if (searchTerms.length > 0) {
+        const termConditions: any[] = [];
+
+        // For each search term, create conditions that must match
+        for (const searchTerm of searchTerms) {
+          const termSearchConditions: any[] = [];
+          const searchLower = searchTerm.toLowerCase();
+
+          // Search in transaction tag (app name)
+          termSearchConditions.push({ tag: { $regex: searchLower, $options: "i" } });
+
+          // Search in amount (try to parse as number)
+          const searchAmount = parseFloatSafe(searchTerm);
+          if (searchAmount !== null) {
+            termSearchConditions.push({ amount: searchAmount });
+          }
+
+          // Search in linked delivery orders (restaurant names and app names)
+          const matchingOrderIds: mongoose.Types.ObjectId[] = [];
+          const matchingOrders = await DeliveryOrder.find({
+            userId: session.user.id,
+            $or: [
+              { restaurantName: { $regex: searchTerm, $options: "i" } },
+              { appName: { $regex: searchTerm, $options: "i" } },
+            ],
+          }).select("_id").lean();
+          matchingOrderIds.push(...matchingOrders.map((o: any) => o._id));
+
+          // Also search in additionalRestaurants
+          const ordersWithAdditionalRestaurants = await DeliveryOrder.find({
+            userId: session.user.id,
+            "additionalRestaurants.name": { $regex: searchTerm, $options: "i" },
+          }).select("_id").lean();
+          ordersWithAdditionalRestaurants.forEach((o: any) => {
+            if (!matchingOrderIds.some(id => id.toString() === o._id.toString())) {
+              matchingOrderIds.push(o._id);
+            }
+          });
+
+          // Search in linked OCR exports (customer names and app names)
+          const matchingCustomerIds: mongoose.Types.ObjectId[] = [];
+          const matchingCustomers = await OcrExport.find({
+            userId: session.user.id,
+            $or: [
+              { customerName: { $regex: searchTerm, $options: "i" } },
+              { appName: { $regex: searchTerm, $options: "i" } },
+            ],
+          }).select("_id").lean();
+          matchingCustomerIds.push(...matchingCustomers.map((c: any) => c._id));
+
+          // Add conditions for matching linked orders and customers
+          if (matchingOrderIds.length > 0) {
+            termSearchConditions.push({ linkedDeliveryOrderIds: { $in: matchingOrderIds } });
+          }
+          if (matchingCustomerIds.length > 0) {
+            termSearchConditions.push({ linkedOcrExportIds: { $in: matchingCustomerIds } });
+          }
+
+          // Each term must match at least one condition (OR within term)
+          if (termSearchConditions.length > 0) {
+            termConditions.push({ $or: termSearchConditions });
+          }
+        }
+
+        // All terms must match (AND across terms)
+        if (termConditions.length > 0) {
+          query.$and = query.$and || [];
+          query.$and.push(...termConditions);
+        }
+      }
     }
 
     const transactions = await Transaction.find(query)

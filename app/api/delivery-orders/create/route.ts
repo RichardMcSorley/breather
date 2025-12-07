@@ -19,7 +19,7 @@ export async function POST(request: NextRequest) {
     await connectDB();
 
     const body = await request.json();
-    const { userId, appName, miles, money, restaurantName, restaurantAddress, restaurantLat, restaurantLon, restaurantPlaceId, date, time, transactionId } = body;
+    const { userId, appName, miles, money, restaurantName, restaurantAddress, restaurantLat, restaurantLon, restaurantPlaceId, date, time, transactionId, additionalRestaurants } = body;
 
     // Validate required fields
     if (!userId) {
@@ -31,9 +31,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
     }
 
-    if (!appName) {
-      return NextResponse.json({ error: "Missing appName" }, { status: 400 });
-    }
+    // appName is optional
 
     // Miles is optional - if provided, must be valid
     if (miles !== undefined && miles !== null && miles !== "") {
@@ -70,7 +68,7 @@ export async function POST(request: NextRequest) {
     const deliveryOrder = await DeliveryOrder.create({
       entryId,
       userId,
-      appName: appName.trim(),
+      ...(appName && appName.trim() && { appName: appName.trim() }),
       ...(milesNum !== undefined && { miles: milesNum }),
       money: moneyNum,
       ...(milesToMoneyRatio !== undefined && { milesToMoneyRatio }),
@@ -83,6 +81,12 @@ export async function POST(request: NextRequest) {
       processedAt: processedAtDate,
       step: "CREATED",
       active: true,
+      ...(Array.isArray(additionalRestaurants) && additionalRestaurants.length > 0 && {
+        additionalRestaurants: additionalRestaurants.map((r: any) => ({
+          name: r.name?.trim() || "",
+          address: r.address?.trim() || undefined,
+        })),
+      }),
     });
 
     // If transactionId is provided, link the order to the transaction

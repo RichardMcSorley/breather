@@ -3,8 +3,6 @@ import connectDB from "@/lib/mongodb";
 import DeliveryOrder from "@/lib/models/DeliveryOrder";
 import Transaction from "@/lib/models/Transaction";
 import { processRestaurantScreenshot } from "@/lib/order-ocr-processor";
-import { searchPlaces } from "@/lib/google-places-helper";
-import { formatAddress } from "@/lib/address-formatter";
 import { handleApiError } from "@/lib/api-error-handler";
 
 export async function POST(request: NextRequest) {
@@ -71,68 +69,24 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Pre-search address using Google Places API
-    let placeId: string | undefined;
-    let placeLat: number | undefined;
-    let placeLon: number | undefined;
-    let formattedAddress: string | undefined;
-
-    try {
-      const searchQuery = `${restaurantName} ${extractedAddress}`;
-      const placesResults = await searchPlaces(
-        searchQuery,
-        lat,
-        lon,
-        5000,
-        "restaurant"
-      );
-
-      if (placesResults.length > 0) {
-        const firstResult = placesResults[0];
-        placeId = firstResult.place_id;
-        placeLat = parseFloat(firstResult.lat);
-        placeLon = parseFloat(firstResult.lon);
-        // Extract address from display_name (remove restaurant name if present)
-        const displayParts = firstResult.display_name.split(',').map(p => p.trim());
-        let addressParts = displayParts;
-        if (displayParts[0] && displayParts[0].toLowerCase() === restaurantName.toLowerCase()) {
-          addressParts = displayParts.slice(1);
-        }
-        formattedAddress = formatAddress(addressParts.join(', '));
-      }
-    } catch (searchError) {
-      console.error("Error searching for address:", searchError);
-      // Continue without address search results
-    }
-
     // Determine if this is the first restaurant or an additional one
     const isFirstRestaurant = !activeOrder.restaurantAddress;
 
     if (isFirstRestaurant) {
       // Update the main restaurant fields
       activeOrder.restaurantName = restaurantName;
-      if (formattedAddress) {
-        activeOrder.restaurantAddress = formattedAddress;
-      } else {
-        activeOrder.restaurantAddress = extractedAddress;
-      }
-      if (placeId) {
-        activeOrder.restaurantPlaceId = placeId;
-      }
-      if (placeLat !== undefined) {
-        activeOrder.restaurantLat = placeLat;
-      }
-      if (placeLon !== undefined) {
-        activeOrder.restaurantLon = placeLon;
-      }
+      activeOrder.restaurantAddress = extractedAddress;
+      activeOrder.restaurantPlaceId = undefined;
+      activeOrder.restaurantLat = undefined;
+      activeOrder.restaurantLon = undefined;
     } else {
       // Add to additionalRestaurants array
       const additionalRestaurant = {
         name: restaurantName,
-        address: formattedAddress || extractedAddress,
-        placeId: placeId,
-        lat: placeLat,
-        lon: placeLon,
+        address: extractedAddress,
+        placeId: undefined,
+        lat: undefined,
+        lon: undefined,
         screenshot: screenshot,
         extractedText: ocrText,
         userLatitude: lat,
@@ -197,12 +151,8 @@ export async function POST(request: NextRequest) {
         ? "Restaurant information updated successfully" 
         : "Additional restaurant added successfully",
       restaurantName,
-      address: formattedAddress || extractedAddress,
-      placeId,
-      lat: placeLat,
-      lon: placeLon,
+      address: extractedAddress,
       isFirstRestaurant,
-      addressFound: !!placeId, // Indicates if address was successfully found via Google Places
     });
   } catch (error) {
     return handleApiError(error);

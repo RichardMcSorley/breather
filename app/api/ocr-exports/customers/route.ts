@@ -149,23 +149,27 @@ export async function GET(request: NextRequest) {
     }
 
     // Apply search filter if provided (search by customer name or address)
+    // Support multi-term search: split by spaces, all terms must match (AND logic)
     if (searchQuery && searchQuery.trim()) {
-      const queryLower = searchQuery.trim().toLowerCase();
-      customers = customers.filter((customer) => {
-        // Search in primary customer name
-        if (customer.customerName.toLowerCase().includes(queryLower)) {
-          return true;
-        }
-        // Search in all customer names
-        if (customer.customerNames && customer.customerNames.some(name => name.toLowerCase().includes(queryLower))) {
-          return true;
-        }
-        // Search in address
-        if (customer.address.toLowerCase().includes(queryLower)) {
-          return true;
-        }
-        return false;
-      });
+      const searchTerms = searchQuery.trim().split(/\s+/).filter(term => term.length > 0);
+      
+      if (searchTerms.length > 0) {
+        customers = customers.filter((customer) => {
+          // All search terms must match (AND logic)
+          return searchTerms.every((term) => {
+            const termLower = term.toLowerCase();
+            // Each term can match in any field (OR logic within term)
+            return (
+              // Search in primary customer name
+              customer.customerName.toLowerCase().includes(termLower) ||
+              // Search in all customer names
+              (customer.customerNames && customer.customerNames.some(name => name.toLowerCase().includes(termLower))) ||
+              // Search in address
+              customer.address.toLowerCase().includes(termLower)
+            );
+          });
+        });
+      }
     }
 
     // Sort by latest visit date (descending) - most recent first

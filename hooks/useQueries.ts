@@ -4,8 +4,8 @@ import { useToast } from "@/lib/toast";
 
 // Query Keys
 export const queryKeys = {
-  transactions: (filterType?: string, filterTag?: string, page?: number, limit?: number) =>
-    ["transactions", filterType, filterTag, page, limit] as const,
+  transactions: (filterType?: string, filterTag?: string, page?: number, limit?: number, search?: string) =>
+    ["transactions", filterType, filterTag, page, limit, search] as const,
   transaction: (id: string) => ["transaction", id] as const,
   bills: () => ["bills"] as const,
   bill: (id: string) => ["bill", id] as const,
@@ -30,10 +30,11 @@ export function useTransactions(
   filterType: string = "all",
   filterTag: string = "all",
   page: number = 1,
-  limit: number = 50
+  limit: number = 50,
+  search: string = ""
 ) {
   return useQuery({
-    queryKey: queryKeys.transactions(filterType, filterTag, page, limit),
+    queryKey: queryKeys.transactions(filterType, filterTag, page, limit, search),
     queryFn: async () => {
       let url = `/api/transactions?page=${page}&limit=${limit}`;
       if (filterType !== "all") {
@@ -41,6 +42,9 @@ export function useTransactions(
       }
       if (filterTag !== "all") {
         url += `&tag=${filterTag}`;
+      }
+      if (search && search.trim()) {
+        url += `&search=${encodeURIComponent(search.trim())}`;
       }
       const res = await fetch(url);
       if (!res.ok) {
