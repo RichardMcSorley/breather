@@ -41,8 +41,10 @@ export async function POST(request: NextRequest) {
     try {
       const processed = await processOrderScreenshot(screenshot, ocrText);
 
-      // Calculate miles to money ratio
-      const milesToMoneyRatio = processed.money / processed.miles;
+      // Calculate miles to money ratio (only if miles is provided and > 0)
+      const milesToMoneyRatio = processed.miles && processed.miles > 0 
+        ? processed.money / processed.miles 
+        : undefined;
 
       // Get current EST time and convert to UTC (matches transaction log timezone logic)
       const { date: processedAtDate } = getCurrentESTAsUTC();
@@ -52,9 +54,9 @@ export async function POST(request: NextRequest) {
         entryId,
         userId,
         appName,
-        miles: processed.miles,
+        ...(processed.miles !== undefined && processed.miles !== null && { miles: processed.miles }),
         money: processed.money,
-        milesToMoneyRatio,
+        ...(milesToMoneyRatio !== undefined && { milesToMoneyRatio }),
         restaurantName: processed.restaurantName,
         time: "", // Time not extracted from screenshot, can be updated later
         rawResponse: processed.rawResponse,
@@ -77,18 +79,23 @@ export async function POST(request: NextRequest) {
       }
 
       // Build response
+      const milesText = deliveryOrder.miles !== undefined ? `${deliveryOrder.miles} mi` : "? mi";
+      const ratioText = deliveryOrder.milesToMoneyRatio !== undefined 
+        ? `$${deliveryOrder.milesToMoneyRatio.toFixed(2)}/mi - ` 
+        : "";
+      
       const response = {
         success: true,
         id: deliveryOrder._id.toString(),
         entryId: deliveryOrder.entryId,
         message: "Delivery order processed and saved successfully",
-        miles: deliveryOrder.miles,
+        ...(deliveryOrder.miles !== undefined && { miles: deliveryOrder.miles }),
         money: deliveryOrder.money,
-        milesToMoneyRatio: deliveryOrder.milesToMoneyRatio,
+        ...(deliveryOrder.milesToMoneyRatio !== undefined && { milesToMoneyRatio: deliveryOrder.milesToMoneyRatio }),
         restaurantName: deliveryOrder.restaurantName,
         time: deliveryOrder.time,
         appName: deliveryOrder.appName,
-        displayText: `$${deliveryOrder.milesToMoneyRatio.toFixed(2)}/mi - ${deliveryOrder.miles} mi for $${deliveryOrder.money} at ${deliveryOrder.restaurantName}`,
+        displayText: `${ratioText}${milesText} for $${deliveryOrder.money} at ${deliveryOrder.restaurantName}`,
         editLink: `https://breather-chi.vercel.app/delivery-orders?orderId=${deliveryOrder._id.toString()}`,
       };
 
@@ -441,7 +448,12 @@ export async function PATCH(request: NextRequest) {
     if (updateSet.miles !== undefined || updateSet.money !== undefined) {
       const finalMiles = updateSet.miles ?? existingOrder.miles;
       const finalMoney = updateSet.money ?? existingOrder.money;
-      updateSet.milesToMoneyRatio = finalMoney / finalMiles;
+      if (finalMiles !== undefined && finalMiles !== null && finalMiles > 0) {
+        updateSet.milesToMoneyRatio = finalMoney / finalMiles;
+      } else {
+        // If miles is 0 or undefined, remove the ratio
+        updateSet.milesToMoneyRatio = undefined;
+      }
     }
 
     if (Object.keys(updateSet).length === 0) {

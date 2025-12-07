@@ -35,8 +35,11 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Missing appName" }, { status: 400 });
     }
 
-    if (!miles || isNaN(parseFloat(miles)) || parseFloat(miles) <= 0) {
-      return NextResponse.json({ error: "Invalid miles" }, { status: 400 });
+    // Miles is optional - if provided, must be valid
+    if (miles !== undefined && miles !== null && miles !== "") {
+      if (isNaN(parseFloat(miles)) || parseFloat(miles) < 0) {
+        return NextResponse.json({ error: "Invalid miles" }, { status: 400 });
+      }
     }
 
     if (!money || isNaN(parseFloat(money)) || parseFloat(money) <= 0) {
@@ -54,10 +57,10 @@ export async function POST(request: NextRequest) {
     // Generate a unique entryId
     const entryId = randomBytes(16).toString("hex");
 
-    // Calculate miles to money ratio
-    const milesNum = parseFloat(miles);
+    // Calculate miles to money ratio (only if miles is provided)
+    const milesNum = miles !== undefined && miles !== null && miles !== "" ? parseFloat(miles) : undefined;
     const moneyNum = parseFloat(money);
-    const milesToMoneyRatio = moneyNum / milesNum;
+    const milesToMoneyRatio = milesNum !== undefined && milesNum > 0 ? moneyNum / milesNum : undefined;
 
     // Parse date and time as EST and convert to UTC for processedAt
     // If time is provided, use it; otherwise default to midnight
@@ -68,9 +71,9 @@ export async function POST(request: NextRequest) {
       entryId,
       userId,
       appName: appName.trim(),
-      miles: milesNum,
+      ...(milesNum !== undefined && { miles: milesNum }),
       money: moneyNum,
-      milesToMoneyRatio,
+      ...(milesToMoneyRatio !== undefined && { milesToMoneyRatio }),
       restaurantName: restaurantName.trim(),
       restaurantAddress: restaurantAddress?.trim() || undefined,
       restaurantPlaceId: restaurantPlaceId || undefined,

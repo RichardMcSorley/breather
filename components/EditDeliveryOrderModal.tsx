@@ -34,9 +34,9 @@ interface DeliveryOrder {
   id: string;
   entryId: string;
   appName: string;
-  miles: number;
+  miles?: number;
   money: number;
-  milesToMoneyRatio: number;
+  milesToMoneyRatio?: number;
   restaurantName: string;
   restaurantAddress?: string | null;
   time: string;
@@ -120,7 +120,7 @@ export default function EditDeliveryOrderModal({
       setOrder(foundOrder);
       setFormValues({
         appName: foundOrder.appName,
-        miles: foundOrder.miles.toString(),
+        miles: foundOrder.miles !== undefined ? foundOrder.miles.toString() : "",
         money: foundOrder.money.toString(),
         restaurantName: foundOrder.restaurantName,
         restaurantAddress: foundOrder.restaurantAddress || "",
@@ -141,12 +141,16 @@ export default function EditDeliveryOrderModal({
       setSaving(true);
       setError(null);
 
-      const miles = parseFloat(formValues.miles);
-      const money = parseFloat(formValues.money);
-
-      if (isNaN(miles) || miles <= 0) {
-        throw new Error("Miles must be a positive number");
+      // Miles is optional - if provided, must be valid
+      const miles = formValues.miles && formValues.miles.trim() !== "" 
+        ? parseFloat(formValues.miles) 
+        : undefined;
+      
+      if (miles !== undefined && (isNaN(miles) || miles < 0)) {
+        throw new Error("Miles must be a valid number");
       }
+      
+      const money = parseFloat(formValues.money);
       if (isNaN(money) || money <= 0) {
         throw new Error("Money must be a positive number");
       }
@@ -166,7 +170,7 @@ export default function EditDeliveryOrderModal({
         body: JSON.stringify({
           id: orderId,
           appName: formValues.appName,
-          miles,
+          ...(miles !== undefined && { miles }),
           money,
           restaurantName: formValues.restaurantName,
           restaurantAddress: cleanedAddress,
@@ -610,9 +614,11 @@ export default function EditDeliveryOrderModal({
             restaurantName={formValues.restaurantName || order.restaurantName}
             orderId={orderId || undefined}
             orderDetails={{
-              miles: parseFloat(formValues.miles) || order.miles,
+              ...(formValues.miles && formValues.miles.trim() !== "" 
+                ? { miles: parseFloat(formValues.miles) } 
+                : order.miles !== undefined ? { miles: order.miles } : {}),
               money: parseFloat(formValues.money) || order.money,
-              milesToMoneyRatio: formValues.miles && formValues.money 
+              milesToMoneyRatio: formValues.miles && formValues.miles.trim() !== "" && formValues.money 
                 ? parseFloat(formValues.money) / parseFloat(formValues.miles)
                 : order.milesToMoneyRatio,
               appName: formValues.appName || order.appName,
@@ -640,9 +646,9 @@ export default function EditDeliveryOrderModal({
               }
               orderId={orderId || undefined}
               orderDetails={{
-                miles: order.miles,
+                ...(order.miles !== undefined && { miles: order.miles }),
                 money: order.money,
-                milesToMoneyRatio: order.milesToMoneyRatio,
+                ...(order.milesToMoneyRatio !== undefined && { milesToMoneyRatio: order.milesToMoneyRatio }),
                 appName: order.appName,
               }}
               userLatitude={

@@ -32,9 +32,9 @@ interface LinkedOrder {
   id: string;
   restaurantName: string;
   appName: string;
-  miles: number;
+  miles?: number;
   money: number;
-  milesToMoneyRatio: number;
+  milesToMoneyRatio?: number;
   time: string;
   processedAt: string;
 }
@@ -477,11 +477,13 @@ export default function CustomerDetailsModal({
                             {order.restaurantName}
                           </div>
                           <div className="text-xs text-gray-600 dark:text-gray-400">
-                            {order.appName} • {order.miles.toFixed(1)} mi • ${order.money.toFixed(2)}
+                            {order.appName}{order.miles !== undefined ? ` • ${order.miles.toFixed(1)} mi` : ""} • ${order.money.toFixed(2)}
                           </div>
-                          <div className="text-xs text-gray-500 dark:text-gray-500 mt-1">
-                            Ratio: ${order.milesToMoneyRatio.toFixed(2)}/mi
-                          </div>
+                          {order.milesToMoneyRatio !== undefined && (
+                            <div className="text-xs text-gray-500 dark:text-gray-500 mt-1">
+                              Ratio: ${order.milesToMoneyRatio.toFixed(2)}/mi
+                            </div>
+                          )}
                         </div>
                       </div>
                     ))}

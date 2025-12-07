@@ -16,9 +16,9 @@ interface DeliveryOrder {
   id: string;
   entryId: string;
   appName: string;
-  miles: number;
+  miles?: number;
   money: number;
-  milesToMoneyRatio: number;
+  milesToMoneyRatio?: number;
   restaurantName: string;
   restaurantAddress?: string;
   time: string;
@@ -270,15 +270,19 @@ export default function DeliveryOrdersList({
                 {/* Bottom section: Miles/ratio and Edit/Delete buttons */}
                 <div className="flex items-center justify-between mt-auto pt-1 border-t border-gray-200 dark:border-gray-700 gap-2 min-w-0">
                   <div className="text-xs text-gray-500 dark:text-gray-400 flex-1 min-w-0 flex items-center gap-2">
-                    <div className="flex items-center gap-1">
-                      <Package className="w-3 h-3" />
-                      <span>
-                        <span className="font-medium">{order.miles.toFixed(1)}</span> mi
-                      </span>
-                    </div>
-                    <div>
-                      <span className="font-medium">${order.milesToMoneyRatio.toFixed(2)}</span>/mi
-                    </div>
+                    {order.miles !== undefined && (
+                      <div className="flex items-center gap-1">
+                        <Package className="w-3 h-3" />
+                        <span>
+                          <span className="font-medium">{order.miles.toFixed(1)}</span> mi
+                        </span>
+                      </div>
+                    )}
+                    {order.milesToMoneyRatio !== undefined && (
+                      <div>
+                        <span className="font-medium">${order.milesToMoneyRatio.toFixed(2)}</span>/mi
+                      </div>
+                    )}
                   </div>
                   <div className="flex items-center gap-2 flex-shrink-0">
                     {onEditClick && (

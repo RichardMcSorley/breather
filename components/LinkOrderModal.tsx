@@ -10,9 +10,9 @@ interface DeliveryOrder {
   id: string;
   entryId: string;
   appName: string;
-  miles: number;
+  miles?: number;
   money: number;
-  milesToMoneyRatio: number;
+  milesToMoneyRatio?: number;
   restaurantName: string;
   time: string;
   processedAt: string;
@@ -242,9 +242,12 @@ export default function LinkOrderModal({
       setError("App name is required");
       return;
     }
-    if (!createFormData.miles || isNaN(parseFloat(createFormData.miles)) || parseFloat(createFormData.miles) <= 0) {
-      setError("Valid miles is required");
-      return;
+    // Miles is optional - if provided, must be valid
+    if (createFormData.miles && createFormData.miles.trim() !== "") {
+      if (isNaN(parseFloat(createFormData.miles)) || parseFloat(createFormData.miles) < 0) {
+        setError("Miles must be a valid number");
+        return;
+      }
     }
     if (!createFormData.money || isNaN(parseFloat(createFormData.money)) || parseFloat(createFormData.money) <= 0) {
       setError("Valid pay amount is required");
@@ -285,7 +288,7 @@ export default function LinkOrderModal({
         body: JSON.stringify({
           userId,
           appName: createFormData.appName.trim(),
-          miles: parseFloat(createFormData.miles),
+          ...(createFormData.miles && createFormData.miles.trim() !== "" && { miles: parseFloat(createFormData.miles) }),
           money: parseFloat(createFormData.money),
           restaurantName: createFormData.restaurantName.trim(),
           restaurantAddress: createFormData.restaurantAddress.trim() || undefined,
@@ -509,7 +512,7 @@ export default function LinkOrderModal({
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                  Miles *
+                  Miles
                 </label>
                 <input
                   type="number"
@@ -646,11 +649,13 @@ export default function LinkOrderModal({
                   {formatDate(order.processedAt)}
                   {order.time && ` at ${order.time}`}
                   {" • "}
-                  {order.miles.toFixed(1)} mi • {formatCurrency(order.money)}
+                  {order.miles !== undefined ? `${order.miles.toFixed(1)} mi • ` : ""}{formatCurrency(order.money)}
                 </div>
-                <div className="text-xs text-gray-500 dark:text-gray-500 mt-1">
-                  Ratio: ${order.milesToMoneyRatio.toFixed(2)}/mi
-                </div>
+                {order.milesToMoneyRatio !== undefined && (
+                  <div className="text-xs text-gray-500 dark:text-gray-500 mt-1">
+                    Ratio: ${order.milesToMoneyRatio.toFixed(2)}/mi
+                  </div>
+                )}
               </div>
               <button
                 onClick={() => handleLink(order.id)}
@@ -669,7 +674,11 @@ export default function LinkOrderModal({
         isOpen={showSearchAddressModal}
         onClose={() => setShowSearchAddressModal(false)}
         title="Search Restaurant Address"
-        initialQuery={createFormData.restaurantAddress}
+        initialQuery={
+          createFormData.restaurantName.trim() && createFormData.restaurantAddress.trim()
+            ? `${createFormData.restaurantName} ${createFormData.restaurantAddress}`
+            : createFormData.restaurantName.trim() || createFormData.restaurantAddress.trim() || ""
+        }
         onAddressSelected={(address, placeId, lat, lon) => {
           setCreateFormData(prev => ({
             ...prev,

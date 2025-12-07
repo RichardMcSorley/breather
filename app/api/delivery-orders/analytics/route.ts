@@ -147,8 +147,8 @@ export async function GET(request: NextRequest) {
     const acceptedCount = acceptedOrders.length;
     const rejectedCount = rejectedOrders.length;
 
-    const acceptedRatios = acceptedOrders.map((o) => o.milesToMoneyRatio).filter((r) => r > 0);
-    const rejectedRatios = rejectedOrders.map((o) => o.milesToMoneyRatio).filter((r) => r > 0);
+    const acceptedRatios = acceptedOrders.map((o) => o.milesToMoneyRatio).filter((r): r is number => r !== undefined && r > 0);
+    const rejectedRatios = rejectedOrders.map((o) => o.milesToMoneyRatio).filter((r): r is number => r !== undefined && r > 0);
 
     const medianRatioAccepted = calculateMedian(acceptedRatios);
     const medianRatioRejected = calculateMedian(rejectedRatios);
@@ -176,7 +176,9 @@ export async function GET(request: NextRequest) {
       const isAccepted = order.linkedTransactionIds && order.linkedTransactionIds.length > 0;
       if (isAccepted) {
         restaurantData.acceptedCount++;
-        restaurantData.acceptedRatios.push(order.milesToMoneyRatio);
+        if (order.milesToMoneyRatio !== undefined) {
+          restaurantData.acceptedRatios.push(order.milesToMoneyRatio);
+        }
         // Add earnings from linked transactions
         const orderId = order._id.toString();
         const orderTransactions = orderIdToTransactions.get(orderId) || [];
@@ -269,7 +271,9 @@ export async function GET(request: NextRequest) {
       const hourRestaurantData = hourRestaurantMap.get(key)!;
       hourRestaurantData.orders.push(order);
       if (order.linkedTransactionIds && order.linkedTransactionIds.length > 0) {
-        hourRestaurantData.acceptedRatios.push(order.milesToMoneyRatio);
+        if (order.milesToMoneyRatio !== undefined) {
+          hourRestaurantData.acceptedRatios.push(order.milesToMoneyRatio);
+        }
       }
     });
 
@@ -341,7 +345,9 @@ export async function GET(request: NextRequest) {
       } else {
         dayData.rejectedCount++;
       }
-      dayData.ratios.push(order.milesToMoneyRatio);
+      if (order.milesToMoneyRatio !== undefined) {
+        dayData.ratios.push(order.milesToMoneyRatio);
+      }
     });
 
     const dayNames = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
@@ -387,7 +393,9 @@ export async function GET(request: NextRequest) {
     const byRatioRange = ratioRanges.map((range) => {
       const rangeOrders = orders.filter(
         (order) =>
-          order.milesToMoneyRatio >= range.min && order.milesToMoneyRatio < range.max
+          order.milesToMoneyRatio !== undefined &&
+          order.milesToMoneyRatio >= range.min &&
+          order.milesToMoneyRatio < range.max
       );
       const accepted = rangeOrders.filter(
         (order) => order.linkedTransactionIds && order.linkedTransactionIds.length > 0
@@ -561,8 +569,12 @@ export async function GET(request: NextRequest) {
           
           if (segmentOrders.length > 0) {
             // Sort by milesToMoneyRatio descending and take the best one
-            const sorted = [...segmentOrders].sort((a, b) => b.milesToMoneyRatio - a.milesToMoneyRatio);
-            hourOrders.push(sorted[0]);
+            // Filter out orders without milesToMoneyRatio before sorting
+            const ordersWithRatio = segmentOrders.filter((o) => o.milesToMoneyRatio !== undefined);
+            if (ordersWithRatio.length > 0) {
+              const sorted = [...ordersWithRatio].sort((a, b) => (b.milesToMoneyRatio || 0) - (a.milesToMoneyRatio || 0));
+              hourOrders.push(sorted[0]);
+            }
           }
         }
         
@@ -604,7 +616,7 @@ export async function GET(request: NextRequest) {
         // If we have orders for this hour, sort all segment bests and take top 3
         if (hourOrders.length > 0) {
           // Sort all segment bests by milesToMoneyRatio descending
-          const sortedHourOrders = hourOrders.sort((a, b) => b.milesToMoneyRatio - a.milesToMoneyRatio);
+          const sortedHourOrders = hourOrders.sort((a, b) => (b.milesToMoneyRatio || 0) - (a.milesToMoneyRatio || 0));
           
           // Try to get top 3, but only include those that can be completed sequentially
           const candidateOrders = sortedHourOrders.slice(0, 3);
@@ -620,42 +632,46 @@ export async function GET(request: NextRequest) {
           
           bestOrdersByHour.push({
             hour,
-            orders: top3Orders.map((order) => {
-              const orderId = order._id.toString();
-              // Check if there's an actual linked transaction (not just matching)
-              const orderTransactions = orderIdToTransactions.get(orderId) || [];
-              const isAccepted = orderTransactions.length > 0;
-              const estimatedCompletionTime = Math.round(calculateOrderTime(order));
-              return {
-                id: orderId,
-                restaurantName: order.restaurantName || "Unknown",
-                money: order.money,
-                miles: order.miles,
-                milesToMoneyRatio: Math.round(order.milesToMoneyRatio * 100) / 100,
-                appName: order.appName || "Unknown",
-                processedAt: order.processedAt.toISOString(),
-                isAccepted,
-                estimatedCompletionTime,
-              };
-            }),
-            worstOrders: worst3Orders.map((order) => {
-              const orderId = order._id.toString();
-              // Check if there's an actual linked transaction (not just matching)
-              const orderTransactions = orderIdToTransactions.get(orderId) || [];
-              const isAccepted = orderTransactions.length > 0;
-              const estimatedCompletionTime = Math.round(calculateOrderTime(order));
-              return {
-                id: orderId,
-                restaurantName: order.restaurantName || "Unknown",
-                money: order.money,
-                miles: order.miles,
-                milesToMoneyRatio: Math.round(order.milesToMoneyRatio * 100) / 100,
-                appName: order.appName || "Unknown",
-                processedAt: order.processedAt.toISOString(),
-                isAccepted,
-                estimatedCompletionTime,
-              };
-            }),
+            orders: top3Orders
+              .filter((order) => order.milesToMoneyRatio !== undefined)
+              .map((order) => {
+                const orderId = order._id.toString();
+                // Check if there's an actual linked transaction (not just matching)
+                const orderTransactions = orderIdToTransactions.get(orderId) || [];
+                const isAccepted = orderTransactions.length > 0;
+                const estimatedCompletionTime = Math.round(calculateOrderTime(order));
+                return {
+                  id: orderId,
+                  restaurantName: order.restaurantName || "Unknown",
+                  money: order.money,
+                  miles: order.miles || 0,
+                  milesToMoneyRatio: Math.round((order.milesToMoneyRatio || 0) * 100) / 100,
+                  appName: order.appName || "Unknown",
+                  processedAt: order.processedAt.toISOString(),
+                  isAccepted,
+                  estimatedCompletionTime,
+                };
+              }),
+            worstOrders: worst3Orders
+              .filter((order) => order.milesToMoneyRatio !== undefined)
+              .map((order) => {
+                const orderId = order._id.toString();
+                // Check if there's an actual linked transaction (not just matching)
+                const orderTransactions = orderIdToTransactions.get(orderId) || [];
+                const isAccepted = orderTransactions.length > 0;
+                const estimatedCompletionTime = Math.round(calculateOrderTime(order));
+                return {
+                  id: orderId,
+                  restaurantName: order.restaurantName || "Unknown",
+                  money: order.money,
+                  miles: order.miles || 0,
+                  milesToMoneyRatio: Math.round((order.milesToMoneyRatio || 0) * 100) / 100,
+                  appName: order.appName || "Unknown",
+                  processedAt: order.processedAt.toISOString(),
+                  isAccepted,
+                  estimatedCompletionTime,
+                };
+              }),
             totalPotentialEarnings: Math.round(totalPotentialEarnings * 100) / 100,
             worstCaseEarnings: Math.round(worstCaseEarnings * 100) / 100,
             orderVolume: totalOrderVolume,

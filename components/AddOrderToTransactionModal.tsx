@@ -11,9 +11,9 @@ interface DeliveryOrder {
   id: string;
   entryId: string;
   appName: string;
-  miles: number;
+  miles?: number;
   money: number;
-  milesToMoneyRatio: number;
+  milesToMoneyRatio?: number;
   restaurantName: string;
   time: string;
   processedAt: string;
@@ -190,10 +190,18 @@ export default function AddOrderToTransactionModal({
                         <span className="font-medium text-green-600 dark:text-green-400">
                           {formatCurrency(order.money)}
                         </span>
-                        <span>•</span>
-                        <span>{order.miles.toFixed(1)} mi</span>
-                        <span>•</span>
-                        <span>${order.milesToMoneyRatio.toFixed(2)}/mi</span>
+                        {order.miles !== undefined && (
+                          <>
+                            <span>•</span>
+                            <span>{order.miles.toFixed(1)} mi</span>
+                          </>
+                        )}
+                        {order.milesToMoneyRatio !== undefined && (
+                          <>
+                            <span>•</span>
+                            <span>${order.milesToMoneyRatio.toFixed(2)}/mi</span>
+                          </>
+                        )}
                       </div>
                       
                       <div className="text-xs text-gray-500 dark:text-gray-500">

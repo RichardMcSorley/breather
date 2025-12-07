@@ -2,8 +2,10 @@
 
 import { useState, useEffect } from "react";
 import Modal from "./ui/Modal";
+import SearchAddressModal from "./SearchAddressModal";
 import { format } from "date-fns";
 import { formatAddress } from "@/lib/address-formatter";
+import { Search } from "lucide-react";
 
 interface Customer {
   address: string;
@@ -38,6 +40,14 @@ export default function LinkCustomerModal({
   const [transactionTime, setTransactionTime] = useState<string | null>(null);
   const [errorAddress, setErrorAddress] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState<string>("");
+  const [showCreateForm, setShowCreateForm] = useState(false);
+  const [creating, setCreating] = useState(false);
+  const [transactionData, setTransactionData] = useState<{ date?: string; time?: string; amount?: number; tag?: string } | null>(null);
+  const [createFormData, setCreateFormData] = useState({
+    customerName: "",
+    customerAddress: "",
+  });
+  const [showSearchAddressModal, setShowSearchAddressModal] = useState(false);
 
   useEffect(() => {
     if (isOpen && userId) {
@@ -49,6 +59,12 @@ export default function LinkCustomerModal({
       setFiltersActive(false);
       setActiveFilters({});
       setSearchQuery("");
+      setShowCreateForm(false);
+      setTransactionData(null);
+      setCreateFormData({
+        customerName: "",
+        customerAddress: "",
+      });
     }
   }, [isOpen, userId, transactionId]);
 
@@ -87,6 +103,7 @@ export default function LinkCustomerModal({
         const transactionResponse = await fetch(`/api/transactions/${transactionId}`);
         if (transactionResponse.ok) {
           const transactionData = await transactionResponse.json();
+          setTransactionData(transactionData);
           
           // Store transaction time for display
           if (transactionData.date && transactionData.time) {
@@ -114,6 +131,7 @@ export default function LinkCustomerModal({
         }
       } else {
         setTransactionTime(null);
+        setTransactionData(null);
       }
 
       setFiltersActive(!skipFilters && (filters.amount !== undefined || filters.appName !== undefined));
@@ -213,6 +231,54 @@ export default function LinkCustomerModal({
       setErrorAddress(null);
     } finally {
       setLinkingAddress(null);
+    }
+  };
+
+  const handleCreateCustomer = async () => {
+    if (!userId || !transactionId) return;
+
+    // Validate form
+    if (!createFormData.customerName.trim()) {
+      setError("Customer name is required");
+      return;
+    }
+    if (!createFormData.customerAddress.trim()) {
+      setError("Customer address is required");
+      return;
+    }
+
+    try {
+      setCreating(true);
+      setError(null);
+
+      const response = await fetch("/api/ocr-exports/create", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          userId,
+          customerName: createFormData.customerName.trim(),
+          customerAddress: createFormData.customerAddress.trim(),
+          appName: transactionData?.tag || undefined,
+          transactionId,
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || "Failed to create customer");
+      }
+
+      // Refresh customers list and close create form
+      setShowCreateForm(false);
+      await fetchCustomers();
+      onLink?.();
+      onClose();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to create customer");
+    } finally {
+      setCreating(false);
     }
   };
 
@@ -325,32 +391,205 @@ export default function LinkCustomerModal({
         )}
 
         {/* No Customers */}
-        {!loading && customers.length === 0 && (
+        {!loading && customers.length === 0 && !showCreateForm && (
           <div className="text-center py-8 text-gray-500 dark:text-gray-400">
             {filtersActive ? (
               <>
-                No customers found matching the filters.
-                <button
-                  onClick={handleClearFilters}
-                  className="block mt-2 text-blue-600 dark:text-blue-400 hover:underline"
-                >
-                  Clear filters to see all customers
-                </button>
+                <p>No customers found matching the filters.</p>
+                <div className="mt-4 space-y-2">
+                  <button
+                    onClick={handleClearFilters}
+                    className="block w-full px-4 py-2 text-sm rounded bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors"
+                  >
+                    Clear filters to see all customers
+                  </button>
+                  {transactionId && (
+                    <button
+                      onClick={async () => {
+                        // Ensure transaction data is loaded before showing form
+                        if (!transactionData && transactionId) {
+                          try {
+                            const transactionResponse = await fetch(`/api/transactions/${transactionId}`);
+                            if (transactionResponse.ok) {
+                              const txData = await transactionResponse.json();
+                              setTransactionData(txData);
+                            }
+                          } catch (err) {
+                            setError("Failed to load transaction data");
+                            return;
+                          }
+                        }
+                        setShowCreateForm(true);
+                      }}
+                      className="block w-full px-4 py-2 text-sm rounded bg-green-600 text-white hover:bg-green-700 transition-colors"
+                    >
+                      Create New Customer
+                    </button>
+                  )}
+                </div>
               </>
             ) : searchQuery.trim() !== "" ? (
-              "No customers found matching your search."
+              <>
+                <p>No customers found matching your search.</p>
+                {transactionId && (
+                  <button
+                    onClick={async () => {
+                      // Ensure transaction data is loaded before showing form
+                      if (!transactionData && transactionId) {
+                        try {
+                          const transactionResponse = await fetch(`/api/transactions/${transactionId}`);
+                          if (transactionResponse.ok) {
+                            const txData = await transactionResponse.json();
+                            setTransactionData(txData);
+                          }
+                        } catch (err) {
+                          setError("Failed to load transaction data");
+                          return;
+                        }
+                      }
+                      setShowCreateForm(true);
+                    }}
+                    className="mt-4 px-4 py-2 text-sm rounded bg-green-600 text-white hover:bg-green-700 transition-colors"
+                  >
+                    Create New Customer
+                  </button>
+                )}
+              </>
             ) : (
-              "No customers found."
+              <>
+                <p>No customers found.</p>
+                {transactionId && (
+                  <button
+                    onClick={async () => {
+                      // Ensure transaction data is loaded before showing form
+                      if (!transactionData && transactionId) {
+                        try {
+                          const transactionResponse = await fetch(`/api/transactions/${transactionId}`);
+                          if (transactionResponse.ok) {
+                            const txData = await transactionResponse.json();
+                            setTransactionData(txData);
+                          }
+                        } catch (err) {
+                          setError("Failed to load transaction data");
+                          return;
+                        }
+                      }
+                      setShowCreateForm(true);
+                    }}
+                    className="mt-4 px-4 py-2 text-sm rounded bg-green-600 text-white hover:bg-green-700 transition-colors"
+                  >
+                    Create New Customer
+                  </button>
+                )}
+              </>
             )}
           </div>
         )}
 
+        {/* Create Customer Form */}
+        {showCreateForm && (
+          <div className="space-y-4">
+            <div className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-4">
+              Create New Customer
+            </div>
+            
+            <div className="space-y-3">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  Customer Name *
+                </label>
+                <input
+                  type="text"
+                  value={createFormData.customerName}
+                  onChange={(e) => setCreateFormData(prev => ({ ...prev, customerName: e.target.value }))}
+                  className="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 px-3 py-2 text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="Enter customer name"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  Customer Address *
+                </label>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={createFormData.customerAddress}
+                    onChange={(e) => setCreateFormData(prev => ({ ...prev, customerAddress: e.target.value }))}
+                    className="flex-1 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 px-3 py-2 text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    placeholder="Enter customer address"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowSearchAddressModal(true)}
+                    className="px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors flex items-center justify-center gap-2"
+                    title="Search address"
+                  >
+                    <Search className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+
+              {transactionData && (
+                <div className="text-xs text-gray-500 dark:text-gray-400 p-2 bg-gray-50 dark:bg-gray-900 rounded">
+                  Customer will be created and linked to transaction: {transactionData.date} {transactionData.time ? `at ${transactionData.time}` : ""}
+                </div>
+              )}
+            </div>
+
+            <div className="flex gap-2 pt-2">
+              <button
+                onClick={handleCreateCustomer}
+                disabled={creating}
+                className="flex-1 px-4 py-2 text-sm rounded bg-green-600 text-white hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              >
+                {creating ? "Creating..." : "Create & Link Customer"}
+              </button>
+              <button
+                onClick={() => {
+                  setShowCreateForm(false);
+                  setError(null);
+                }}
+                disabled={creating}
+                className="px-4 py-2 text-sm rounded bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600 disabled:opacity-50 transition-colors"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* Customer Results */}
-        {customers.length > 0 && (
+        {customers.length > 0 && !showCreateForm && (
           <div className="space-y-3 max-h-[400px] overflow-y-auto">
-            <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300">
-              CUSTOMERS
-            </h3>
+            <div className="flex items-center justify-between">
+              <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300">
+                CUSTOMERS
+              </h3>
+              {transactionId && (
+                <button
+                  onClick={async () => {
+                    // Ensure transaction data is loaded before showing form
+                    if (!transactionData && transactionId) {
+                      try {
+                        const transactionResponse = await fetch(`/api/transactions/${transactionId}`);
+                        if (transactionResponse.ok) {
+                          const txData = await transactionResponse.json();
+                          setTransactionData(txData);
+                        }
+                      } catch (err) {
+                        setError("Failed to load transaction data");
+                        return;
+                      }
+                    }
+                    setShowCreateForm(true);
+                  }}
+                  className="px-3 py-1.5 text-xs rounded bg-green-600 text-white hover:bg-green-700 transition-colors"
+                >
+                  Create New Customer
+                </button>
+              )}
+            </div>
             {customers.map((customer) => {
               const formattedAddress = formatAddress(customer.address);
               return (
@@ -417,6 +656,21 @@ export default function LinkCustomerModal({
           </div>
         )}
       </div>
+
+      {/* Search Address Modal */}
+      <SearchAddressModal
+        isOpen={showSearchAddressModal}
+        onClose={() => setShowSearchAddressModal(false)}
+        title="Search Customer Address"
+        initialQuery={createFormData.customerAddress}
+        onAddressSelected={(address) => {
+          setCreateFormData(prev => ({
+            ...prev,
+            customerAddress: address,
+          }));
+          setShowSearchAddressModal(false);
+        }}
+      />
     </Modal>
   );
 }
