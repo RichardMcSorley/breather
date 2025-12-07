@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { useSession } from "next-auth/react";
 import { format, isToday, isYesterday } from "date-fns";
-import { Sparkles, MapPin, User, Car, Package, Check, Utensils, Pencil, Trash2, ShoppingBag, ArrowUpCircle, ArrowDownCircle, XCircle } from "lucide-react";
+import { Sparkles, MapPin, User, Car, Package, Check, Utensils, Pencil, Trash2, ShoppingBag, ArrowUpCircle, ArrowDownCircle, XCircle, Search, X } from "lucide-react";
 import { formatAddress } from "@/lib/address-formatter";
 import Layout from "@/components/Layout";
 import AddTransactionModal from "@/components/AddTransactionModal";
@@ -561,6 +561,7 @@ export default function HistoryPage() {
   const [showStreetViewForTransaction, setShowStreetViewForTransaction] = useState<string | null>(null);
   const [editingAdditionalRestaurant, setEditingAdditionalRestaurant] = useState<{ orderId: string; restaurantIndex: number; restaurant: AdditionalRestaurant } | null>(null);
   const [routeSegments, setRouteSegments] = useState<Record<string, RouteSegment[]>>({});
+  const [searchQuery, setSearchQuery] = useState("");
   
   const { data, isLoading: loading } = useTransactions("all", "all", page, limit);
   // Fetch all transactions for date totals calculation
@@ -638,6 +639,70 @@ export default function HistoryPage() {
       style: "currency",
       currency: "USD",
     }).format(amount);
+  };
+
+  // Search filter function
+  const matchesSearch = (transaction: Transaction, query: string): boolean => {
+    if (!query.trim()) return true;
+    
+    const searchLower = query.toLowerCase().trim();
+    
+    // Search by amount (exact match or partial string match)
+    const amountStr = transaction.amount.toString();
+    if (amountStr.includes(searchLower) || formatCurrency(transaction.amount).toLowerCase().includes(searchLower)) {
+      return true;
+    }
+    
+    // Search by app name (tag)
+    if (transaction.tag && transaction.tag.toLowerCase().includes(searchLower)) {
+      return true;
+    }
+    
+    // Search by restaurant name
+    if (transaction.linkedDeliveryOrders) {
+      for (const order of transaction.linkedDeliveryOrders) {
+        if (order.restaurantName && order.restaurantName.toLowerCase().includes(searchLower)) {
+          return true;
+        }
+        // Also check additional restaurants
+        if (order.additionalRestaurants) {
+          for (const restaurant of order.additionalRestaurants) {
+            if (restaurant.name && restaurant.name.toLowerCase().includes(searchLower)) {
+              return true;
+            }
+          }
+        }
+      }
+    }
+    
+    // Search by customer name
+    if (transaction.linkedOcrExports) {
+      for (const customer of transaction.linkedOcrExports) {
+        if (customer.customerName && customer.customerName.toLowerCase().includes(searchLower)) {
+          return true;
+        }
+      }
+    }
+    
+    // Search by app name from linked orders
+    if (transaction.linkedDeliveryOrders) {
+      for (const order of transaction.linkedDeliveryOrders) {
+        if (order.appName && order.appName.toLowerCase().includes(searchLower)) {
+          return true;
+        }
+      }
+    }
+    
+    // Search by app name from linked customers
+    if (transaction.linkedOcrExports) {
+      for (const customer of transaction.linkedOcrExports) {
+        if (customer.appName && customer.appName.toLowerCase().includes(searchLower)) {
+          return true;
+        }
+      }
+    }
+    
+    return false;
   };
 
 
@@ -1333,7 +1398,12 @@ export default function HistoryPage() {
     return iconColors[appName] || { bg: "bg-gray-500 dark:bg-gray-600", text: "text-white" };
   };
 
-  const groupedTransactions = transactions.reduce((acc: Record<string, Transaction[]>, transaction: Transaction) => {
+  // Apply search filter to transactions
+  const filteredTransactions = searchQuery.trim()
+    ? transactions.filter((transaction: Transaction) => matchesSearch(transaction, searchQuery))
+    : transactions;
+
+  const groupedTransactions = filteredTransactions.reduce((acc: Record<string, Transaction[]>, transaction: Transaction) => {
     const dateKey = formatDate(transaction.date, transaction.time);
     if (!acc[dateKey]) {
       acc[dateKey] = [];
@@ -1354,7 +1424,7 @@ export default function HistoryPage() {
 
   return (
     <Layout>
-      <div className="mb-6">
+      <div className="mb-6 space-y-4">
         <div className="flex justify-end gap-2">
           <button
             onClick={() => {
@@ -1390,12 +1460,43 @@ export default function HistoryPage() {
             Order
           </button>
         </div>
+        
+        {/* Search Input */}
+        <div className="relative">
+          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 dark:text-gray-500 w-5 h-5" />
+          <input
+            type="text"
+            placeholder="Search by restaurant, customer, app, or amount..."
+            value={searchQuery}
+            onChange={(e) => {
+              setSearchQuery(e.target.value);
+              setPage(1); // Reset to page 1 when search changes
+            }}
+            className="w-full pl-10 pr-10 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent min-h-[44px]"
+          />
+          {searchQuery && (
+            <button
+              onClick={() => {
+                setSearchQuery("");
+                setPage(1);
+              }}
+              className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 min-w-[44px] min-h-[44px] flex items-center justify-center"
+              title="Clear search"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          )}
+        </div>
       </div>
 
       <div className="space-y-6">
         {Object.keys(groupedTransactions).length === 0 ? (
           <div className="text-center py-12 text-gray-500 dark:text-gray-400">
-            No transactions found. Add your first transaction!
+            {searchQuery.trim() ? (
+              <>No transactions found matching &quot;{searchQuery}&quot;. Try a different search term.</>
+            ) : (
+              <>No transactions found. Add your first transaction!</>
+            )}
           </div>
         ) : (
           Object.entries(groupedTransactions).map(([dateKey, dateTransactions]) => {
