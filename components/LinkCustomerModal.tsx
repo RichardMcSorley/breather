@@ -287,6 +287,7 @@ export default function LinkCustomerModal({
 
     try {
       setError(null);
+      // Skip step without auto-linking - just transition to NAV_TO_CUSTOMER
       const response = await fetch(`/api/transactions/${transactionId}`, {
         method: "PUT",
         headers: {
