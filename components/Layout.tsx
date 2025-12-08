@@ -4,7 +4,7 @@ import { useSession, signOut } from "next-auth/react";
 import { usePathname, useRouter } from "next/navigation";
 import Link from "next/link";
 import { ReactNode, useState } from "react";
-import { BarChart3, Clock, FileText, Car, Menu, Settings, Eye, EyeOff, Mail } from "lucide-react";
+import { BarChart3, Clock, FileText, Car, Menu, Settings, Eye, EyeOff } from "lucide-react";
 import OfflineIndicator from "./OfflineIndicator";
 import ToastContainer from "./ui/Toast";
 import HamburgerMenu from "./HamburgerMenu";
@@ -26,7 +26,6 @@ export default function Layout({ children }: LayoutProps) {
     { href: "/history", label: "Logs", icon: Clock },
     { href: "/bills", label: "Bills", icon: FileText },
     { href: "/mileage", label: "Mileage", icon: Car },
-    { href: "/cash-app-emails", label: "Cash App", icon: Mail },
   ];
 
   return (

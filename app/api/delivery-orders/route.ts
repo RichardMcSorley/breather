@@ -41,6 +41,12 @@ export async function POST(request: NextRequest) {
     try {
       const processed = await processOrderScreenshotGemini(screenshot, ocrText, "order");
 
+      // Extract restaurants array from metadata
+      const restaurants: any[] = [];
+      if (processed.metadata?.extractedData?.restaurants && Array.isArray(processed.metadata.extractedData.restaurants)) {
+        restaurants.push(...processed.metadata.extractedData.restaurants);
+      }
+
       // Calculate miles to money ratio (only if miles is provided and > 0)
       const milesToMoneyRatio = processed.miles && processed.miles > 0 
         ? processed.money / processed.miles 
@@ -48,6 +54,10 @@ export async function POST(request: NextRequest) {
 
       // Get current EST time and convert to UTC (matches transaction log timezone logic)
       const { date: processedAtDate } = getCurrentESTAsUTC();
+
+      // First restaurant becomes the main restaurant, additional restaurants go to additionalRestaurants
+      const firstRestaurant = restaurants.length > 0 ? restaurants[0] : null;
+      const mainRestaurantName = firstRestaurant?.restaurantName || processed.restaurantName;
 
       // Save to delivery orders collection
       const deliveryOrder = await DeliveryOrder.create({
@@ -57,7 +67,7 @@ export async function POST(request: NextRequest) {
         ...(processed.miles !== undefined && processed.miles !== null && { miles: processed.miles }),
         money: processed.money,
         ...(milesToMoneyRatio !== undefined && { milesToMoneyRatio }),
-        restaurantName: processed.restaurantName,
+        restaurantName: mainRestaurantName,
         time: "", // Time not extracted from screenshot, can be updated later
         rawResponse: processed.rawResponse,
         metadata: {
@@ -70,6 +80,16 @@ export async function POST(request: NextRequest) {
         ...(lon !== undefined && lon !== null && { userLongitude: lon }),
         ...(alt !== undefined && alt !== null && { userAltitude: alt }),
         ...(address !== undefined && address !== null && { userAddress: address }),
+        // Add remaining restaurants to additionalRestaurants - all from same screenshot, same order ID
+        ...(restaurants.length > 1 && {
+          additionalRestaurants: restaurants.slice(1).map((r: any) => ({
+            name: r.restaurantName || "",
+            userLatitude: lat,
+            userLongitude: lon,
+            userAltitude: alt,
+            userAddress: address,
+          })),
+        }),
       });
 
       // Attempt auto-linking to matching transaction
