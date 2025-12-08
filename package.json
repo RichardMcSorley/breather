@@ -45,6 +45,7 @@
     "react": "^19.2.1",
     "react-dom": "^19.2.1",
     "react-leaflet": "^5.0.0",
+    "recharts": "^3.5.1",
     "styled-jsx": "^5.1.7",
     "tesseract.js": "^6.0.1",
     "undici": "^7.16.0"
