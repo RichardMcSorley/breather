@@ -10,7 +10,8 @@ import { attemptAutoLinkCustomerToTransaction } from "@/lib/auto-link-helper";
 
 /**
  * API endpoint for processing customer screenshots with Gemini
- * Creates/updates customer entry and links to active transaction
+ * Creates/updates customer entry and links to active transaction if available.
+ * Saves customer info even if no active transaction is found.
  */
 export async function POST(request: NextRequest) {
   try {
@@ -57,7 +58,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Find the active transaction for this user and appName
+    // Find the active transaction for this user and appName (optional - will save customer info even if not found)
     const trimmedAppName = appName.trim();
     const activeTransaction = await Transaction.findOne({
       userId,
@@ -65,13 +66,6 @@ export async function POST(request: NextRequest) {
       type: "income",
       ...(trimmedAppName && { tag: { $regex: new RegExp(`^${trimmedAppName}$`, "i") } }),
     }).sort({ date: -1, createdAt: -1 });
-
-    if (!activeTransaction) {
-      return NextResponse.json(
-        { error: "No active transaction found for this app" },
-        { status: 404 }
-      );
-    }
 
     // Extract customer data from metadata
     const customerData = metadata.extractedData || {};
@@ -112,34 +106,38 @@ export async function POST(request: NextRequest) {
       ...(address !== undefined && address !== null && { userAddress: address }),
     });
 
-    // Link customer to the active transaction
-    try {
-      // First try auto-linking
-      await attemptAutoLinkCustomerToTransaction(exportEntry, userId);
-      
-      // Also manually link to ensure connection
-      await Transaction.findByIdAndUpdate(
-        activeTransaction._id,
-        { $addToSet: { linkedOcrExportIds: exportEntry._id } },
-        { new: true }
-      );
-      
-      await OcrExport.findByIdAndUpdate(
-        exportEntry._id,
-        { $addToSet: { linkedTransactionIds: activeTransaction._id } },
-        { new: true }
-      );
-    } catch (linkError) {
-      console.error("Error linking customer to transaction:", linkError);
-      // Don't fail the request if linking fails
+    // Link customer to the active transaction (if one exists)
+    if (activeTransaction) {
+      try {
+        // First try auto-linking
+        await attemptAutoLinkCustomerToTransaction(exportEntry, userId);
+        
+        // Also manually link to ensure connection
+        await Transaction.findByIdAndUpdate(
+          activeTransaction._id,
+          { $addToSet: { linkedOcrExportIds: exportEntry._id } },
+          { new: true }
+        );
+        
+        await OcrExport.findByIdAndUpdate(
+          exportEntry._id,
+          { $addToSet: { linkedTransactionIds: activeTransaction._id } },
+          { new: true }
+        );
+      } catch (linkError) {
+        console.error("Error linking customer to transaction:", linkError);
+        // Don't fail the request if linking fails
+      }
     }
 
     return NextResponse.json({
       success: true,
       id: exportEntry._id.toString(),
       entryId: exportEntry.entryId,
-      transactionId: activeTransaction._id.toString(),
-      message: "Customer information created and linked successfully",
+      transactionId: activeTransaction?._id.toString() || null,
+      message: activeTransaction 
+        ? "Customer information created and linked successfully"
+        : "Customer information created successfully (no active transaction to link)",
       customer: {
         customerName,
         deliveryAddress: customerAddress,

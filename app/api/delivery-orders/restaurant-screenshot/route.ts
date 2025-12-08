@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import connectDB from "@/lib/mongodb";
 import DeliveryOrder from "@/lib/models/DeliveryOrder";
 import Transaction from "@/lib/models/Transaction";
-import { processRestaurantScreenshot } from "@/lib/order-ocr-processor";
+import { processOrderScreenshotGemini } from "@/lib/order-ocr-processor-gemini";
 import { handleApiError } from "@/lib/api-error-handler";
 
 export async function POST(request: NextRequest) {
@@ -31,18 +31,23 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Process screenshot to extract restaurant name and address
+    // Process screenshot to extract restaurant name and address using Gemini
     let restaurantName: string;
     let extractedAddress: string;
     let rawResponse: string;
     let metadata: Record<string, any> = {};
 
     try {
-      const processed = await processRestaurantScreenshot(screenshot, ocrText);
-      restaurantName = processed.restaurantName;
-      extractedAddress = processed.address;
+      const processed = await processOrderScreenshotGemini(screenshot, ocrText, "restaurant");
+      
+      // Extract restaurant data from metadata
+      const restaurantData = processed.metadata?.extractedData || {};
+      restaurantName = restaurantData.restaurantName?.trim() || processed.restaurantName || "unknown";
+      extractedAddress = restaurantData.address?.trim() || "unknown";
       rawResponse = processed.rawResponse;
-      metadata = processed.metadata;
+      metadata = {
+        extractedData: restaurantData,
+      };
     } catch (processError) {
       console.error("Error processing restaurant screenshot:", processError);
       return NextResponse.json(

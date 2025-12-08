@@ -3,7 +3,7 @@ import connectDB from "@/lib/mongodb";
 import DeliveryOrder from "@/lib/models/DeliveryOrder";
 import Transaction from "@/lib/models/Transaction";
 import { handleApiError } from "@/lib/api-error-handler";
-import { processOrderScreenshot } from "@/lib/order-ocr-processor";
+import { processOrderScreenshotGemini } from "@/lib/order-ocr-processor-gemini";
 import { randomBytes } from "crypto";
 import { attemptAutoLinkOrderToTransaction } from "@/lib/auto-link-helper";
 import { getCurrentESTAsUTC } from "@/lib/date-utils";
@@ -37,9 +37,9 @@ export async function POST(request: NextRequest) {
     // Generate a unique entryId
     const entryId = randomBytes(16).toString("hex");
 
-    // Process screenshot immediately with Moondream
+    // Process screenshot with Gemini
     try {
-      const processed = await processOrderScreenshot(screenshot, ocrText);
+      const processed = await processOrderScreenshotGemini(screenshot, ocrText, "order");
 
       // Calculate miles to money ratio (only if miles is provided and > 0)
       const milesToMoneyRatio = processed.miles && processed.miles > 0 
@@ -60,7 +60,9 @@ export async function POST(request: NextRequest) {
         restaurantName: processed.restaurantName,
         time: "", // Time not extracted from screenshot, can be updated later
         rawResponse: processed.rawResponse,
-        metadata: processed.metadata,
+        metadata: {
+          extractedData: processed.metadata?.extractedData,
+        },
         processedAt: processedAtDate,
         step: "CREATED",
         active: true,

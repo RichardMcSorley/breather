@@ -22,6 +22,8 @@ export const queryKeys = {
   appHeatmap: (localDate: string, viewMode: string) => ["appHeatmap", localDate, viewMode] as const,
   teslaConnection: () => ["teslaConnection"] as const,
   deliveryOrders: (userId?: string, limit?: number) => ["deliveryOrders", userId, limit] as const,
+  emailConfig: () => ["emailConfig"] as const,
+  emailList: (limit?: number, offset?: number) => ["emailList", limit, offset] as const,
 };
 
 // Query Hooks
@@ -918,6 +920,68 @@ export function useSyncTesla() {
     },
     onError: (error: Error) => {
       toast.error(error.message || "Error syncing Tesla");
+    },
+  });
+}
+
+export function useEmailConfig() {
+  return useQuery({
+    queryKey: queryKeys.emailConfig(),
+    queryFn: async () => {
+      const res = await fetch("/api/email/config");
+      if (!res.ok) {
+        if (res.status === 404) {
+          return null;
+        }
+        const errorData = await res.json().catch(() => ({ error: "Unknown error" }));
+        throw new Error(errorData.error || "Failed to fetch email config");
+      }
+      return res.json();
+    },
+  });
+}
+
+export function useSyncEmail() {
+  const queryClient = useQueryClient();
+  const toast = useToast();
+
+  return useMutation({
+    mutationFn: async () => {
+      const res = await fetch("/api/email/sync", {
+        method: "POST",
+      });
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({ error: "Unknown error" }));
+        throw new Error(errorData.error || "Failed to sync emails");
+      }
+      return res.json();
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ["transactions"] });
+      queryClient.invalidateQueries({ queryKey: ["summary"] });
+      queryClient.invalidateQueries({ queryKey: ["emailConfig"] });
+      queryClient.invalidateQueries({ queryKey: ["emailList"] });
+      toast.success(
+        data.message ||
+          `Synced ${data.emailsProcessed || 0} emails, created ${data.transactionsCreated || 0} transactions`
+      );
+    },
+    onError: (error: Error) => {
+      toast.error(error.message || "Error syncing emails");
+    },
+  });
+}
+
+export function useEmailList(limit: number = 50, offset: number = 0) {
+  return useQuery({
+    queryKey: queryKeys.emailList(limit, offset),
+    queryFn: async () => {
+      const res = await fetch(`/api/email/list?limit=${limit}&offset=${offset}`);
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({ error: "Unknown error" }));
+        throw new Error(errorData.error || "Failed to fetch emails");
+      }
+      return res.json();
     },
   });
 }

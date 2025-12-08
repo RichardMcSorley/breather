@@ -55,6 +55,17 @@ TESLA_CLIENT_SECRET=your_tesla_client_secret
 TESLA_REDIRECT_URI=http://localhost:3000/api/tesla/callback
 TESLA_API_BASE_URL=https://fleet-api.prd.na.vn.cloud.tesla.com
 TESLA_ENCRYPTION_KEY=your_32_character_encryption_key
+
+# Email/IMAP Integration (Optional - for Cash App email scraping)
+# NOTE: For Proton Mail, you MUST use Proton Mail Bridge for IMAP access.
+# SMTP tokens are for sending only and cannot be used to receive emails.
+# Install Proton Mail Bridge and use these settings:
+EMAIL_USERNAME=your_proton_email_address
+EMAIL_TOKEN=your_proton_mail_password  # Your Proton Mail account password (NOT SMTP token)
+EMAIL_SERVER=127.0.0.1  # Proton Bridge runs on localhost
+EMAIL_PORT=1143  # Proton Bridge IMAP port
+EMAIL_ENCRYPTION_KEY=your_32_character_encryption_key
+EMAIL_SYNC_LIMIT=50
 ```
 
 3. Generate a NextAuth secret:

@@ -5,7 +5,7 @@ import { NextRequest, NextResponse } from "next/server";
 import connectDB from "@/lib/mongodb";
 import OcrExport from "@/lib/models/OcrExport";
 import { handleApiError } from "@/lib/api-error-handler";
-import { processOcrScreenshot } from "@/lib/ocr-processor";
+import { processOrderScreenshotGemini } from "@/lib/order-ocr-processor-gemini";
 import { geocodeAddress } from "@/lib/geocode-helper";
 import { isSameAddress } from "@/lib/ocr-analytics";
 import { randomBytes } from "crypto";
@@ -34,9 +34,21 @@ export async function POST(request: NextRequest) {
     // Generate a unique entryId
     const entryId = randomBytes(16).toString("hex");
 
-    // Process screenshot immediately with Moondream
+    // Process screenshot with Gemini
     try {
-      const processed = await processOcrScreenshot(screenshot, ocrText);
+      const processed = await processOrderScreenshotGemini(screenshot, ocrText, "customer");
+      
+      // Extract customer data from metadata
+      const customerData = processed.metadata?.extractedData || {};
+      const customerName = customerData.customerName?.trim() || "unknown";
+      const customerAddress = customerData.deliveryAddress?.trim() || "unknown";
+      
+      const processedResult = {
+        customerName,
+        customerAddress,
+        rawResponse: processed.rawResponse || JSON.stringify(customerData),
+        metadata: processed.metadata,
+      };
 
       // Check for existing geocode data with exact address match
       let geocodeData: { lat: number; lon: number; displayName?: string } | null = null;
@@ -44,7 +56,7 @@ export async function POST(request: NextRequest) {
       
       try {
         const existingEntry = await OcrExport.findOne({
-          customerAddress: processed.customerAddress,
+          customerAddress: processedResult.customerAddress,
           lat: { $exists: true, $ne: null },
           lon: { $exists: true, $ne: null },
         }).lean();
@@ -57,7 +69,7 @@ export async function POST(request: NextRequest) {
           };
         } else {
           // If not found in cache, geocode the address
-          geocodeData = await geocodeAddress(processed.customerAddress);
+          geocodeData = await geocodeAddress(processedResult.customerAddress);
           if (!geocodeData) {
             geocodeFailed = true;
           }
@@ -78,10 +90,10 @@ export async function POST(request: NextRequest) {
         entryId,
         userId,
         appName: appName || undefined,
-        customerName: processed.customerName,
-        customerAddress: processed.customerAddress,
-        rawResponse: processed.rawResponse,
-        metadata: processed.metadata,
+        customerName: processedResult.customerName,
+        customerAddress: processedResult.customerAddress,
+        rawResponse: processedResult.rawResponse,
+        metadata: processedResult.metadata,
         lat: geocodeData?.lat ?? null,
         lon: geocodeData?.lon ?? null,
         geocodeDisplayName: geocodeFailed ? "unknown" : (geocodeData?.displayName ?? null),
@@ -116,7 +128,7 @@ export async function POST(request: NextRequest) {
       // Check for repeat customers by address (address is the unique identifier)
       const allUserEntries = await OcrExport.find({ userId }).lean();
       const matchingEntries = allUserEntries.filter((entry) =>
-        isSameAddress(entry.customerAddress, processed.customerAddress)
+        isSameAddress(entry.customerAddress, processedResult.customerAddress)
       );
       const visitCount = matchingEntries.length;
       const isRepeatCustomer = visitCount > 1;
@@ -126,7 +138,7 @@ export async function POST(request: NextRequest) {
         new Set(matchingEntries.map((entry) => entry.customerName).filter(Boolean))
       );
 
-      const encodedAddress = encodeURIComponent(processed.customerAddress);
+      const encodedAddress = encodeURIComponent(processedResult.customerAddress);
       // Build response
       const response: any = {
         success: true,
