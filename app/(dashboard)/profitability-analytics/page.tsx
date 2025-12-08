@@ -47,6 +47,7 @@ export default function ProfitabilityAnalyticsPage() {
   const [minPayPerMile, setMinPayPerMile] = useState(1.25);
   const [minPayPerMinute, setMinPayPerMinute] = useState(0.3);
   const [gasCost, setGasCost] = useState(0.15);
+  const [maxMileage, setMaxMileage] = useState(50);
   const [selectedStore, setSelectedStore] = useState<string | null>(null);
 
   const userId = session?.user?.id;
@@ -186,7 +187,7 @@ export default function ProfitabilityAnalyticsPage() {
       {/* What-If Simulator Controls */}
       <Card className="p-4 mb-6">
         <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">What-If Simulator</h3>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
               Min $/Mile: {formatCurrency(minPayPerMile)}
@@ -226,6 +227,20 @@ export default function ProfitabilityAnalyticsPage() {
               step="0.01"
               value={gasCost}
               onChange={(e) => setGasCost(parseFloat(e.target.value))}
+              className="w-full"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+              Max Mileage: {maxMileage.toFixed(0)} mi
+            </label>
+            <input
+              type="range"
+              min="5"
+              max="100"
+              step="1"
+              value={maxMileage}
+              onChange={(e) => setMaxMileage(parseFloat(e.target.value))}
               className="w-full"
             />
           </div>
@@ -317,12 +332,12 @@ export default function ProfitabilityAnalyticsPage() {
             }} />
             <Scatter
               name="Accepted"
-              data={analytics.payVsDistance.filter((d) => d.accepted)}
+              data={analytics.payVsDistance.filter((d) => d.accepted && d.distance <= maxMileage)}
               fill="#10b981"
             />
             <Scatter
               name="Rejected"
-              data={analytics.payVsDistance.filter((d) => !d.accepted)}
+              data={analytics.payVsDistance.filter((d) => !d.accepted && d.distance <= maxMileage)}
               fill="#ef4444"
             />
           </ScatterChart>
