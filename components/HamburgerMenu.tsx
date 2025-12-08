@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import Link from "next/link";
-import { Receipt, Package, BarChart3, X, ShoppingCart, List, Mail } from "lucide-react";
+import { Receipt, Package, BarChart3, X, ShoppingCart, List, Mail, TrendingUp } from "lucide-react";
 
 interface HamburgerMenuProps {
   isOpen: boolean;
@@ -44,6 +44,7 @@ export default function HamburgerMenu({ isOpen, onClose }: HamburgerMenuProps) {
     { href: "/ocr-data", label: "Customers", icon: Receipt },
     { href: "/delivery-orders", label: "Orders", icon: Package },
     { href: "/order-analytics", label: "Order Analytics", icon: BarChart3 },
+    { href: "/profitability-analytics", label: "Profitability Analytics", icon: TrendingUp },
     { href: "/kroger-search", label: "Kroger Search", icon: ShoppingCart },
     { href: "/shopping-lists", label: "Shopping Lists", icon: List },
     ...(isLocalhost ? [{ href: "/cash-app-emails", label: "Cash App", icon: Mail }] : []),
