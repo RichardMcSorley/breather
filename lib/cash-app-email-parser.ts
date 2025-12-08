@@ -17,6 +17,16 @@ export function parseCashAppEmail(email: EmailMessage): ParsedCashAppTransaction
     const text = email.text || email.html || "";
     const html = email.html || "";
 
+    // Check if this is a Tesla-related transaction
+    // Only process transactions that mention Tesla-related keywords
+    const teslaKeywords = ["tesla", "supercharger", "tesla, inc", "tesla inc"];
+    const contentToCheck = (text + " " + html).toLowerCase();
+    const isTeslaTransaction = teslaKeywords.some(keyword => contentToCheck.includes(keyword));
+    
+    if (!isTeslaTransaction) {
+      return null; // Skip non-Tesla transactions
+    }
+
     // Extract amount - Cash App emails typically show amounts like "$50.00" or "$50"
     const amountMatch = text.match(/\$(\d+\.?\d*)/);
     if (!amountMatch) {
@@ -151,6 +161,16 @@ export function parseCashAppEmail(email: EmailMessage): ParsedCashAppTransaction
     // If no notes found, use a default
     if (!notes) {
       notes = type === "income" ? "Cash App payment received" : "Cash App payment sent";
+    }
+
+    // Final validation: Ensure the extracted notes also contain Tesla keywords
+    // This provides an extra layer of filtering in case the email content check passed
+    // but the actual transaction notes don't mention Tesla
+    const notesLower = notes.toLowerCase();
+    const notesContainTesla = teslaKeywords.some(keyword => notesLower.includes(keyword));
+    
+    if (!notesContainTesla) {
+      return null; // Skip if notes don't contain Tesla keywords
     }
 
     return {
