@@ -194,7 +194,7 @@ export default function DeliveryOrdersList({
                 setPage(1);
               }
             }}
-            placeholder="Search by restaurant name, address, or pay amount..."
+            placeholder="Search by app name, restaurant name, address, or pay amount..."
             className="w-full pl-10 pr-10 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent min-h-[44px]"
           />
           {searchQuery && (

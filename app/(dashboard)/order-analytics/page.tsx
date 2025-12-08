@@ -39,67 +39,6 @@ interface AnalyticsData {
     medianRatio: number;
     volume: number;
   }>;
-  bestOrdersByHour?: Array<{
-    hour: number;
-    orders: Array<{
-      id: string;
-      restaurantName: string;
-      money: number;
-      miles: number;
-      milesToMoneyRatio: number;
-      appName: string;
-      processedAt: string;
-      isAccepted?: boolean;
-      estimatedCompletionTime?: number;
-    }>;
-    worstOrders: Array<{
-      id: string;
-      restaurantName: string;
-      money: number;
-      miles: number;
-      milesToMoneyRatio: number;
-      appName: string;
-      processedAt: string;
-      isAccepted?: boolean;
-      estimatedCompletionTime?: number;
-    }>;
-    totalPotentialEarnings: number;
-    worstCaseEarnings: number;
-    orderVolume: number;
-  }>;
-  bestOrdersByDay?: Array<{
-    date: string;
-      bestOrdersByHour: Array<{
-        hour: number;
-        orders: Array<{
-          id: string;
-          restaurantName: string;
-          money: number;
-          miles: number;
-          milesToMoneyRatio: number;
-          appName: string;
-          processedAt: string;
-          isAccepted?: boolean;
-          estimatedCompletionTime?: number;
-        }>;
-        worstOrders: Array<{
-          id: string;
-          restaurantName: string;
-          money: number;
-          miles: number;
-          milesToMoneyRatio: number;
-          appName: string;
-          processedAt: string;
-          isAccepted?: boolean;
-          estimatedCompletionTime?: number;
-        }>;
-        totalPotentialEarnings: number;
-        worstCaseEarnings: number;
-        orderVolume: number;
-      }>;
-    totalActualEarnings: number;
-    totalPotentialEarnings: number;
-  }>;
   byTime: {};
   locationInsights?: {
     topEarningsZones: Array<{
@@ -127,11 +66,9 @@ export default function OrderAnalyticsPage() {
   const [analytics, setAnalytics] = useState<AnalyticsData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [excludedApps, setExcludedApps] = useState<string[]>(["roadie", "shopper"]);
+  const [excludedApps, setExcludedApps] = useState<string[]>(["roadie", "shopper", "uber driver"]);
   const [showAppFilter, setShowAppFilter] = useState(false);
   const [selectedDayOfWeek, setSelectedDayOfWeek] = useState<number | null>(null); // null = all days, 0-6 = Sunday-Saturday
-  const [selectedBestOrdersDateIndex, setSelectedBestOrdersDateIndex] = useState<number>(6); // Default to today (index 6, rightmost)
-  const [showWorstCaseOrders, setShowWorstCaseOrders] = useState<boolean>(false);
   const [viewingOrderId, setViewingOrderId] = useState<string | null>(null);
   const [selectedZone, setSelectedZone] = useState<{ latitude: number; longitude: number; index: number } | null>(null);
   const [locationTab, setLocationTab] = useState<"earnings" | "volume">("earnings");
@@ -218,28 +155,6 @@ export default function OrderAnalyticsPage() {
       minimumFractionDigits: 2,
       maximumFractionDigits: 2,
     }).format(amount);
-  };
-
-  /**
-   * Parses a date string (YYYY-MM-DD) and time string (HH:MM) as LOCAL time.
-   * The time string represents the user's local time, not UTC.
-   * This matches the timezone logic used in the logs screen for transactions.
-   */
-  const buildLocalDateFromParts = (dateString: string, timeString?: string) => {
-    if (!dateString) return new Date();
-    const baseDate = dateString.split("T")[0] || dateString;
-    const [year, month, day] = baseDate.split("-").map(Number);
-    if ([year, month, day].some((value) => Number.isNaN(value))) {
-      const fallback = new Date(dateString);
-      return Number.isNaN(fallback.getTime()) ? new Date() : fallback;
-    }
-    const [hour, minute] = (timeString?.split(":").map(Number) ?? [0, 0]).map((value) =>
-      Number.isNaN(value) ? 0 : value
-    );
-    
-    // Parse as LOCAL date/time - the time string is already in the user's local timezone
-    // Create a local Date object directly without UTC conversion
-    return new Date(year, month - 1, day, hour, minute);
   };
 
   const formatPercent = (value: number) => {
@@ -522,194 +437,6 @@ export default function OrderAnalyticsPage() {
         </Card>
       )}
 
-      {/* Best Orders by Hour - Independent tab selector, not influenced by day-of-week filter */}
-      {((analytics.bestOrdersByDay && analytics.bestOrdersByDay.length > 0) ||
-        (analytics.bestOrdersByHour && analytics.bestOrdersByHour.length > 0)) && (
-        <Card className="p-6 mb-6">
-          <div className="mb-4">
-            <div className="flex items-center justify-between mb-2">
-              <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
-                {showWorstCaseOrders ? "Worst Orders by Hour" : "Best Orders by Hour"}
-              </h3>
-              <label className="flex items-center gap-2 cursor-pointer">
-                <span className="text-sm text-gray-600 dark:text-gray-400">
-                  Show worst case orders
-                </span>
-                <input
-                  type="checkbox"
-                  checked={showWorstCaseOrders}
-                  onChange={(e) => setShowWorstCaseOrders(e.target.checked)}
-                  className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 dark:focus:ring-blue-600 dark:ring-offset-gray-800 focus:ring-2 dark:bg-gray-700 dark:border-gray-600"
-                />
-              </label>
-            </div>
-            <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
-              {showWorstCaseOrders
-                ? "The worst 3 orders for each hour, based on $/mile ratio. These represent the worst case scenario if you only took the lowest-paying orders."
-                : "The top 3 orders you should have taken for each hour, based on $/mile ratio. Orders are selected from each 20-minute segment of the hour."}
-            </p>
-            {/* Date Tabs - Today on the right */}
-            {analytics.bestOrdersByDay && analytics.bestOrdersByDay.length > 0 ? (
-              <div className="flex gap-2 border-b border-gray-200 dark:border-gray-700 mb-4 overflow-x-auto">
-                {analytics.bestOrdersByDay.map((dayData, index) => {
-                  // Parse date string (YYYY-MM-DD) as LOCAL time to match logs screen timezone logic
-                  const date = buildLocalDateFromParts(dayData.date);
-                  const isToday = index === 6; // Today is always the last index (rightmost)
-                  const dateLabel = isToday
-                    ? "Today"
-                    : date.toLocaleDateString("en-US", { month: "short", day: "numeric" });
-                  
-                  return (
-                    <button
-                      key={dayData.date}
-                      onClick={() => setSelectedBestOrdersDateIndex(index)}
-                      className={`px-4 py-2 text-sm font-medium transition-colors border-b-2 whitespace-nowrap ${
-                        selectedBestOrdersDateIndex === index
-                          ? "border-blue-500 text-blue-600 dark:text-blue-400"
-                          : "border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300"
-                      }`}
-                    >
-                      {dateLabel}
-                    </button>
-                  );
-                })}
-              </div>
-            ) : null}
-          </div>
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead className="bg-gray-50 dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700">
-                <tr>
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider">
-                    Hour
-                  </th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider">
-                    Orders
-                  </th>
-                  <th className="px-4 py-3 text-right text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider">
-                    Volume
-                  </th>
-                  <th className="px-4 py-3 text-right text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider">
-                    {showWorstCaseOrders ? "Worst Case Earnings" : "Total Potential Earnings"}
-                  </th>
-                  <th className="px-4 py-3 text-right text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider">
-                    {showWorstCaseOrders ? "Total Potential Earnings" : "Worst Case Earnings"}
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
-                {(analytics.bestOrdersByDay && analytics.bestOrdersByDay.length > 0
-                  ? analytics.bestOrdersByDay[Math.min(selectedBestOrdersDateIndex, analytics.bestOrdersByDay.length - 1)]?.bestOrdersByHour
-                  : analytics.bestOrdersByHour
-                )?.map((hourData) => (
-                  <tr
-                    key={hourData.hour}
-                    className="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
-                  >
-                    <td className="px-4 py-3">
-                      <div className="text-sm font-medium text-gray-900 dark:text-white">
-                        {formatHour(hourData.hour)}
-                      </div>
-                    </td>
-                    <td className="px-4 py-3">
-                      <div className="space-y-2">
-                        {(showWorstCaseOrders ? (hourData.worstOrders || []) : hourData.orders).map((order, index) => (
-                          <button
-                            key={order.id}
-                            onClick={() => setViewingOrderId(order.id)}
-                            className={`text-sm border-l-2 pl-2 w-full text-left hover:opacity-80 transition-opacity cursor-pointer ${
-                              order.isAccepted
-                                ? "border-green-500 dark:border-green-400 bg-green-50 dark:bg-green-900/20"
-                                : showWorstCaseOrders
-                                ? "border-red-500 dark:border-red-400"
-                                : "border-blue-500 dark:border-blue-400"
-                            }`}
-                          >
-                            <div className="flex items-center gap-2">
-                              <span className="font-medium text-gray-900 dark:text-white">
-                                {order.restaurantName}
-                              </span>
-                              <span className="text-xs text-gray-500 dark:text-gray-400">
-                                ({order.appName}
-                                {order.estimatedCompletionTime !== undefined && (
-                                  <> • ~{order.estimatedCompletionTime} min</>
-                                )}
-                                )
-                              </span>
-                              {order.isAccepted && (
-                                <span className="text-xs px-1.5 py-0.5 rounded bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400 font-medium">
-                                  Accepted
-                                </span>
-                              )}
-                            </div>
-                            <div className="text-xs text-gray-600 dark:text-gray-400 mt-0.5">
-                              {formatCurrency(order.money)} • {order.miles} mi •{" "}
-                              {formatCurrency(order.milesToMoneyRatio)}/mi
-                            </div>
-                          </button>
-                        ))}
-                      </div>
-                    </td>
-                    <td className="px-4 py-3 text-right">
-                      <div className="text-sm text-gray-700 dark:text-gray-300">
-                        {hourData.orderVolume || 0}
-                      </div>
-                    </td>
-                    <td className="px-4 py-3 text-right">
-                      <div className={`text-sm font-semibold ${showWorstCaseOrders ? "text-red-600 dark:text-red-400" : "text-green-600 dark:text-green-400"}`}>
-                        {formatCurrency(showWorstCaseOrders ? hourData.worstCaseEarnings : hourData.totalPotentialEarnings)}
-                      </div>
-                    </td>
-                    <td className="px-4 py-3 text-right">
-                      <div className={`text-sm font-semibold ${showWorstCaseOrders ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400"}`}>
-                        {formatCurrency(showWorstCaseOrders ? hourData.totalPotentialEarnings : hourData.worstCaseEarnings || 0)}
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-                {/* Summary Row */}
-                {analytics.bestOrdersByDay && analytics.bestOrdersByDay.length > 0 && (
-                  <tr className="bg-gray-50 dark:bg-gray-900 border-t-2 border-gray-300 dark:border-gray-600">
-                    <td className="px-4 py-3">
-                      <div className="text-sm font-bold text-gray-900 dark:text-white">
-                        Total
-                      </div>
-                    </td>
-                    <td className="px-4 py-3">
-                      <div className="text-sm text-gray-600 dark:text-gray-400">
-                        Actual Earnings
-                      </div>
-                    </td>
-                    <td className="px-4 py-3 text-right">
-                      <div className="text-sm text-gray-700 dark:text-gray-300">
-                        {analytics.bestOrdersByDay[Math.min(selectedBestOrdersDateIndex, analytics.bestOrdersByDay.length - 1)]?.bestOrdersByHour.reduce((sum, hour) => sum + (hour.orderVolume || 0), 0) || 0}
-                      </div>
-                    </td>
-                    <td className="px-4 py-3 text-right">
-                      <div className={`text-sm font-semibold ${showWorstCaseOrders ? "text-red-600 dark:text-red-400" : "text-green-600 dark:text-green-400"}`}>
-                        {formatCurrency(
-                          showWorstCaseOrders
-                            ? analytics.bestOrdersByDay[Math.min(selectedBestOrdersDateIndex, analytics.bestOrdersByDay.length - 1)]?.bestOrdersByHour.reduce((sum, hour) => sum + (hour.worstCaseEarnings || 0), 0) || 0
-                            : analytics.bestOrdersByDay[Math.min(selectedBestOrdersDateIndex, analytics.bestOrdersByDay.length - 1)]?.totalPotentialEarnings || 0
-                        )}
-                      </div>
-                    </td>
-                    <td className="px-4 py-3 text-right">
-                      <div className={`text-sm font-semibold ${showWorstCaseOrders ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400"}`}>
-                        {formatCurrency(
-                          showWorstCaseOrders
-                            ? analytics.bestOrdersByDay[Math.min(selectedBestOrdersDateIndex, analytics.bestOrdersByDay.length - 1)]?.totalPotentialEarnings || 0
-                            : analytics.bestOrdersByDay[Math.min(selectedBestOrdersDateIndex, analytics.bestOrdersByDay.length - 1)]?.bestOrdersByHour.reduce((sum, hour) => sum + (hour.worstCaseEarnings || 0), 0) || 0
-                        )}
-                      </div>
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-        </Card>
-      )}
 
       {/* Location Insights */}
       {analytics.locationInsights && 

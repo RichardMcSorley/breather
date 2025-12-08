@@ -148,7 +148,7 @@ export async function GET(request: NextRequest) {
       });
     }
 
-    // Apply search filter if provided (search by customer name or address)
+    // Apply search filter if provided (search by customer name, address, or app name)
     // Support multi-term search: split by spaces, all terms must match (AND logic)
     if (searchQuery && searchQuery.trim()) {
       const searchTerms = searchQuery.trim().split(/\s+/).filter(term => term.length > 0);
@@ -165,7 +165,9 @@ export async function GET(request: NextRequest) {
               // Search in all customer names
               (customer.customerNames && customer.customerNames.some(name => name.toLowerCase().includes(termLower))) ||
               // Search in address
-              customer.address.toLowerCase().includes(termLower)
+              customer.address.toLowerCase().includes(termLower) ||
+              // Search in app names
+              (customer.apps && customer.apps.some(app => app.toLowerCase().includes(termLower)))
             );
           });
         });

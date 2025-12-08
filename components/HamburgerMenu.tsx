@@ -1,9 +1,9 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import Link from "next/link";
-import { Receipt, Package, BarChart3, X, TestTube, ShoppingCart, List } from "lucide-react";
+import { Receipt, Package, BarChart3, X, ShoppingCart, List, Mail } from "lucide-react";
 
 interface HamburgerMenuProps {
   isOpen: boolean;
@@ -13,6 +13,14 @@ interface HamburgerMenuProps {
 export default function HamburgerMenu({ isOpen, onClose }: HamburgerMenuProps) {
   const pathname = usePathname();
   const router = useRouter();
+  const [isLocalhost, setIsLocalhost] = useState(false);
+
+  // Check if we're on localhost
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      setIsLocalhost(window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1");
+    }
+  }, []);
 
   // Close menu on pathname change
   useEffect(() => {
@@ -36,9 +44,9 @@ export default function HamburgerMenu({ isOpen, onClose }: HamburgerMenuProps) {
     { href: "/ocr-data", label: "Customers", icon: Receipt },
     { href: "/delivery-orders", label: "Orders", icon: Package },
     { href: "/order-analytics", label: "Order Analytics", icon: BarChart3 },
-    { href: "/test-order", label: "Test Order", icon: TestTube },
     { href: "/kroger-search", label: "Kroger Search", icon: ShoppingCart },
     { href: "/shopping-lists", label: "Shopping Lists", icon: List },
+    ...(isLocalhost ? [{ href: "/cash-app-emails", label: "Cash App", icon: Mail }] : []),
   ];
 
   const handleLinkClick = () => {

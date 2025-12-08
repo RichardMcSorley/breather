@@ -250,7 +250,7 @@ export async function GET(request: NextRequest) {
       });
     }
 
-    // Apply search filter if provided (search by restaurant name, address, or pay amount)
+    // Apply search filter if provided (search by app name, restaurant name, address, or pay amount)
     // Support multi-term search: split by spaces, all terms must match (AND logic)
     if (searchQuery && searchQuery.trim()) {
       const searchTerms = searchQuery.trim().split(/\s+/).filter(term => term.length > 0);
@@ -273,6 +273,10 @@ export async function GET(request: NextRequest) {
               }
             }
             
+            // Search in app name
+            if (order.appName && order.appName.toLowerCase().includes(termLower)) {
+              return true;
+            }
             // Search in main restaurant name
             if (order.restaurantName && order.restaurantName.toLowerCase().includes(termLower)) {
               return true;
