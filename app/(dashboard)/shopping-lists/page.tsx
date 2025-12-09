@@ -27,6 +27,7 @@ export default function ShoppingListsPage() {
   const [uploadProgress, setUploadProgress] = useState<string>("");
   const [error, setError] = useState<string | null>(null);
   const [selectedLocation, setSelectedLocation] = useState<KrogerLocation | null>(null);
+  const [selectedApp, setSelectedApp] = useState<string>("Instacart");
 
   // Load selected location from localStorage on mount
   useEffect(() => {
@@ -115,36 +116,68 @@ export default function ShoppingListsPage() {
     setError(null);
 
     try {
-      // Convert all files to base64
-      const screenshots: string[] = [];
+      // Process screenshots one at a time to avoid payload size limits
+      const allItems: any[] = [];
+      
       for (let i = 0; i < files.length; i++) {
-        setUploadProgress(`Reading image ${i + 1} of ${files.length}...`);
+        setUploadProgress(`Processing screenshot ${i + 1} of ${files.length}...`);
+        
+        // Convert file to base64
         const base64 = await readFileAsBase64(files[i]);
-        screenshots.push(base64);
+        
+        // Process single screenshot
+        const response = await fetch("/api/shopping-lists/process-screenshot", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            screenshot: base64,
+            locationId: selectedLocation.locationId,
+            app: selectedApp || undefined,
+          }),
+        });
+
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({ error: "Failed to process screenshot" }));
+          throw new Error(errorData.error || `Failed to process screenshot ${i + 1}`);
+        }
+
+        const data = await response.json();
+        if (data.items && data.items.length > 0) {
+          allItems.push(...data.items);
+        }
       }
 
-      setUploadProgress(`Processing ${screenshots.length} screenshot${screenshots.length > 1 ? "s" : ""}...`);
+      if (allItems.length === 0) {
+        setError("No products found in any of the screenshots");
+        return;
+      }
 
-      const response = await fetch("/api/shopping-lists/from-screenshots", {
+      setUploadProgress("Creating shopping list...");
+
+      // Create shopping list with all accumulated items
+      const createResponse = await fetch("/api/shopping-lists/create", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          screenshots,
+          name: `Shopping List - ${new Date().toLocaleDateString()}`,
           locationId: selectedLocation.locationId,
+          items: allItems,
         }),
       });
 
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ error: "Failed to process screenshots" }));
-        throw new Error(errorData.error || "Failed to process screenshots");
+      if (!createResponse.ok) {
+        const errorData = await createResponse.json().catch(() => ({ error: "Failed to create shopping list" }));
+        throw new Error(errorData.error || "Failed to create shopping list");
       }
 
-      const data = await response.json();
+      const createData = await createResponse.json();
       
-      if (data.shoppingListId) {
-        router.push(`/shopping-lists/${data.shoppingListId}`);
+      if (createData.shoppingListId || createData._id) {
+        router.push(`/shopping-lists/${createData.shoppingListId || createData._id}`);
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to process screenshots");
@@ -222,33 +255,81 @@ export default function ShoppingListsPage() {
           onLocationSelected={handleLocationSelected}
         />
 
-        {/* Upload Button */}
-        <div className="flex gap-3">
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept="image/*"
-            multiple
-            onChange={handleFileSelect}
-            className="hidden"
-          />
-          <button
-            onClick={handleUploadClick}
-            disabled={uploading || !selectedLocation}
-            className="flex-1 px-4 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-          >
-            {uploading ? (
-              <>
-                <Loader2 className="w-5 h-5 animate-spin" />
-                {uploadProgress || "Processing..."}
-              </>
-            ) : (
-              <>
-                <Upload className="w-5 h-5" />
-                Upload Screenshots (select multiple)
-              </>
-            )}
-          </button>
+        {/* App Selector and Upload Button */}
+        <div className="space-y-3">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+              App
+            </label>
+            <div className="inline-flex rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 p-1 w-fit max-w-full overflow-hidden" role="group">
+              <input
+                type="radio"
+                name="app-selector"
+                id="app-instacart"
+                value="Instacart"
+                checked={selectedApp === "Instacart"}
+                onChange={(e) => setSelectedApp(e.target.value)}
+                className="hidden"
+              />
+              <label
+                htmlFor="app-instacart"
+                className={`px-3 sm:px-4 py-2 text-xs sm:text-sm font-medium rounded-md cursor-pointer transition-colors whitespace-nowrap ${
+                  selectedApp === "Instacart"
+                    ? "bg-green-600 text-white"
+                    : "text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
+                }`}
+              >
+                Instacart
+              </label>
+              
+              <input
+                type="radio"
+                name="app-selector"
+                id="app-doordash"
+                value="DoorDash"
+                checked={selectedApp === "DoorDash"}
+                onChange={(e) => setSelectedApp(e.target.value)}
+                className="hidden"
+              />
+              <label
+                htmlFor="app-doordash"
+                className={`px-3 sm:px-4 py-2 text-xs sm:text-sm font-medium rounded-md cursor-pointer transition-colors whitespace-nowrap ${
+                  selectedApp === "DoorDash"
+                    ? "bg-red-600 text-white"
+                    : "text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
+                }`}
+              >
+                DoorDash
+              </label>
+            </div>
+          </div>
+          <div className="flex gap-3">
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*"
+              multiple
+              onChange={handleFileSelect}
+              className="hidden"
+            />
+            <button
+              onClick={handleUploadClick}
+              disabled={uploading || !selectedLocation}
+              className="flex-1 px-4 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 text-sm sm:text-base"
+            >
+              {uploading ? (
+                <>
+                  <Loader2 className="w-5 h-5 animate-spin flex-shrink-0" />
+                  <span className="truncate">{uploadProgress || "Processing..."}</span>
+                </>
+              ) : (
+                <>
+                  <Upload className="w-5 h-5 flex-shrink-0" />
+                  <span className="truncate">Upload Screenshots (select multiple)</span>
+                </>
+              )}
+            </button>
+          </div>
         </div>
 
         {error && (

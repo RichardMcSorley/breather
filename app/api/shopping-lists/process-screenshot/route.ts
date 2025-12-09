@@ -14,7 +14,7 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { screenshot, locationId } = body;
+    const { screenshot, locationId, app: selectedApp } = body;
 
     if (!screenshot) {
       return NextResponse.json(
@@ -31,7 +31,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Extract products from screenshot using Gemini
-    const extractedProducts = await extractProductsFromScreenshot(screenshot);
+    const { products: extractedProducts, app } = await extractProductsFromScreenshot(screenshot);
 
     if (!extractedProducts || extractedProducts.length === 0) {
       return NextResponse.json({
@@ -98,6 +98,7 @@ export async function POST(request: NextRequest) {
               searchTerm,
               productName: product.productName,
               customer: product.customer || "A",
+              app: selectedApp || product.app || app,
               quantity: product.quantity,
               aisleLocation: product.aisleLocation,
               productId: krogerProduct.productId,
@@ -121,6 +122,7 @@ export async function POST(request: NextRequest) {
             searchTerm,
             productName: product.productName,
             customer: product.customer || "A",
+            app: selectedApp || product.app || app,
             quantity: product.quantity,
             aisleLocation: product.aisleLocation,
             found: false,
@@ -130,6 +132,7 @@ export async function POST(request: NextRequest) {
             searchTerm,
             productName: product.productName,
             customer: product.customer || "A",
+            app: selectedApp || product.app || app,
             quantity: product.quantity,
             aisleLocation: product.aisleLocation,
             found: false,

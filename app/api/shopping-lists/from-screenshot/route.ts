@@ -32,7 +32,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Extract products from screenshot using Gemini
-    const extractedProducts = await extractProductsFromScreenshot(screenshot);
+    const { products: extractedProducts, app } = await extractProductsFromScreenshot(screenshot);
 
     // Debug: Log extracted products
     console.log("Gemini extracted products:", JSON.stringify(extractedProducts, null, 2));
@@ -104,6 +104,7 @@ export async function POST(request: NextRequest) {
               searchTerm,
               productName: product.productName,
               customer: product.customer || "A",
+              app: product.app || app,
               quantity: product.quantity,
               aisleLocation: product.aisleLocation,
               // All Kroger data
@@ -128,6 +129,7 @@ export async function POST(request: NextRequest) {
             searchTerm,
             productName: product.productName,
             customer: product.customer || "A",
+            app: product.app || app,
             quantity: product.quantity,
             aisleLocation: product.aisleLocation,
             found: false,
@@ -138,6 +140,7 @@ export async function POST(request: NextRequest) {
             searchTerm,
             productName: product.productName,
             customer: product.customer || "A",
+            app: product.app || app,
             quantity: product.quantity,
             aisleLocation: product.aisleLocation,
             found: false,

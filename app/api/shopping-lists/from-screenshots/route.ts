@@ -34,7 +34,7 @@ export async function POST(request: NextRequest) {
     // Extract products from all screenshots using Gemini
     const allExtractedProducts = [];
     for (const screenshot of screenshots) {
-      const extractedProducts = await extractProductsFromScreenshot(screenshot);
+      const { products: extractedProducts } = await extractProductsFromScreenshot(screenshot);
       if (extractedProducts && extractedProducts.length > 0) {
         allExtractedProducts.push(...extractedProducts);
       }
@@ -107,6 +107,7 @@ export async function POST(request: NextRequest) {
               searchTerm,
               productName: product.productName,
               customer: product.customer || "A",
+              app: product.app,
               quantity: product.quantity,
               aisleLocation: product.aisleLocation,
               productId: krogerProduct.productId,
@@ -130,6 +131,7 @@ export async function POST(request: NextRequest) {
             searchTerm,
             productName: product.productName,
             customer: product.customer || "A",
+            app: product.app,
             quantity: product.quantity,
             aisleLocation: product.aisleLocation,
             found: false,
@@ -139,6 +141,7 @@ export async function POST(request: NextRequest) {
             searchTerm,
             productName: product.productName,
             customer: product.customer || "A",
+            app: product.app,
             quantity: product.quantity,
             aisleLocation: product.aisleLocation,
             found: false,

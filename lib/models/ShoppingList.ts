@@ -23,6 +23,7 @@ export interface IShoppingListItem {
   searchTerm: string; // Simplified search term for Kroger
   productName: string; // Full product name from screenshot
   customer?: string; // Customer badge (A, B, C)
+  app?: string; // App name: "Instacart" or "DoorDash"
   quantity?: string; // Quantity from screenshot (e.g., "1 ct")
   aisleLocation?: string; // Aisle location from screenshot
   // Kroger product data
@@ -40,6 +41,7 @@ export interface IShoppingListItem {
   productPageURI?: string;
   categories?: string[];
   found: boolean; // Whether Kroger search found a match
+  done?: boolean; // Whether item has been scanned and completed
 }
 
 export interface IShoppingList extends Document {
@@ -80,6 +82,7 @@ const ShoppingListItemSchema = new Schema({
     required: true,
   },
   customer: String,
+  app: String, // "Instacart" or "DoorDash"
   quantity: String,
   aisleLocation: String,
   // Kroger product data
@@ -97,6 +100,10 @@ const ShoppingListItemSchema = new Schema({
   productPageURI: String,
   categories: [String],
   found: {
+    type: Boolean,
+    default: false,
+  },
+  done: {
     type: Boolean,
     default: false,
   },

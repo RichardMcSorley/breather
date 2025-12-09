@@ -123,6 +123,11 @@ const CUSTOMER_PICKUP_SCHEMA = {
 const SHOPPING_LIST_SCHEMA = {
   type: "object",
   properties: {
+    app: {
+      type: "string",
+      enum: ["Instacart", "DoorDash"],
+      description: "The app name: 'Instacart' if the screenshot has a light background/theme, 'DoorDash' if it has a dark background/theme"
+    },
     products: {
       type: "array",
       items: {
@@ -162,7 +167,7 @@ const SHOPPING_LIST_SCHEMA = {
       description: "Array of products from the shopping list"
     }
   },
-  required: ["products"]
+  required: ["app", "products"]
 };
 
 // Get the appropriate prompt based on screenshot type - focused only on essential fields
@@ -207,7 +212,8 @@ Extract the customer name, full delivery address, delivery instructions, deliver
 Extract the customer name, pickup address, and restaurant name if shown.`;
 
     case "shopping-list":
-      return `Extract from this Instacart shopper shopping list screenshot:
+      return `Extract from this shopping list screenshot:
+- app: Determine which app this is based on the theme/background: "Instacart" if the screenshot has a light background/theme (white or light colors), "DoorDash" if it has a dark background/theme (black or dark colors)
 - products: Array of product objects, each with:
   - productName: The full product name as displayed (e.g., "Ensure® Max Protein Cafe Mocha Nutrition Shakes")
   - searchTerm: A simplified search term for finding the product - just the brand and main product type, remove extra descriptions like "Limited Edition", pack sizes, etc. (e.g., "Ensure Max Protein Mocha", "Dr Pepper Blackberry Zero Sugar", "Coca Cola Cherry Zero Sugar")
@@ -217,7 +223,9 @@ Extract the customer name, pickup address, and restaurant name if shown.`;
   - price: The price shown (e.g., "$13.49")
   - aisleLocation: The aisle and shelf location (e.g., "Aisle 11 - Shelf 5 (from the bottom)")
 
-IMPORTANT: Look carefully for customer badges - they are small colored circles (green for A, blue for B, orange for C) with a letter inside, usually positioned near the product image. Extract all products visible.`;
+IMPORTANT: 
+- First, determine the app by looking at the overall theme: light/white background = Instacart, dark/black background = DoorDash
+- Look carefully for customer badges - they are small colored circles (green for A, blue for B, orange for C) with a letter inside, usually positioned near the product image. Extract all products visible.`;
 
     default:
       throw new Error(`Unknown screenshot type: ${type}`);
@@ -398,14 +406,27 @@ export interface ExtractedProduct {
   size?: string;
   price?: string;
   aisleLocation?: string;
+  app?: string; // "Instacart" or "DoorDash"
 }
 
 export async function extractProductsFromScreenshot(
   screenshot: string
-): Promise<ExtractedProduct[]> {
+): Promise<{ products: ExtractedProduct[]; app?: string }> {
   const result = await processOrderScreenshotGemini(screenshot, undefined, "shopping-list");
   
-  const products = result.metadata?.extractedData?.products || [];
-  return products as ExtractedProduct[];
+  const extractedData = result.metadata?.extractedData || {};
+  const products = extractedData.products || [];
+  const app = extractedData.app;
+  
+  // Add app to each product for convenience
+  const productsWithApp = products.map((p: ExtractedProduct) => ({
+    ...p,
+    app,
+  }));
+  
+  return {
+    products: productsWithApp as ExtractedProduct[],
+    app,
+  };
 }
 

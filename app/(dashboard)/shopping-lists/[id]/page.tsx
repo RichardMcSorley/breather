@@ -5,8 +5,9 @@ import { useParams } from "next/navigation";
 import Layout from "@/components/Layout";
 import Image from "next/image";
 import Modal from "@/components/ui/Modal";
-import { ShoppingCart, ExternalLink, Barcode, Loader2, Search, Check } from "lucide-react";
+import { ShoppingCart, ExternalLink, Barcode, Loader2, Search, Check, Upload, Plus, Edit, Trash2, Scan, X } from "lucide-react";
 import { KrogerProduct } from "@/lib/types/kroger";
+import { BrowserMultiFormatReader } from "@zxing/browser";
 
 interface KrogerAisleLocation {
   aisleNumber?: string;
@@ -31,6 +32,7 @@ interface ShoppingListItem {
   searchTerm: string;
   productName: string;
   customer?: string;
+  app?: string; // "Instacart" or "DoorDash"
   quantity?: string;
   aisleLocation?: string;
   productId?: string;
@@ -47,6 +49,7 @@ interface ShoppingListItem {
   productPageURI?: string;
   categories?: string[];
   found: boolean;
+  done?: boolean;
 }
 
 interface ShoppingList {
@@ -66,14 +69,180 @@ const customerColors: Record<string, string> = {
   E: "bg-pink-500",
 };
 
-function CustomerBadge({ customer }: { customer?: string }) {
+// App tag colors
+const getAppTagColor = (appName?: string) => {
+  if (!appName) return { bg: "bg-gray-100 dark:bg-gray-700", text: "text-gray-600 dark:text-gray-400" };
+  if (appName === "Instacart") return { bg: "bg-green-100 dark:bg-green-900/30", text: "text-green-800 dark:text-green-400" };
+  if (appName === "DoorDash") return { bg: "bg-red-100 dark:bg-red-900/30", text: "text-red-800 dark:text-red-400" };
+  return { bg: "bg-gray-100 dark:bg-gray-700", text: "text-gray-600 dark:text-gray-400" };
+};
+
+// App tag colors for badge (non-transparent, dark background)
+const getAppTagColorForBadge = (appName?: string) => {
+  if (!appName) return { bg: "bg-gray-800 dark:bg-gray-700", text: "text-gray-300 dark:text-gray-300" };
+  if (appName === "Instacart") return { bg: "bg-green-700 dark:bg-green-800", text: "text-white dark:text-white" };
+  if (appName === "DoorDash") return { bg: "bg-red-700 dark:bg-red-800", text: "text-white dark:text-white" };
+  return { bg: "bg-gray-800 dark:bg-gray-700", text: "text-gray-300 dark:text-gray-300" };
+};
+
+// Swipeable Item Component
+function SwipeableItem({
+  item,
+  originalIndex,
+  onTap,
+  onEdit,
+  onDelete,
+  children,
+}: {
+  item: ShoppingListItem;
+  originalIndex: number;
+  onTap: () => void;
+  onEdit: () => void;
+  onDelete: () => void;
+  children: React.ReactNode;
+}) {
+  const [swipeOffset, setSwipeOffset] = useState(0);
+  const [touchStart, setTouchStart] = useState<number | null>(null);
+  const [touchEnd, setTouchEnd] = useState<number | null>(null);
+  const [isDragging, setIsDragging] = useState(false);
+  const minSwipeDistance = 50;
+  const maxSwipeDistance = 120;
+
+  const onTouchStart = (e: React.TouchEvent) => {
+    setTouchEnd(null);
+    setTouchStart(e.targetTouches[0].clientX);
+    setIsDragging(true);
+  };
+
+  const onTouchMove = (e: React.TouchEvent) => {
+    if (touchStart === null) return;
+    const currentX = e.targetTouches[0].clientX;
+    setTouchEnd(currentX);
+    
+    const distance = touchStart - currentX;
+    // Limit swipe distance
+    const limitedDistance = Math.max(-maxSwipeDistance, Math.min(maxSwipeDistance, distance));
+    setSwipeOffset(limitedDistance);
+  };
+
+  const onTouchEnd = () => {
+    if (touchStart === null || touchEnd === null) {
+      setIsDragging(false);
+      setSwipeOffset(0);
+      return;
+    }
+    
+    const distance = touchStart - touchEnd;
+    const isLeftSwipe = distance > minSwipeDistance;
+    const isRightSwipe = distance < -minSwipeDistance;
+
+    if (isLeftSwipe) {
+      // Swipe left = delete
+      setSwipeOffset(-maxSwipeDistance);
+      setTimeout(() => {
+        onDelete();
+        setSwipeOffset(0);
+        setIsDragging(false);
+      }, 300);
+    } else if (isRightSwipe) {
+      // Swipe right = edit
+      setSwipeOffset(maxSwipeDistance);
+      setTimeout(() => {
+        onEdit();
+        setSwipeOffset(0);
+        setIsDragging(false);
+      }, 300);
+    } else {
+      // Small movement = tap
+      if (Math.abs(distance) < 10) {
+        onTap();
+      }
+      setSwipeOffset(0);
+      setIsDragging(false);
+    }
+
+    setTouchStart(null);
+    setTouchEnd(null);
+  };
+
+  const handleClick = (e: React.MouseEvent) => {
+    // Only trigger tap if not dragging
+    if (!isDragging && swipeOffset === 0) {
+      onTap();
+    }
+  };
+
+  // Calculate which action is visible based on swipe direction
+  const showEditAction = swipeOffset > 0;
+  const showDeleteAction = swipeOffset < 0;
+
+  return (
+    <div className="relative overflow-hidden rounded-lg mb-2">
+      {/* Action Buttons Background */}
+      <div className="absolute inset-0 flex pointer-events-none">
+        {/* Edit Action (Right side - shows when swiping right) */}
+        <div 
+          className={`flex-1 bg-blue-600 dark:bg-blue-700 flex items-center justify-end pr-4 transition-opacity duration-200 ${
+            showEditAction ? "opacity-100" : "opacity-0"
+          }`}
+        >
+          <Edit className="w-5 h-5 text-white" />
+          <span className="ml-2 text-white text-sm font-medium">Edit</span>
+        </div>
+        {/* Delete Action (Left side - shows when swiping left) */}
+        <div 
+          className={`flex-1 bg-red-600 dark:bg-red-700 flex items-center justify-start pl-4 transition-opacity duration-200 ${
+            showDeleteAction ? "opacity-100" : "opacity-0"
+          }`}
+        >
+          <Trash2 className="w-5 h-5 text-white" />
+          <span className="ml-2 text-white text-sm font-medium">Delete</span>
+        </div>
+      </div>
+
+      {/* Main Content */}
+      <div
+        className="relative bg-white dark:bg-gray-800 transition-transform duration-200 ease-out cursor-pointer"
+        style={{
+          transform: `translateX(${swipeOffset}px)`,
+        }}
+        onTouchStart={onTouchStart}
+        onTouchMove={onTouchMove}
+        onTouchEnd={onTouchEnd}
+        onClick={handleClick}
+      >
+        {children}
+      </div>
+    </div>
+  );
+}
+
+function CustomerBadge({ customer, app }: { customer?: string; app?: string }) {
   if (!customer) return null;
   const bgColor = customerColors[customer] || "bg-gray-500";
+  const appColor = getAppTagColorForBadge(app);
+  
+  // Convert app name to short version
+  const getShortAppName = (appName?: string) => {
+    if (appName === "Instacart") return "IC";
+    if (appName === "DoorDash") return "DD";
+    return appName;
+  };
+  
   return (
-    <div 
-      className={`absolute -top-1 -left-1 w-6 h-6 ${bgColor} text-white rounded-full flex items-center justify-center text-xs font-bold shadow z-10`}
-    >
-      {customer}
+    <div className="absolute -top-1 -left-1 flex flex-col gap-1 z-10">
+      <div className="flex items-center gap-1">
+        <div 
+          className={`w-6 h-6 ${bgColor} text-white rounded-full flex items-center justify-center text-xs font-bold shadow`}
+        >
+          {customer}
+        </div>
+        {app && (
+          <span className={`text-xs px-2 py-0.5 rounded ${appColor.bg} ${appColor.text} font-semibold shadow whitespace-nowrap`}>
+            {getShortAppName(app)}
+          </span>
+        )}
+      </div>
     </div>
   );
 }
@@ -212,6 +381,7 @@ function SearchProductModal({
         searchTerm: searchTerm,
         productName: item.productName,
         customer: item.customer || "A",
+        app: item.app,
         quantity: item.quantity,
         aisleLocation: item.aisleLocation,
         productId: selectedProduct.productId,
@@ -404,6 +574,756 @@ function SearchProductModal({
               </>
             )}
           </button>
+        )}
+      </div>
+    </Modal>
+  );
+}
+
+// Edit Item Modal Component
+function EditItemModal({
+  item,
+  itemIndex,
+  shoppingListId,
+  locationId,
+  isOpen,
+  onClose,
+  onItemUpdated,
+}: {
+  item: ShoppingListItem;
+  itemIndex: number;
+  shoppingListId: string;
+  locationId: string;
+  isOpen: boolean;
+  onClose: () => void;
+  onItemUpdated: () => void;
+}) {
+  const [customer, setCustomer] = useState(item.customer || "A");
+  const [quantity, setQuantity] = useState(item.quantity || "1");
+  const [app, setApp] = useState(item.app || "");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [productName, setProductName] = useState("");
+  const [searching, setSearching] = useState(false);
+  const [searchResults, setSearchResults] = useState<KrogerProduct[]>([]);
+  const [selectedProduct, setSelectedProduct] = useState<KrogerProduct | null>(null);
+  const [searchError, setSearchError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (isOpen) {
+      setCustomer(item.customer || "A");
+      setQuantity(item.quantity || "1");
+      setApp(item.app || "");
+      setError(null);
+      setProductName("");
+      setSearchResults([]);
+      setSelectedProduct(null);
+      setSearchError(null);
+    }
+  }, [isOpen, item]);
+
+  const handleSearch = async () => {
+    if (!productName.trim() || productName.trim().length < 2) {
+      return;
+    }
+
+    setSearching(true);
+    setSearchResults([]);
+    setSelectedProduct(null);
+    setSearchError(null);
+
+    try {
+      const response = await fetch(
+        `/api/kroger/products/search?term=${encodeURIComponent(productName)}&locationId=${locationId}&limit=10`
+      );
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ error: "Search failed" }));
+        const errorMessage = errorData.error || `Search failed (${response.status})`;
+        throw new Error(errorMessage);
+      }
+
+      const data = await response.json();
+      if (data.data) {
+        setSearchResults(data.data);
+        if (data.data.length === 0) {
+          setSearchError("No products found. Try a different search term.");
+        }
+      } else {
+        setSearchError("No products found. Try a different search term.");
+      }
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : "Search failed. Please try again.";
+      setSearchError(errorMessage);
+      console.error("Search error:", err);
+    } finally {
+      setSearching(false);
+    }
+  };
+
+  const getImageUrl = (product: KrogerProduct) => {
+    if (product.images && product.images.length > 0) {
+      const defaultImg = product.images.find(img => img.default) || product.images[0];
+      const sizes = ["xlarge", "large", "medium", "small"];
+      for (const size of sizes) {
+        const found = defaultImg?.sizes?.find(s => s.size === size);
+        if (found?.url) return found.url;
+      }
+      return defaultImg?.sizes?.[0]?.url;
+    }
+    return null;
+  };
+
+  const handleSave = async () => {
+    setSaving(true);
+    setError(null);
+
+    try {
+      let updatedItem: ShoppingListItem;
+
+      // If a new product was selected, replace the item with new product data
+      if (selectedProduct) {
+        const krogerItem = selectedProduct.items?.[0];
+        
+        // Get best image URL
+        let imageUrl: string | undefined;
+        if (selectedProduct.images && selectedProduct.images.length > 0) {
+          const frontImg = selectedProduct.images.find(img => img.perspective === "front");
+          const defaultImg = selectedProduct.images.find(img => img.default);
+          const imgToUse = frontImg || defaultImg || selectedProduct.images[0];
+          
+          if (imgToUse?.sizes && imgToUse.sizes.length > 0) {
+            const sizeOrder = ["xlarge", "large", "medium", "small", "thumbnail"];
+            for (const size of sizeOrder) {
+              const found = imgToUse.sizes.find(s => s.size === size);
+              if (found?.url) {
+                imageUrl = found.url;
+                break;
+              }
+            }
+            if (!imageUrl && imgToUse.sizes[0]?.url) {
+              imageUrl = imgToUse.sizes[0].url;
+            }
+          }
+        }
+
+        // Store all images
+        const images = selectedProduct.images?.map(img => ({
+          perspective: img.perspective,
+          default: img.default,
+          sizes: img.sizes?.map(s => ({ size: s.size, url: s.url })) || [],
+        })) || [];
+
+        // Store all Kroger aisle locations
+        const krogerAisles = selectedProduct.aisleLocations?.map(aisle => ({
+          aisleNumber: aisle.number,
+          shelfNumber: aisle.shelfNumber,
+          side: aisle.side,
+          description: aisle.description,
+          bayNumber: aisle.bayNumber,
+        })) || [];
+
+        updatedItem = {
+          searchTerm: productName,
+          productName: selectedProduct.description || productName,
+          customer: customer,
+          quantity: quantity,
+          app: app || undefined,
+          productId: selectedProduct.productId,
+          upc: selectedProduct.upc || krogerItem?.itemId,
+          brand: selectedProduct.brand,
+          description: selectedProduct.description,
+          size: krogerItem?.size,
+          price: krogerItem?.price?.regular,
+          promoPrice: krogerItem?.price?.promo,
+          stockLevel: krogerItem?.inventory?.stockLevel,
+          imageUrl,
+          images,
+          krogerAisles,
+          productPageURI: selectedProduct.productPageURI,
+          categories: selectedProduct.categories,
+          found: true,
+        };
+      } else {
+        // Just update the existing item's fields
+        updatedItem = {
+          ...item,
+          customer,
+          quantity,
+          app: app || undefined,
+        };
+      }
+
+      const response = await fetch(`/api/shopping-lists/${shoppingListId}/items`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ itemIndex, item: updatedItem }),
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to update item");
+      }
+
+      onItemUpdated();
+      onClose();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to update item");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Modal isOpen={isOpen} onClose={onClose} title="Edit Item">
+      <div className="space-y-4">
+        {/* Current Product Name */}
+        <div>
+          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+            Current Product
+          </label>
+          <p className="text-gray-900 dark:text-white font-medium">{item.productName}</p>
+        </div>
+
+        {/* Search for Different Product */}
+        <div>
+          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+            Search for Different Product (optional)
+          </label>
+          <div className="flex gap-2">
+            <input
+              type="text"
+              value={productName}
+              onChange={(e) => setProductName(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && !searching) {
+                  handleSearch();
+                }
+              }}
+              placeholder="Enter product name to search..."
+              className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+            <button
+              onClick={handleSearch}
+              disabled={searching || !productName.trim()}
+              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+            >
+              {searching ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  Searching...
+                </>
+              ) : (
+                <>
+                  <Search className="w-4 h-4" />
+                  Search
+                </>
+              )}
+            </button>
+          </div>
+        </div>
+
+        {searchError && (
+          <div className="p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
+            <p className="text-sm text-red-600 dark:text-red-400">{searchError}</p>
+          </div>
+        )}
+
+        {/* Search Results */}
+        {searchResults.length > 0 && (
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+              Select Product
+            </label>
+            <div className="max-h-64 overflow-y-auto space-y-2">
+              {searchResults.map((product) => {
+                const imageUrl = getImageUrl(product);
+                const isSelected = selectedProduct?.productId === product.productId;
+                return (
+                  <div
+                    key={product.productId}
+                    onClick={() => setSelectedProduct(product)}
+                    className={`p-3 border rounded-lg cursor-pointer transition-colors ${
+                      isSelected
+                        ? "border-blue-500 bg-blue-50 dark:bg-blue-900/20"
+                        : "border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600"
+                    }`}
+                  >
+                    <div className="flex gap-3">
+                      {imageUrl ? (
+                        <div className="relative w-16 h-16 bg-white rounded overflow-hidden flex-shrink-0">
+                          <Image
+                            src={imageUrl}
+                            alt={product.description || ""}
+                            fill
+                            className="object-contain p-1"
+                            unoptimized
+                          />
+                        </div>
+                      ) : (
+                        <div className="w-16 h-16 bg-gray-100 dark:bg-gray-700 rounded flex items-center justify-center flex-shrink-0">
+                          <ShoppingCart className="w-6 h-6 text-gray-400" />
+                        </div>
+                      )}
+                      <div className="flex-1 min-w-0">
+                        <p className="font-medium text-gray-900 dark:text-white text-sm">
+                          {product.description}
+                        </p>
+                        {product.brand && (
+                          <p className="text-xs text-gray-500 dark:text-gray-400">{product.brand}</p>
+                        )}
+                        {product.items?.[0]?.price?.regular && (
+                          <p className="text-sm font-semibold text-gray-900 dark:text-white mt-1">
+                            ${product.items[0].price.regular.toFixed(2)}
+                          </p>
+                        )}
+                      </div>
+                      {isSelected && (
+                        <Check className="w-5 h-5 text-blue-600 dark:text-blue-400 flex-shrink-0" />
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {selectedProduct && (
+          <div className="p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
+            <p className="text-sm text-blue-600 dark:text-blue-400">
+              ✓ New product selected: <strong>{selectedProduct.description}</strong>
+            </p>
+          </div>
+        )}
+
+        {/* Customer */}
+        <div>
+          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+            Customer
+          </label>
+          <select
+            value={customer}
+            onChange={(e) => setCustomer(e.target.value)}
+            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+          >
+            <option value="A">A</option>
+            <option value="B">B</option>
+            <option value="C">C</option>
+            <option value="D">D</option>
+            <option value="E">E</option>
+          </select>
+        </div>
+
+        {/* Quantity */}
+        <div>
+          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+            Quantity
+          </label>
+          <input
+            type="text"
+            value={quantity}
+            onChange={(e) => setQuantity(e.target.value)}
+            placeholder="1"
+            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+          />
+        </div>
+
+        {/* App */}
+        <div>
+          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+            App
+          </label>
+          <select
+            value={app}
+            onChange={(e) => setApp(e.target.value)}
+            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+          >
+            <option value="">None</option>
+            <option value="Instacart">Instacart</option>
+            <option value="DoorDash">DoorDash</option>
+          </select>
+        </div>
+
+        {error && (
+          <div className="p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
+            <p className="text-sm text-red-600 dark:text-red-400">{error}</p>
+          </div>
+        )}
+
+        {/* Save Button */}
+        <div className="flex gap-2 pt-2">
+          <button
+            onClick={onClose}
+            className="flex-1 px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={handleSave}
+            disabled={saving}
+            className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+          >
+            {saving ? (
+              <>
+                <Loader2 className="w-4 h-4 animate-spin" />
+                Saving...
+              </>
+            ) : (
+              <>
+                <Check className="w-4 h-4" />
+                Save
+              </>
+            )}
+          </button>
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
+// Manual Entry Modal Component
+function ManualEntryModal({
+  locationId,
+  shoppingListId,
+  isOpen,
+  onClose,
+  onItemAdded,
+}: {
+  locationId: string;
+  shoppingListId: string;
+  isOpen: boolean;
+  onClose: () => void;
+  onItemAdded: () => void;
+}) {
+  const [productName, setProductName] = useState("");
+  const [searching, setSearching] = useState(false);
+  const [searchResults, setSearchResults] = useState<KrogerProduct[]>([]);
+  const [selectedProduct, setSelectedProduct] = useState<KrogerProduct | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [searchError, setSearchError] = useState<string | null>(null);
+  const [customer, setCustomer] = useState("A");
+  const [quantity, setQuantity] = useState("1");
+
+  useEffect(() => {
+    if (isOpen) {
+      setProductName("");
+      setSearchResults([]);
+      setSelectedProduct(null);
+      setSearchError(null);
+      setCustomer("A");
+      setQuantity("1");
+    }
+  }, [isOpen]);
+
+  const handleSearch = async () => {
+    if (!productName.trim() || productName.trim().length < 2) {
+      return;
+    }
+
+    setSearching(true);
+    setSearchResults([]);
+    setSelectedProduct(null);
+    setSearchError(null);
+
+    try {
+      const response = await fetch(
+        `/api/kroger/products/search?term=${encodeURIComponent(productName)}&locationId=${locationId}&limit=10`
+      );
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ error: "Search failed" }));
+        const errorMessage = errorData.error || `Search failed (${response.status})`;
+        throw new Error(errorMessage);
+      }
+
+      const data = await response.json();
+      if (data.data) {
+        setSearchResults(data.data);
+        if (data.data.length === 0) {
+          setSearchError("No products found. Try a different search term.");
+        }
+      } else {
+        setSearchError("No products found. Try a different search term.");
+      }
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : "Search failed. Please try again.";
+      setSearchError(errorMessage);
+      console.error("Search error:", err);
+    } finally {
+      setSearching(false);
+    }
+  };
+
+  const handleSave = async () => {
+    if (!selectedProduct) return;
+
+    setSaving(true);
+    try {
+      const krogerItem = selectedProduct.items?.[0];
+      
+      // Get best image URL
+      let imageUrl: string | undefined;
+      if (selectedProduct.images && selectedProduct.images.length > 0) {
+        const frontImg = selectedProduct.images.find(img => img.perspective === "front");
+        const defaultImg = selectedProduct.images.find(img => img.default);
+        const imgToUse = frontImg || defaultImg || selectedProduct.images[0];
+        
+        if (imgToUse?.sizes && imgToUse.sizes.length > 0) {
+          const sizeOrder = ["xlarge", "large", "medium", "small", "thumbnail"];
+          for (const size of sizeOrder) {
+            const found = imgToUse.sizes.find(s => s.size === size);
+            if (found?.url) {
+              imageUrl = found.url;
+              break;
+            }
+          }
+          if (!imageUrl && imgToUse.sizes[0]?.url) {
+            imageUrl = imgToUse.sizes[0].url;
+          }
+        }
+      }
+
+      // Store all images
+      const images = selectedProduct.images?.map(img => ({
+        perspective: img.perspective,
+        default: img.default,
+        sizes: img.sizes?.map(s => ({ size: s.size, url: s.url })) || [],
+      })) || [];
+
+      // Store all Kroger aisle locations
+      const krogerAisles = selectedProduct.aisleLocations?.map(aisle => ({
+        aisleNumber: aisle.number,
+        shelfNumber: aisle.shelfNumber,
+        side: aisle.side,
+        description: aisle.description,
+        bayNumber: aisle.bayNumber,
+      })) || [];
+
+      const newItem: ShoppingListItem = {
+        searchTerm: productName,
+        productName: selectedProduct.description || productName,
+        customer: customer,
+        quantity: quantity,
+        productId: selectedProduct.productId,
+        upc: selectedProduct.upc || krogerItem?.itemId,
+        brand: selectedProduct.brand,
+        description: selectedProduct.description,
+        size: krogerItem?.size,
+        price: krogerItem?.price?.regular,
+        promoPrice: krogerItem?.price?.promo,
+        stockLevel: krogerItem?.inventory?.stockLevel,
+        imageUrl,
+        images,
+        krogerAisles,
+        productPageURI: selectedProduct.productPageURI,
+        categories: selectedProduct.categories,
+        found: true,
+      };
+
+      // Add the item via API
+      const response = await fetch(`/api/shopping-lists/${shoppingListId}/items`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ items: [newItem] }),
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to add item");
+      }
+
+      onItemAdded();
+      onClose();
+    } catch (err) {
+      console.error("Save error:", err);
+      setSearchError(err instanceof Error ? err.message : "Failed to add item");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const getImageUrl = (product: KrogerProduct) => {
+    if (product.images && product.images.length > 0) {
+      const defaultImg = product.images.find(img => img.default) || product.images[0];
+      const sizes = ["xlarge", "large", "medium", "small"];
+      for (const size of sizes) {
+        const found = defaultImg?.sizes?.find(s => s.size === size);
+        if (found?.url) return found.url;
+      }
+      return defaultImg?.sizes?.[0]?.url;
+    }
+    return null;
+  };
+
+  return (
+    <Modal isOpen={isOpen} onClose={onClose} title="Add Product Manually">
+      <div className="space-y-4">
+        {/* Product Name Input */}
+        <div>
+          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+            Product Name
+          </label>
+          <div className="flex gap-2">
+            <input
+              type="text"
+              value={productName}
+              onChange={(e) => setProductName(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && !searching) {
+                  handleSearch();
+                }
+              }}
+              placeholder="Enter product name..."
+              className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+            <button
+              onClick={handleSearch}
+              disabled={searching || !productName.trim()}
+              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+            >
+              {searching ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  Searching...
+                </>
+              ) : (
+                <>
+                  <Search className="w-4 h-4" />
+                  Search
+                </>
+              )}
+            </button>
+          </div>
+        </div>
+
+        {/* Customer and Quantity */}
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+              Customer
+            </label>
+            <select
+              value={customer}
+              onChange={(e) => setCustomer(e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              <option value="A">A</option>
+              <option value="B">B</option>
+              <option value="C">C</option>
+              <option value="D">D</option>
+              <option value="E">E</option>
+            </select>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+              Quantity
+            </label>
+            <input
+              type="text"
+              value={quantity}
+              onChange={(e) => setQuantity(e.target.value)}
+              placeholder="1"
+              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
+        </div>
+
+        {searchError && (
+          <div className="p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
+            <p className="text-sm text-red-600 dark:text-red-400">{searchError}</p>
+          </div>
+        )}
+
+        {/* Search Results */}
+        {searchResults.length > 0 && (
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+              Select Product
+            </label>
+            <div className="max-h-64 overflow-y-auto space-y-2">
+              {searchResults.map((product) => {
+                const imageUrl = getImageUrl(product);
+                const isSelected = selectedProduct?.productId === product.productId;
+                return (
+                  <div
+                    key={product.productId}
+                    onClick={() => setSelectedProduct(product)}
+                    className={`p-3 border rounded-lg cursor-pointer transition-colors ${
+                      isSelected
+                        ? "border-blue-500 bg-blue-50 dark:bg-blue-900/20"
+                        : "border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600"
+                    }`}
+                  >
+                    <div className="flex gap-3">
+                      {imageUrl ? (
+                        <div className="relative w-16 h-16 bg-white rounded overflow-hidden flex-shrink-0">
+                          <Image
+                            src={imageUrl}
+                            alt={product.description || ""}
+                            fill
+                            className="object-contain p-1"
+                            unoptimized
+                          />
+                        </div>
+                      ) : (
+                        <div className="w-16 h-16 bg-gray-100 dark:bg-gray-700 rounded flex items-center justify-center flex-shrink-0">
+                          <ShoppingCart className="w-6 h-6 text-gray-400" />
+                        </div>
+                      )}
+                      <div className="flex-1 min-w-0">
+                        <p className="font-medium text-gray-900 dark:text-white text-sm">
+                          {product.description}
+                        </p>
+                        {product.brand && (
+                          <p className="text-xs text-gray-500 dark:text-gray-400">{product.brand}</p>
+                        )}
+                        {product.items?.[0]?.price?.regular && (
+                          <p className="text-sm font-semibold text-gray-900 dark:text-white mt-1">
+                            ${product.items[0].price.regular.toFixed(2)}
+                          </p>
+                        )}
+                      </div>
+                      {isSelected && (
+                        <Check className="w-5 h-5 text-blue-600 dark:text-blue-400 flex-shrink-0" />
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* Save Button */}
+        {selectedProduct && (
+          <div className="flex gap-2 pt-2">
+            <button
+              onClick={onClose}
+              className="flex-1 px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={handleSave}
+              disabled={saving}
+              className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+            >
+              {saving ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  Adding...
+                </>
+              ) : (
+                <>
+                  <Plus className="w-4 h-4" />
+                  Add to List
+                </>
+              )}
+            </button>
+          </div>
         )}
       </div>
     </Modal>
@@ -701,6 +1621,233 @@ function ProductDetailModal({
   );
 }
 
+// Barcode Scanner Component
+function BarcodeScanner({
+  isOpen,
+  onClose,
+  onScan,
+  item,
+}: {
+  isOpen: boolean;
+  onClose: () => void;
+  onScan: (barcode: string) => void;
+  item: ShoppingListItem;
+}) {
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+  const codeReaderRef = useRef<BrowserMultiFormatReader | null>(null);
+  const [error, setError] = useState<string>("");
+
+  useEffect(() => {
+    if (!isOpen) {
+      // Cleanup when closing - stop video stream
+      if (videoRef.current?.srcObject) {
+        const stream = videoRef.current.srcObject as MediaStream;
+        stream.getTracks().forEach(track => track.stop());
+        videoRef.current.srcObject = null;
+      }
+      return;
+    }
+
+    const codeReader = new BrowserMultiFormatReader();
+    codeReaderRef.current = codeReader;
+
+    const videoElement = videoRef.current;
+    if (!videoElement) {
+      setError("No video element found.");
+      return;
+    }
+
+    let scanning = true;
+
+    // Start scanning
+    const scanPromise = codeReader
+      .decodeFromVideoDevice(
+        undefined, // auto-select camera
+        videoElement,
+        (result, error) => {
+          if (result && scanning) {
+            scanning = false;
+            const scannedCode = result.getText();
+            // Stop video stream
+            if (videoElement.srcObject) {
+              const stream = videoElement.srcObject as MediaStream;
+              stream.getTracks().forEach(track => track.stop());
+              videoElement.srcObject = null;
+            }
+            onScan(scannedCode);
+          }
+          if (error && !(error instanceof Error && error.name === "NotFoundException")) {
+            // Only show non-"not found" errors
+            console.error("Scan error:", error);
+          }
+        }
+      )
+      .catch((err) => {
+        console.error(err);
+        setError(String(err));
+      });
+
+    // Cleanup on unmount
+    return () => {
+      scanning = false;
+      // Stop video stream
+      if (videoElement.srcObject) {
+        const stream = videoElement.srcObject as MediaStream;
+        stream.getTracks().forEach(track => track.stop());
+        videoElement.srcObject = null;
+      }
+    };
+  }, [isOpen, onScan]);
+
+  if (!isOpen) return null;
+
+  return (
+    <Modal isOpen={isOpen} onClose={onClose} title="Scan Barcode">
+      <div className="space-y-4">
+        <div className="text-center">
+          <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
+            Point your camera at the barcode
+          </p>
+        </div>
+
+        {/* Video preview */}
+        <div className="relative w-full max-w-md mx-auto">
+          <video
+            ref={videoRef}
+            className="w-full rounded-lg border-2 border-gray-300 dark:border-gray-600"
+            style={{ aspectRatio: "4/3" }}
+            muted
+            playsInline
+          />
+          {/* Scanning overlay */}
+          <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+            <div className="border-2 border-blue-500 rounded-lg w-3/4 h-1/2" />
+          </div>
+        </div>
+
+        {error && (
+          <div className="p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
+            <p className="text-sm text-red-600 dark:text-red-400">{error}</p>
+          </div>
+        )}
+
+        <div className="flex gap-2">
+          <button
+            onClick={onClose}
+            className="flex-1 px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800"
+          >
+            Cancel
+          </button>
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
+// Scan Result Modal Component
+function ScanResultModal({
+  isOpen,
+  onClose,
+  success,
+  item,
+  scannedBarcode,
+}: {
+  isOpen: boolean;
+  onClose: () => void;
+  success: boolean;
+  item: ShoppingListItem;
+  scannedBarcode?: string;
+}) {
+  const customer = item.customer || "A";
+  const app = item.app || "";
+  
+  // Get customer color
+  const customerColorMap: Record<string, { bg: string; text: string; border: string }> = {
+    A: { bg: "bg-green-500", text: "text-white", border: "border-green-600" },
+    B: { bg: "bg-blue-500", text: "text-white", border: "border-blue-600" },
+    C: { bg: "bg-orange-500", text: "text-white", border: "border-orange-600" },
+    D: { bg: "bg-purple-500", text: "text-white", border: "border-purple-600" },
+    E: { bg: "bg-pink-500", text: "text-white", border: "border-pink-600" },
+  };
+
+  const colors = customerColorMap[customer] || customerColorMap.A;
+  
+  // Get short app name
+  const getShortAppName = (appName?: string) => {
+    if (appName === "Instacart") return "IC";
+    if (appName === "DoorDash") return "DD";
+    return appName || "";
+  };
+
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      {/* Backdrop */}
+      <div className="absolute inset-0 bg-black/50" onClick={onClose} />
+      
+      {/* Modal */}
+      <div className={`relative w-full max-w-md rounded-2xl shadow-2xl ${colors.bg} ${colors.text} border-4 ${colors.border}`}>
+        <div className="p-8 text-center space-y-6">
+          {/* App Name - Prominent */}
+          {app && (
+            <div className="mb-4">
+              <div className="inline-block px-6 py-3 bg-white/20 backdrop-blur-sm rounded-lg border-2 border-white/30">
+                <p className="text-2xl font-bold">{getShortAppName(app)}</p>
+              </div>
+            </div>
+          )}
+
+          {/* Customer Badge - Large */}
+          <div className="flex justify-center">
+            <div className={`w-24 h-24 ${colors.bg} rounded-full flex items-center justify-center text-4xl font-bold shadow-lg border-4 border-white/50`}>
+              {customer}
+            </div>
+          </div>
+
+          {/* Success/Error Message */}
+          <div className="space-y-2">
+            {success ? (
+              <>
+                <div className="flex justify-center">
+                  <Check className="w-16 h-16 text-white" strokeWidth={3} />
+                </div>
+                <h2 className="text-3xl font-bold">Success!</h2>
+                <p className="text-lg opacity-90">Correct item scanned</p>
+              </>
+            ) : (
+              <>
+                <div className="flex justify-center">
+                  <X className="w-16 h-16 text-white" strokeWidth={3} />
+                </div>
+                <h2 className="text-3xl font-bold">Incorrect Barcode</h2>
+                <p className="text-lg opacity-90">Scanned: {scannedBarcode}</p>
+                <p className="text-base opacity-80">Expected: {item.upc || "N/A"}</p>
+              </>
+            )}
+          </div>
+
+          {/* Product Name */}
+          <div className="pt-4 border-t border-white/30">
+            <p className="text-lg font-semibold opacity-90">{item.productName}</p>
+            {item.description && item.description !== item.productName && (
+              <p className="text-sm opacity-75 mt-1">{item.description}</p>
+            )}
+          </div>
+
+          {/* OK Button */}
+          <button
+            onClick={onClose}
+            className="w-full px-6 py-4 bg-white/20 backdrop-blur-sm rounded-lg border-2 border-white/30 hover:bg-white/30 transition-colors font-semibold text-lg"
+          >
+            OK
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function ShoppingListDetailPage() {
   const params = useParams();
   const id = params.id as string;
@@ -711,6 +1858,15 @@ export default function ShoppingListDetailPage() {
   const [error, setError] = useState<string | null>(null);
   const [selectedItem, setSelectedItem] = useState<ShoppingListItem | null>(null);
   const [searchItem, setSearchItem] = useState<{ item: ShoppingListItem; index: number } | null>(null);
+  const [editItem, setEditItem] = useState<{ item: ShoppingListItem; index: number } | null>(null);
+  const [manualEntryOpen, setManualEntryOpen] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState<string>("");
+  const [selectedApp, setSelectedApp] = useState<string>("Instacart");
+  const [activeTab, setActiveTab] = useState<"todo" | "done">("todo");
+  const [scanningItem, setScanningItem] = useState<ShoppingListItem | null>(null);
+  const [scanResult, setScanResult] = useState<{ success: boolean; item: ShoppingListItem; scannedBarcode?: string } | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const hasAutoRefreshedRef = useRef(false);
 
   const fetchShoppingList = async () => {
@@ -784,6 +1940,159 @@ export default function ShoppingListDetailPage() {
     return `$${price.toFixed(2)}`;
   };
 
+  const readFileAsBase64 = (file: File): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        const result = event.target?.result as string;
+        if (result) {
+          resolve(result);
+        } else {
+          reject(new Error("Failed to read file"));
+        }
+      };
+      reader.onerror = () => reject(new Error("Failed to read file"));
+      reader.readAsDataURL(file);
+    });
+  };
+
+  const handleScreenshotUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+
+    if (!shoppingList) return;
+
+    setUploading(true);
+    setError(null);
+
+    try {
+      // Process screenshots one at a time to avoid payload size limits
+      const allItems: any[] = [];
+      
+      for (let i = 0; i < files.length; i++) {
+        setUploadProgress(`Processing screenshot ${i + 1} of ${files.length}...`);
+        
+        // Convert file to base64
+        const base64 = await readFileAsBase64(files[i]);
+        
+        // Process single screenshot
+        const response = await fetch("/api/shopping-lists/process-screenshot", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            screenshot: base64,
+            locationId: shoppingList.locationId,
+            app: selectedApp || undefined,
+          }),
+        });
+
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({ error: "Failed to process screenshot" }));
+          throw new Error(errorData.error || `Failed to process screenshot ${i + 1}`);
+        }
+
+        const data = await response.json();
+        if (data.items && data.items.length > 0) {
+          allItems.push(...data.items);
+        }
+      }
+
+      if (allItems.length === 0) {
+        setError("No products found in any of the screenshots");
+        return;
+      }
+
+      setUploadProgress("Adding items to shopping list...");
+
+      // Add items to existing shopping list
+      const addResponse = await fetch(`/api/shopping-lists/${id}/items`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          items: allItems,
+        }),
+      });
+
+      if (!addResponse.ok) {
+        const errorData = await addResponse.json().catch(() => ({ error: "Failed to add items" }));
+        throw new Error(errorData.error || "Failed to add items");
+      }
+
+      // Reload the shopping list
+      await fetchShoppingList();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to process screenshots");
+    } finally {
+      setUploading(false);
+      setUploadProgress("");
+      if (fileInputRef.current) {
+        fileInputRef.current.value = "";
+      }
+    }
+  };
+
+  const handleManualEntryAdded = async () => {
+    await fetchShoppingList();
+  };
+
+  const handleScanBarcode = (item: ShoppingListItem) => {
+    setScanningItem(item);
+  };
+
+  const handleBarcodeScanned = async (scannedCode: string) => {
+    if (!scanningItem) return;
+
+    // Normalize UPC codes (remove non-digits for comparison)
+    const normalizeUPC = (upc: string) => upc.replace(/\D/g, "");
+    const scannedNormalized = normalizeUPC(scannedCode);
+    const expectedNormalized = scanningItem.upc ? normalizeUPC(scanningItem.upc) : "";
+
+    const success = Boolean(expectedNormalized && scannedNormalized === expectedNormalized);
+
+    // Close scanner
+    setScanningItem(null);
+
+    // Show result modal
+    setScanResult({
+      success,
+      item: scanningItem,
+      scannedBarcode: scannedCode,
+    });
+
+    // If successful, mark item as done
+    if (success) {
+      try {
+        const response = await fetch(`/api/shopping-lists/${id}/items`, {
+          method: "PUT",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            itemIndex: shoppingList?.items.findIndex(i => i === scanningItem) ?? -1,
+            item: {
+              ...scanningItem,
+              done: true,
+            },
+          }),
+        });
+
+        if (response.ok) {
+          await fetchShoppingList();
+        }
+      } catch (err) {
+        console.error("Failed to mark item as done:", err);
+      }
+    }
+  };
+
+  const handleScanResultClose = () => {
+    setScanResult(null);
+  };
+
   if (loading) {
     return (
       <Layout>
@@ -807,10 +2116,13 @@ export default function ShoppingListDetailPage() {
   // Helper to get primary aisle info
   const getPrimaryAisle = (item: ShoppingListItem) => item.krogerAisles?.[0];
 
+  // Create items with their original indices before sorting
+  const itemsWithIndices = shoppingList.items.map((item, index) => ({ item, originalIndex: index }));
+  
   // Sort items by: 1) Aisle number, 2) Shelf number, 3) Side (L before R)
-  const sortedItems = [...shoppingList.items].sort((a, b) => {
-    const aisleA = getPrimaryAisle(a);
-    const aisleB = getPrimaryAisle(b);
+  const sortedItemsWithIndices = itemsWithIndices.sort((a, b) => {
+    const aisleA = getPrimaryAisle(a.item);
+    const aisleB = getPrimaryAisle(b.item);
     
     // Compare aisle numbers first
     const aisleNumA = parseInt(aisleA?.aisleNumber || "999") || 999;
@@ -827,11 +2139,13 @@ export default function ShoppingListDetailPage() {
     const sideB = aisleB?.side || "Z";
     return sideA.localeCompare(sideB);
   });
+  
+  const sortedItems = sortedItemsWithIndices.map(({ item }) => item);
 
   // Group sorted items by aisle + shelf + side for section headers
-  const groupedItems: { aisle: string; shelf: string; side: string; items: ShoppingListItem[] }[] = [];
+  const groupedItems: { aisle: string; shelf: string; side: string; items: ShoppingListItem[]; originalIndices: number[] }[] = [];
   
-  sortedItems.forEach((item) => {
+  sortedItemsWithIndices.forEach(({ item, originalIndex }) => {
     const primaryAisle = getPrimaryAisle(item);
     const aisleNum = primaryAisle?.aisleNumber || "";
     const shelf = primaryAisle?.shelfNumber || "";
@@ -840,34 +2154,154 @@ export default function ShoppingListDetailPage() {
     const lastGroup = groupedItems[groupedItems.length - 1];
     if (lastGroup && lastGroup.aisle === aisleNum && lastGroup.shelf === shelf && lastGroup.side === side) {
       lastGroup.items.push(item);
+      lastGroup.originalIndices.push(originalIndex);
     } else {
-      groupedItems.push({ aisle: aisleNum, shelf, side, items: [item] });
+      groupedItems.push({ aisle: aisleNum, shelf, side, items: [item], originalIndices: [originalIndex] });
     }
   });
 
   // If no aisle groupings, just show all items
   if (groupedItems.length === 0 || (groupedItems.length === 1 && !groupedItems[0].aisle)) {
     groupedItems.length = 0;
-    groupedItems.push({ aisle: "", shelf: "", side: "", items: sortedItems });
+    groupedItems.push({ 
+      aisle: "", 
+      shelf: "", 
+      side: "", 
+      items: sortedItems,
+      originalIndices: sortedItemsWithIndices.map(({ originalIndex }) => originalIndex)
+    });
   }
+
+  // Filter items by done status based on active tab
+  const filteredGroupedItems = groupedItems.map(group => ({
+    ...group,
+    items: group.items.filter(item => 
+      activeTab === "todo" ? !item.done : item.done
+    ),
+    originalIndices: group.items
+      .map((item, idx) => item.done === (activeTab === "done") ? group.originalIndices[idx] : -1)
+      .filter(idx => idx !== -1)
+  })).filter(group => group.items.length > 0);
 
   return (
     <Layout>
-      <div className="max-w-2xl mx-auto">
+      <div className="max-w-2xl mx-auto px-4">
         {/* Header */}
         <div className="mb-4">
-          <h1 className="text-xl font-bold text-gray-900 dark:text-white">
-            {shoppingList.name}
-          </h1>
-          <p className="text-sm text-gray-500 dark:text-gray-400">
-            {shoppingList.items.length} items
-            {refreshing && (
-              <span className="ml-2 inline-flex items-center gap-1">
-                <Loader2 className="w-3 h-3 animate-spin" />
-                Updating...
-              </span>
-            )}
-          </p>
+          {/* Todo/Done Tabs */}
+          <div className="mb-4 flex gap-2 border-b border-gray-200 dark:border-gray-700">
+            <button
+              onClick={() => setActiveTab("todo")}
+              className={`px-4 py-2 font-medium text-sm transition-colors ${
+                activeTab === "todo"
+                  ? "text-blue-600 dark:text-blue-400 border-b-2 border-blue-600 dark:border-blue-400"
+                  : "text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300"
+              }`}
+            >
+              Todo ({shoppingList.items.filter(item => !item.done).length})
+            </button>
+            <button
+              onClick={() => setActiveTab("done")}
+              className={`px-4 py-2 font-medium text-sm transition-colors ${
+                activeTab === "done"
+                  ? "text-blue-600 dark:text-blue-400 border-b-2 border-blue-600 dark:border-blue-400"
+                  : "text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300"
+              }`}
+            >
+              Done ({shoppingList.items.filter(item => item.done).length})
+            </button>
+          </div>
+          <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
+            <div className="flex-1 min-w-0">
+              <h1 className="text-xl font-bold text-gray-900 dark:text-white">
+                {shoppingList.name}
+              </h1>
+              <p className="text-sm text-gray-500 dark:text-gray-400">
+                {shoppingList.items.length} items
+                {refreshing && (
+                  <span className="ml-2 inline-flex items-center gap-1">
+                    <Loader2 className="w-3 h-3 animate-spin" />
+                    Updating...
+                  </span>
+                )}
+                {uploading && (
+                  <span className="ml-2 inline-flex items-center gap-1">
+                    <Loader2 className="w-3 h-3 animate-spin" />
+                    {uploadProgress || "Processing..."}
+                  </span>
+                )}
+              </p>
+            </div>
+            <div className="flex flex-col gap-2 w-full sm:w-auto">
+              <div className="inline-flex rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 p-1 w-fit" role="group">
+                <input
+                  type="radio"
+                  name="app-selector-detail"
+                  id="app-instacart-detail"
+                  value="Instacart"
+                  checked={selectedApp === "Instacart"}
+                  onChange={(e) => setSelectedApp(e.target.value)}
+                  className="hidden"
+                />
+                <label
+                  htmlFor="app-instacart-detail"
+                  className={`px-3 py-1.5 text-xs font-medium rounded-md cursor-pointer transition-colors whitespace-nowrap ${
+                    selectedApp === "Instacart"
+                      ? "bg-green-600 text-white"
+                      : "text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
+                  }`}
+                >
+                  Instacart
+                </label>
+                
+                <input
+                  type="radio"
+                  name="app-selector-detail"
+                  id="app-doordash-detail"
+                  value="DoorDash"
+                  checked={selectedApp === "DoorDash"}
+                  onChange={(e) => setSelectedApp(e.target.value)}
+                  className="hidden"
+                />
+                <label
+                  htmlFor="app-doordash-detail"
+                  className={`px-3 py-1.5 text-xs font-medium rounded-md cursor-pointer transition-colors whitespace-nowrap ${
+                    selectedApp === "DoorDash"
+                      ? "bg-red-600 text-white"
+                      : "text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
+                  }`}
+                >
+                  DoorDash
+                </label>
+              </div>
+              <div className="flex gap-2 w-full sm:w-auto">
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/*"
+                  multiple
+                  onChange={handleScreenshotUpload}
+                  className="hidden"
+                />
+                <button
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={uploading}
+                  className="flex-1 sm:flex-initial px-4 py-2 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 text-sm whitespace-nowrap"
+                >
+                  <Upload className="w-4 h-4 flex-shrink-0" />
+                  <span className="truncate">Add Screenshot</span>
+                </button>
+                <button
+                  onClick={() => setManualEntryOpen(true)}
+                  disabled={uploading}
+                  className="flex-1 sm:flex-initial px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 text-sm whitespace-nowrap"
+                >
+                  <Plus className="w-4 h-4 flex-shrink-0" />
+                  <span className="truncate">Add Manually</span>
+                </button>
+              </div>
+            </div>
+          </div>
         </div>
 
         {error && (
@@ -878,7 +2312,12 @@ export default function ShoppingListDetailPage() {
 
         {/* Items */}
         <div>
-          {groupedItems.map((group, groupIndex) => (
+          {filteredGroupedItems.length === 0 ? (
+            <div className="text-center py-12 text-gray-500 dark:text-gray-400">
+              <p>No {activeTab === "todo" ? "todo" : "completed"} items</p>
+            </div>
+          ) : (
+            filteredGroupedItems.map((group, groupIndex) => (
             <div key={groupIndex}>
               {/* Aisle/Shelf/Side Header - Instacart Style */}
               {group.aisle && (
@@ -898,32 +2337,54 @@ export default function ShoppingListDetailPage() {
               
               {/* Items in this aisle */}
               {group.items.map((item, index) => {
-                // Find the original index in the shopping list items array
-                // Use a combination of searchTerm, productName, and customer to uniquely identify
-                const originalIndex = shoppingList.items.findIndex(
-                  (listItem) =>
-                    listItem.searchTerm === item.searchTerm &&
-                    listItem.productName === item.productName &&
-                    listItem.customer === item.customer
-                );
+                // Use the tracked original index from the grouped items
+                const originalIndex = group.originalIndices[index];
 
                 return (
-                  <div
+                  <SwipeableItem
                     key={`${groupIndex}-${index}`}
-                    className="flex gap-4 py-3 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800/50 rounded-lg transition-colors"
-                    onClick={() => {
+                    item={item}
+                    originalIndex={originalIndex}
+                    onTap={() => {
                       if (item.found) {
                         setSelectedItem(item);
                       } else if (originalIndex >= 0) {
                         setSearchItem({ item, index: originalIndex });
                       }
                     }}
+                    onEdit={() => {
+                      if (originalIndex >= 0) {
+                        setEditItem({ item, index: originalIndex });
+                      }
+                    }}
+                    onDelete={async () => {
+                      if (originalIndex >= 0 && confirm("Delete this item?")) {
+                        try {
+                          const response = await fetch(`/api/shopping-lists/${id}/items`, {
+                            method: "DELETE",
+                            headers: {
+                              "Content-Type": "application/json",
+                            },
+                            body: JSON.stringify({ itemIndex: originalIndex }),
+                          });
+
+                          if (!response.ok) {
+                            throw new Error("Failed to delete item");
+                          }
+
+                          await fetchShoppingList();
+                        } catch (err) {
+                          setError(err instanceof Error ? err.message : "Failed to delete item");
+                        }
+                      }
+                    }}
                   >
+                    <div className="flex gap-4 py-3 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-800/50 rounded-lg transition-colors">
                     {/* Product Image with Customer Badge */}
                     <div className="relative flex-shrink-0">
-                      <CustomerBadge customer={item.customer} />
+                      <CustomerBadge customer={item.customer} app={item.app} />
                       {item.imageUrl ? (
-                        <div className="relative w-20 h-20 bg-white rounded-lg overflow-hidden shadow-sm border border-gray-100 dark:border-gray-600">
+                        <div className="relative w-20 h-20 bg-white rounded-lg overflow-visible shadow-sm border border-gray-100 dark:border-gray-600">
                           <Image
                             src={item.imageUrl}
                             alt={item.found && item.description ? item.description : item.productName}
@@ -933,7 +2394,7 @@ export default function ShoppingListDetailPage() {
                           />
                         </div>
                       ) : (
-                        <div className="w-20 h-20 bg-gray-100 dark:bg-gray-700 rounded-lg flex items-center justify-center border border-gray-200 dark:border-gray-600">
+                        <div className="w-20 h-20 bg-gray-100 dark:bg-gray-700 rounded-lg flex items-center justify-center border border-gray-200 dark:border-gray-600 overflow-visible">
                           <ShoppingCart className="w-6 h-6 text-gray-400" />
                         </div>
                       )}
@@ -941,65 +2402,97 @@ export default function ShoppingListDetailPage() {
 
                     {/* Product Details */}
                     <div className="flex-1 min-w-0 pt-1">
-                      {/* Quantity + Kroger Product Name */}
-                      <p className="text-gray-900 dark:text-white leading-snug">
-                        {item.found && item.description ? (
-                          <>
-                            {item.quantity && (
-                              <span className="font-bold">{item.quantity} </span>
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="flex-1 min-w-0">
+                          {/* Quantity + Kroger Product Name */}
+                          <p className="text-gray-900 dark:text-white leading-snug">
+                            {item.found && item.description ? (
+                              <>
+                                {item.quantity && (
+                                  <span className="font-bold">{item.quantity} </span>
+                                )}
+                                {item.description}
+                              </>
+                            ) : (
+                              <>
+                                <span className="font-bold">{item.quantity || "1 ct"}</span>{" "}
+                                {item.productName}
+                              </>
                             )}
-                            {item.brand && (
-                              <span className="text-sm text-gray-500 dark:text-gray-400 uppercase">
-                                {item.brand}{" "}
-                              </span>
-                            )}
-                            {item.description}
-                          </>
-                        ) : (
-                          <>
-                            <span className="font-bold">{item.quantity || "1 ct"}</span>{" "}
-                            {item.productName}
-                          </>
+                          </p>
+                          
+                          {/* Kroger Size • Price */}
+                          {item.found && (
+                            <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+                              {item.size}
+                              {item.size && (item.price || item.promoPrice) && " • "}
+                              {item.promoPrice ? (
+                                <span className="text-red-600 dark:text-red-400">
+                                  {formatPrice(item.promoPrice)}
+                                </span>
+                              ) : item.price ? (
+                                <span>{formatPrice(item.price)}</span>
+                              ) : null}
+                            </p>
+                          )}
+
+                          {/* Kroger Aisle Location */}
+                          {item.found && item.krogerAisles?.[0] && (() => {
+                            const aisle = item.krogerAisles[0];
+                            const locationParts: string[] = [];
+                            
+                            if (aisle.shelfNumber) {
+                              locationParts.push(`Shelf ${aisle.shelfNumber}`);
+                            }
+                            
+                            // Add side info if available
+                            if (aisle.side) {
+                              locationParts.push(`Side ${aisle.side}`);
+                            }
+                            
+                            // Add bay if available
+                            if (aisle.bayNumber) {
+                              locationParts.push(`Bay ${aisle.bayNumber}`);
+                            }
+                            
+                            const locationText = locationParts.join(" - ");
+                            
+                            return locationText ? (
+                              <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">
+                                {locationText}
+                              </p>
+                            ) : null;
+                          })()}
+
+                          {/* Not found indicator */}
+                          {!item.found && (
+                            <p className="text-sm text-red-500 mt-1">
+                              Not found at Kroger
+                            </p>
+                          )}
+                        </div>
+                        {/* Scan Button - Only show for todo items with UPC */}
+                        {activeTab === "todo" && item.upc && (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleScanBarcode(item);
+                            }}
+                            className="flex-shrink-0 px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2 text-sm"
+                          >
+                            <Scan className="w-4 h-4" />
+                            Scan
+                          </button>
                         )}
-                      </p>
-                      
-                      {/* Kroger Size • Price */}
-                      {item.found && (
-                        <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-                          {item.size}
-                          {item.size && (item.price || item.promoPrice) && " • "}
-                          {item.promoPrice ? (
-                            <span className="text-red-600 dark:text-red-400">
-                              {formatPrice(item.promoPrice)}
-                            </span>
-                          ) : item.price ? (
-                            <span>{formatPrice(item.price)}</span>
-                          ) : null}
-                        </p>
-                      )}
-
-                      {/* Kroger Aisle Location */}
-                      {item.found && item.krogerAisles?.[0]?.aisleNumber && (
-                        <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">
-                          Aisle {item.krogerAisles[0].aisleNumber}
-                          {item.krogerAisles[0].description && ` - ${item.krogerAisles[0].description}`}
-                          {item.krogerAisles[0].shelfNumber && ` • Shelf ${item.krogerAisles[0].shelfNumber}`}
-                          {item.krogerAisles[0].side && ` (Side ${item.krogerAisles[0].side})`}
-                        </p>
-                      )}
-
-                      {/* Not found indicator */}
-                      {!item.found && (
-                        <p className="text-sm text-red-500 mt-1">
-                          Not found at Kroger
-                        </p>
-                      )}
+                      </div>
                     </div>
-                  </div>
+                    </div>
+                  </SwipeableItem>
                 );
               })}
             </div>
-          ))}
+          ))
+          )}
         </div>
       </div>
 
@@ -1023,6 +2516,49 @@ export default function ShoppingListDetailPage() {
           isOpen={!!searchItem}
           onClose={() => setSearchItem(null)}
           onItemUpdated={fetchShoppingList}
+        />
+      )}
+
+      {/* Manual Entry Modal */}
+      <ManualEntryModal
+        locationId={shoppingList.locationId}
+        shoppingListId={shoppingList._id}
+        isOpen={manualEntryOpen}
+        onClose={() => setManualEntryOpen(false)}
+        onItemAdded={handleManualEntryAdded}
+      />
+
+      {/* Edit Item Modal */}
+      {editItem && (
+        <EditItemModal
+          item={editItem.item}
+          itemIndex={editItem.index}
+          shoppingListId={shoppingList._id}
+          locationId={shoppingList.locationId}
+          isOpen={!!editItem}
+          onClose={() => setEditItem(null)}
+          onItemUpdated={fetchShoppingList}
+        />
+      )}
+
+      {/* Barcode Scanner Modal */}
+      {scanningItem && (
+        <BarcodeScanner
+          isOpen={!!scanningItem}
+          onClose={() => setScanningItem(null)}
+          onScan={handleBarcodeScanned}
+          item={scanningItem}
+        />
+      )}
+
+      {/* Scan Result Modal */}
+      {scanResult && (
+        <ScanResultModal
+          isOpen={!!scanResult}
+          onClose={handleScanResultClose}
+          success={scanResult.success}
+          item={scanResult.item}
+          scannedBarcode={scanResult.scannedBarcode}
         />
       )}
     </Layout>
