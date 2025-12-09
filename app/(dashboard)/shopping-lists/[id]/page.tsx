@@ -2100,6 +2100,28 @@ function BarcodeScanner({
           <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
             Manual Override UPC
           </label>
+          {/* Quick Override Button - Use Expected UPC */}
+          {item.upc && (
+            <button
+              onClick={() => {
+                // Cancel any pending auto-scan
+                if (scanTimeoutRef.current) {
+                  clearTimeout(scanTimeoutRef.current);
+                  scanTimeoutRef.current = null;
+                }
+                // Stop video stream
+                if (videoRef.current?.srcObject) {
+                  const stream = videoRef.current.srcObject as MediaStream;
+                  stream.getTracks().forEach(track => track.stop());
+                  videoRef.current.srcObject = null;
+                }
+                onScan(item.upc!);
+              }}
+              className="w-full px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 font-medium mb-2"
+            >
+              Use Expected UPC ({item.upc})
+            </button>
+          )}
           <div className="flex gap-2">
             <input
               type="text"
