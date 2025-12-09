@@ -8,6 +8,7 @@ import Modal from "@/components/ui/Modal";
 import { ShoppingCart, ExternalLink, Barcode, Loader2, Search, Check, Upload, Plus, Edit, Trash2, Scan, X } from "lucide-react";
 import { KrogerProduct } from "@/lib/types/kroger";
 import { BrowserMultiFormatReader } from "@zxing/browser";
+import { barcodesMatch } from "@/lib/barcode-utils";
 
 interface KrogerAisleLocation {
   aisleNumber?: string;
@@ -859,12 +860,14 @@ function ManualEntryModal({
   isOpen,
   onClose,
   onItemAdded,
+  selectedApp,
 }: {
   locationId: string;
   shoppingListId: string;
   isOpen: boolean;
   onClose: () => void;
   onItemAdded: () => void;
+  selectedApp: string;
 }) {
   const [productName, setProductName] = useState("");
   const [searching, setSearching] = useState(false);
@@ -975,6 +978,7 @@ function ManualEntryModal({
         productName: selectedProduct.description || productName,
         customer: customer,
         quantity: quantity,
+        app: selectedApp || undefined,
         productId: selectedProduct.productId,
         upc: selectedProduct.upc || krogerItem?.itemId,
         brand: selectedProduct.brand,
@@ -1357,7 +1361,15 @@ function ProductDetailModal({
 
   return (
     <Modal isOpen={isOpen} onClose={onClose} title="">
-      <div className="space-y-4">
+      <div className="space-y-4 relative">
+        {/* Close button in top right */}
+        <button
+          onClick={onClose}
+          className="absolute top-0 right-0 text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 text-2xl font-bold w-8 h-8 flex items-center justify-center rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors z-10"
+          aria-label="Close"
+        >
+          <X className="w-5 h-5" />
+        </button>
         {loading ? (
           <div className="flex items-center justify-center py-12">
             <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
@@ -1664,6 +1676,7 @@ function ScanResultModal({
   item,
   scannedBarcode,
   onForceDone,
+  onConfirmQuantity,
 }: {
   isOpen: boolean;
   onClose: () => void;
@@ -1671,6 +1684,7 @@ function ScanResultModal({
   item: ShoppingListItem;
   scannedBarcode?: string;
   onForceDone?: () => void;
+  onConfirmQuantity?: () => void;
 }) {
   const customer = item.customer || "A";
   const app = item.app || "";
@@ -1749,6 +1763,14 @@ function ScanResultModal({
             )}
           </div>
 
+          {/* Quantity Confirmation (only for successful scans) */}
+          {success && (
+            <div className="pt-4 border-t border-white/30">
+              <p className="text-lg font-semibold opacity-90 mb-2">Confirm Quantity:</p>
+              <p className="text-2xl font-bold opacity-95">{item.quantity || "1"}</p>
+            </div>
+          )}
+
           {/* Action Buttons */}
           <div className="flex gap-3">
             {!success && onForceDone && (
@@ -1762,12 +1784,24 @@ function ScanResultModal({
                 Mark as Done
               </button>
             )}
-            <button
-              onClick={onClose}
-              className={`px-6 py-4 bg-white/20 backdrop-blur-sm rounded-lg border-2 border-white/30 hover:bg-white/30 transition-colors font-semibold text-lg ${!success && onForceDone ? "flex-1" : "w-full"}`}
-            >
-              {success ? "OK" : "Try Again"}
-            </button>
+            {success && onConfirmQuantity ? (
+              <button
+                onClick={() => {
+                  onConfirmQuantity();
+                  onClose();
+                }}
+                className="w-full px-6 py-4 bg-white/30 backdrop-blur-sm rounded-lg border-2 border-white/40 hover:bg-white/40 transition-colors font-semibold text-lg"
+              >
+                OK
+              </button>
+            ) : (
+              <button
+                onClick={onClose}
+                className={`px-6 py-4 bg-white/20 backdrop-blur-sm rounded-lg border-2 border-white/30 hover:bg-white/30 transition-colors font-semibold text-lg ${!success && onForceDone ? "flex-1" : "w-full"}`}
+              >
+                {success ? "OK" : "Try Again"}
+              </button>
+            )}
           </div>
         </div>
       </div>
@@ -1973,12 +2007,7 @@ export default function ShoppingListDetailPage() {
   const handleBarcodeScanned = async (scannedCode: string) => {
     if (!scanningItem) return;
 
-    // Normalize UPC codes (remove non-digits for comparison)
-    const normalizeUPC = (upc: string) => upc.replace(/\D/g, "");
-    const scannedNormalized = normalizeUPC(scannedCode);
-    const expectedNormalized = scanningItem.upc ? normalizeUPC(scanningItem.upc) : "";
-
-    if (!expectedNormalized) {
+    if (!scanningItem.upc) {
       // No expected UPC to compare against
       setScanResult({
         success: false,
@@ -1989,32 +2018,10 @@ export default function ShoppingListDetailPage() {
       return;
     }
 
-    // Compare barcodes, handling leading zeros
-    // UPC codes can be stored with or without leading zeros
-    // We'll try multiple comparison strategies
-    
-    // Strategy 1: Exact match
-    const exactMatch = scannedNormalized === expectedNormalized;
-    
-    // Strategy 2: Pad both to the same length (max length) and compare
-    const maxLength = Math.max(scannedNormalized.length, expectedNormalized.length);
-    const scannedPadded = scannedNormalized.padStart(maxLength, "0");
-    const expectedPadded = expectedNormalized.padStart(maxLength, "0");
-    const paddedMatch = scannedPadded === expectedPadded;
-    
-    // Strategy 3: Compare the significant digits (remove leading zeros from both)
-    const scannedTrimmed = scannedNormalized.replace(/^0+/, "") || "0";
-    const expectedTrimmed = expectedNormalized.replace(/^0+/, "") || "0";
-    const trimmedMatch = scannedTrimmed === expectedTrimmed;
-    
-    // Strategy 4: Compare last N digits where N is the length of the shorter code
-    // This handles cases where one has leading zeros and the other doesn't
-    const minLength = Math.min(scannedNormalized.length, expectedNormalized.length);
-    const scannedLastN = scannedNormalized.slice(-minLength);
-    const expectedLastN = expectedNormalized.slice(-minLength);
-    const lastNMatch = scannedLastN === expectedLastN;
-    
-    const success = exactMatch || paddedMatch || trimmedMatch || lastNMatch;
+    // Use proper barcode normalization that handles broken formats
+    // This handles cases like "0007800001336" (broken 13-digit: "00" + body11)
+    // and normalizes both to canonical 12-digit UPC-A format
+    const success = barcodesMatch(scannedCode, scanningItem.upc);
 
     // Close scanner
     setScanningItem(null);
@@ -2026,30 +2033,7 @@ export default function ShoppingListDetailPage() {
       scannedBarcode: scannedCode,
     });
 
-    // If successful, mark item as done
-    if (success) {
-      try {
-        const response = await fetch(`/api/shopping-lists/${id}/items`, {
-          method: "PUT",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            itemIndex: shoppingList?.items.findIndex(i => i === scanningItem) ?? -1,
-            item: {
-              ...scanningItem,
-              done: true,
-            },
-          }),
-        });
-
-        if (response.ok) {
-          await fetchShoppingList();
-        }
-      } catch (err) {
-        console.error("Failed to mark item as done:", err);
-      }
-    }
+    // Don't automatically mark as done - wait for quantity confirmation
   };
 
   const handleScanResultClose = () => {
@@ -2064,6 +2048,33 @@ export default function ShoppingListDetailPage() {
   };
 
   const handleForceMarkDone = async (item: ShoppingListItem) => {
+    try {
+      const response = await fetch(`/api/shopping-lists/${id}/items`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          itemIndex: shoppingList?.items.findIndex(i => i === item) ?? -1,
+          item: {
+            ...item,
+            done: true,
+          },
+        }),
+      });
+
+      if (response.ok) {
+        await fetchShoppingList();
+      } else {
+        setError("Failed to mark item as done");
+      }
+    } catch (err) {
+      console.error("Failed to mark item as done:", err);
+      setError("Failed to mark item as done");
+    }
+  };
+
+  const handleConfirmQuantity = async (item: ShoppingListItem) => {
     try {
       const response = await fetch(`/api/shopping-lists/${id}/items`, {
         method: "PUT",
@@ -2110,50 +2121,74 @@ export default function ShoppingListDetailPage() {
     );
   }
 
-  // Helper to get primary aisle info
-  const getPrimaryAisle = (item: ShoppingListItem) => item.krogerAisles?.[0];
+  // Helper to get primary aisle info - uses the smallest aisle number
+  const getPrimaryAisle = (item: ShoppingListItem) => {
+    const aisles = item.krogerAisles;
+    if (!aisles || aisles.length === 0) return undefined;
+    
+    // Find the aisle with the smallest aisle number
+    return aisles.reduce((smallest, current) => {
+      const smallestNum = parseInt(smallest?.aisleNumber || "999") || 999;
+      const currentNum = parseInt(current?.aisleNumber || "999") || 999;
+      return currentNum < smallestNum ? current : smallest;
+    });
+  };
 
   // Create items with their original indices before sorting
   const itemsWithIndices = shoppingList.items.map((item, index) => ({ item, originalIndex: index }));
   
-  // Sort items by: 1) Aisle number, 2) Shelf number, 3) Side (L before R)
+  // Sort items by: 1) Aisle number (unknowns first), 2) Bay number, 3) Shelf number
   const sortedItemsWithIndices = itemsWithIndices.sort((a, b) => {
     const aisleA = getPrimaryAisle(a.item);
     const aisleB = getPrimaryAisle(b.item);
     
-    // Compare aisle numbers first
-    const aisleNumA = parseInt(aisleA?.aisleNumber || "999") || 999;
-    const aisleNumB = parseInt(aisleB?.aisleNumber || "999") || 999;
+    // Check if aisles are unknown (no aisle number)
+    const isUnknownA = !aisleA || !aisleA.aisleNumber;
+    const isUnknownB = !aisleB || !aisleB.aisleNumber;
+    
+    // Unknown aisles go to the top
+    if (isUnknownA && !isUnknownB) return -1; // A is unknown, B is not - A comes first
+    if (!isUnknownA && isUnknownB) return 1;  // B is unknown, A is not - B comes first
+    if (isUnknownA && isUnknownB) return 0;  // Both unknown - keep original order
+    
+    // At this point, both aisles are known (not undefined)
+    if (!aisleA || !aisleB) return 0; // Type guard - should not happen but TypeScript needs it
+    
+    // Compare aisle numbers (both known)
+    const aisleNumA = parseInt(aisleA.aisleNumber || "999") || 999;
+    const aisleNumB = parseInt(aisleB.aisleNumber || "999") || 999;
     if (aisleNumA !== aisleNumB) return aisleNumA - aisleNumB;
     
-    // Same aisle - sort by shelf number
+    // Same aisle - sort by bay number
+    const bayA = parseInt(aisleA?.bayNumber || "999") || 999;
+    const bayB = parseInt(aisleB?.bayNumber || "999") || 999;
+    if (bayA !== bayB) return bayA - bayB;
+    
+    // Same bay - sort by shelf number
     const shelfA = parseInt(aisleA?.shelfNumber || "999") || 999;
     const shelfB = parseInt(aisleB?.shelfNumber || "999") || 999;
-    if (shelfA !== shelfB) return shelfA - shelfB;
-    
-    // Same shelf - sort by side (L before R)
-    const sideA = aisleA?.side || "Z";
-    const sideB = aisleB?.side || "Z";
-    return sideA.localeCompare(sideB);
+    return shelfA - shelfB;
   });
   
   const sortedItems = sortedItemsWithIndices.map(({ item }) => item);
 
-  // Group sorted items by aisle + shelf + side for section headers
-  const groupedItems: { aisle: string; shelf: string; side: string; items: ShoppingListItem[]; originalIndices: number[] }[] = [];
+  // Group sorted items by aisle + bay + shelf for section headers
+  const groupedItems: { aisle: string; bay: string; shelf: string; side: string; description: string; items: ShoppingListItem[]; originalIndices: number[] }[] = [];
   
   sortedItemsWithIndices.forEach(({ item, originalIndex }) => {
     const primaryAisle = getPrimaryAisle(item);
     const aisleNum = primaryAisle?.aisleNumber || "";
+    const bay = primaryAisle?.bayNumber || "";
     const shelf = primaryAisle?.shelfNumber || "";
     const side = primaryAisle?.side || "";
+    const description = primaryAisle?.description || "";
     
     const lastGroup = groupedItems[groupedItems.length - 1];
-    if (lastGroup && lastGroup.aisle === aisleNum && lastGroup.shelf === shelf && lastGroup.side === side) {
+    if (lastGroup && lastGroup.aisle === aisleNum && lastGroup.bay === bay && lastGroup.shelf === shelf) {
       lastGroup.items.push(item);
       lastGroup.originalIndices.push(originalIndex);
     } else {
-      groupedItems.push({ aisle: aisleNum, shelf, side, items: [item], originalIndices: [originalIndex] });
+      groupedItems.push({ aisle: aisleNum, bay, shelf, side, description, items: [item], originalIndices: [originalIndex] });
     }
   });
 
@@ -2162,8 +2197,10 @@ export default function ShoppingListDetailPage() {
     groupedItems.length = 0;
     groupedItems.push({ 
       aisle: "", 
+      bay: "", 
       shelf: "", 
-      side: "", 
+      side: "",
+      description: "",
       items: sortedItems,
       originalIndices: sortedItemsWithIndices.map(({ originalIndex }) => originalIndex)
     });
@@ -2316,11 +2353,19 @@ export default function ShoppingListDetailPage() {
           ) : (
             filteredGroupedItems.map((group, groupIndex) => (
             <div key={groupIndex}>
-              {/* Aisle/Shelf/Side Header - Instacart Style */}
+              {/* Aisle/Bay/Shelf Header - Instacart Style */}
               {group.aisle && (
                 <div className="pt-4 pb-2 border-b border-gray-200 dark:border-gray-700 mb-2">
                   <h2 className="font-bold text-gray-900 dark:text-white text-base">
-                    Aisle {group.aisle} - Shelf {group.shelf || "?"} ({group.side || "?"})
+                    {(() => {
+                      const aisleNum = parseInt(group.aisle) || 0;
+                      // If aisle number is 100+, show only the area description
+                      if (aisleNum >= 100 && group.description) {
+                        return `${group.description} | ${group.side || "?"} - Bay ${group.bay || "?"} | Shelf ${group.shelf || "?"}`;
+                      }
+                      // Otherwise show the full format with aisle number
+                      return `Aisle ${group.aisle} | ${group.side || "?"} - Bay ${group.bay || "?"} | Shelf ${group.shelf || "?"}`;
+                    })()}
                   </h2>
                 </div>
               )}
@@ -2559,6 +2604,7 @@ export default function ShoppingListDetailPage() {
         isOpen={manualEntryOpen}
         onClose={() => setManualEntryOpen(false)}
         onItemAdded={handleManualEntryAdded}
+        selectedApp={selectedApp}
       />
 
       {/* Edit Item Modal */}
@@ -2593,6 +2639,7 @@ export default function ShoppingListDetailPage() {
           item={scanResult.item}
           scannedBarcode={scanResult.scannedBarcode}
           onForceDone={() => handleForceMarkDone(scanResult.item)}
+          onConfirmQuantity={() => handleConfirmQuantity(scanResult.item)}
         />
       )}
     </Layout>
