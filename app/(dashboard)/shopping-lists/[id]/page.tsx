@@ -5,7 +5,8 @@ import { useParams } from "next/navigation";
 import Layout from "@/components/Layout";
 import Image from "next/image";
 import Modal from "@/components/ui/Modal";
-import { ShoppingCart, ExternalLink, Barcode, Loader2, Search, Check, Upload, Plus, Edit, Trash2, Scan, X, AlertTriangle } from "lucide-react";
+import { ShoppingCart, ExternalLink, Barcode, Loader2, Search, Check, Upload, Plus, Edit, Trash2, Scan, X, AlertTriangle, Code } from "lucide-react";
+import JsonViewerModal from "@/components/JsonViewer";
 import { KrogerProduct } from "@/lib/types/kroger";
 import { BrowserMultiFormatReader } from "@zxing/browser";
 import { barcodesMatch } from "@/lib/barcode-utils";
@@ -1606,6 +1607,7 @@ function ProductDetailModal({
   const [productDetails, setProductDetails] = useState<KrogerProduct | null>(null);
   const [loading, setLoading] = useState(false);
   const [showBarcode, setShowBarcode] = useState(false);
+  const [showJson, setShowJson] = useState(false);
 
   useEffect(() => {
     if (isOpen && item.productId && !productDetails) {
@@ -1804,7 +1806,7 @@ function ProductDetailModal({
             <div className="text-center">
               {price?.promo && price.promo !== price.regular ? (
                 <div className="flex items-center justify-center gap-2">
-                  <span className="text-2xl font-bold text-green-600 dark:text-green-400">
+                  <span className="text-2xl font-bold text-gray-900 dark:text-white">
                     {formatPrice(price.promo)}
                   </span>
                   <span className="text-lg text-gray-400 line-through">
@@ -1880,17 +1882,24 @@ function ProductDetailModal({
               </div>
             )}
 
-            {/* Kroger Link */}
-            {product?.productPageURI && (
-              <a
-                href={`https://www.kroger.com${product.productPageURI}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-              >
-                <ExternalLink className="w-5 h-5" />
-                View on Kroger
-              </a>
+            {/* JSON Viewer */}
+            <button
+              onClick={() => setShowJson(true)}
+              disabled={!productDetails}
+              className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <Code className="w-5 h-5" />
+              View JSON Data
+            </button>
+
+            {/* JSON Viewer Modal */}
+            {productDetails && (
+              <JsonViewerModal
+                data={productDetails}
+                title={`Product JSON: ${productDetails.description || item.productName}`}
+                isOpen={showJson}
+                onClose={() => setShowJson(false)}
+              />
             )}
 
             {/* Status Change and Action Buttons */}
@@ -3276,11 +3285,24 @@ export default function ShoppingListDetailPage() {
                               {item.size}
                               {item.size && (item.price || item.promoPrice) && " • "}
                               {item.promoPrice ? (
-                                <span className="text-red-600 dark:text-red-400">
+                                <span className="text-gray-500 dark:text-gray-400">
                                   {formatPrice(item.promoPrice)}
                                 </span>
                               ) : item.price ? (
                                 <span>{formatPrice(item.price)}</span>
+                              ) : null}
+                            </p>
+                          )}
+
+                          {/* Stock Level Indicator */}
+                          {item.found && item.stockLevel && (
+                            <p className="text-xs mt-1">
+                              {item.stockLevel === "HIGH" ? (
+                                <span className="text-green-600 dark:text-green-400">✓ In Stock</span>
+                              ) : item.stockLevel === "LOW" ? (
+                                <span className="text-yellow-600 dark:text-yellow-400">⚠ Low Stock</span>
+                              ) : item.stockLevel === "TEMPORARILY_OUT_OF_STOCK" ? (
+                                <span className="text-red-600 dark:text-red-400">✗ Out of Stock</span>
                               ) : null}
                             </p>
                           )}
