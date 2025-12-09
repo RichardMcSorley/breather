@@ -1925,13 +1925,14 @@ export default function ShoppingListDetailPage() {
 
     setUploading(true);
     setError(null);
+    setUploadProgress(`Processing 1 of ${files.length} screenshots...`);
 
     try {
       // Process screenshots one at a time to avoid payload size limits
       const allItems: any[] = [];
       
       for (let i = 0; i < files.length; i++) {
-        setUploadProgress(`Processing screenshot ${i + 1} of ${files.length}...`);
+        setUploadProgress(`Processing ${i + 1} of ${files.length} screenshots...`);
         
         // Convert file to base64
         const base64 = await readFileAsBase64(files[i]);
@@ -2261,7 +2262,7 @@ export default function ShoppingListDetailPage() {
                 {uploading && (
                   <span className="ml-2 inline-flex items-center gap-1">
                     <Loader2 className="w-3 h-3 animate-spin" />
-                    {uploadProgress || "Processing..."}
+                    <span>{uploadProgress || "Processing..."}</span>
                   </span>
                 )}
               </p>
