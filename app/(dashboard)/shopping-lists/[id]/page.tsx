@@ -1062,13 +1062,19 @@ function ManualEntryModal({
 
   const getImageUrl = (product: KrogerProduct) => {
     if (product.images && product.images.length > 0) {
-      const defaultImg = product.images.find(img => img.default) || product.images[0];
-      const sizes = ["xlarge", "large", "medium", "small"];
-      for (const size of sizes) {
-        const found = defaultImg?.sizes?.find(s => s.size === size);
-        if (found?.url) return found.url;
+      // Match the same logic used when saving: prioritize front perspective, then default, then first image
+      const frontImg = product.images.find(img => img.perspective === "front");
+      const defaultImg = product.images.find(img => img.default);
+      const imgToUse = frontImg || defaultImg || product.images[0];
+      
+      if (imgToUse?.sizes && imgToUse.sizes.length > 0) {
+        const sizeOrder = ["xlarge", "large", "medium", "small", "thumbnail"];
+        for (const size of sizeOrder) {
+          const found = imgToUse.sizes.find(s => s.size === size);
+          if (found?.url) return found.url;
+        }
+        return imgToUse.sizes[0]?.url;
       }
-      return defaultImg?.sizes?.[0]?.url;
     }
     return null;
   };
@@ -1254,6 +1260,8 @@ function ProductDetailModal({
   onEdit,
   onDelete,
   onMoveToProblem,
+  onMoveToTodo,
+  onMoveToDone,
 }: {
   item: ShoppingListItem;
   locationId: string;
@@ -1262,6 +1270,8 @@ function ProductDetailModal({
   onEdit?: () => void;
   onDelete?: () => void;
   onMoveToProblem?: () => void;
+  onMoveToTodo?: () => void;
+  onMoveToDone?: () => void;
 }) {
   const [productDetails, setProductDetails] = useState<KrogerProduct | null>(null);
   const [loading, setLoading] = useState(false);
@@ -1553,46 +1563,77 @@ function ProductDetailModal({
               </a>
             )}
 
-            {/* Edit, Move to Problem, and Delete Buttons */}
-            <div className="flex gap-2 pt-2">
-              {onEdit && (
-                <button
-                  onClick={() => {
-                    onEdit();
-                    onClose();
-                  }}
-                  className="flex-1 px-4 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center justify-center gap-2"
-                >
-                  <Edit className="w-5 h-5" />
-                  Edit
-                </button>
-              )}
-              {onMoveToProblem && !item.problem && (
-                <button
-                  onClick={() => {
-                    onMoveToProblem();
-                    onClose();
-                  }}
-                  className="flex-1 px-4 py-3 bg-orange-600 text-white rounded-lg hover:bg-orange-700 transition-colors flex items-center justify-center gap-2"
-                >
-                  <AlertTriangle className="w-5 h-5" />
-                  Issue
-                </button>
-              )}
-              {onDelete && (
-                <button
-                  onClick={() => {
-                    if (confirm("Delete this item?")) {
-                      onDelete();
+            {/* Status Change and Action Buttons */}
+            <div className="space-y-2 pt-2">
+              {/* Status Change Buttons */}
+              <div className="flex gap-2">
+                {onMoveToTodo && (item.done || item.problem) && (
+                  <button
+                    onClick={() => {
+                      onMoveToTodo();
                       onClose();
-                    }
-                  }}
-                  className="flex-1 px-4 py-3 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors flex items-center justify-center gap-2"
-                >
-                  <Trash2 className="w-5 h-5" />
-                  Delete
-                </button>
-              )}
+                    }}
+                    className="flex-1 px-4 py-3 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors flex items-center justify-center gap-2"
+                  >
+                    <Check className="w-5 h-5" />
+                    Move to Todo
+                  </button>
+                )}
+                {onMoveToProblem && !item.problem && (
+                  <button
+                    onClick={() => {
+                      onMoveToProblem();
+                      onClose();
+                    }}
+                    className="flex-1 px-4 py-3 bg-orange-600 text-white rounded-lg hover:bg-orange-700 transition-colors flex items-center justify-center gap-2"
+                  >
+                    <AlertTriangle className="w-5 h-5" />
+                    Move to Problem
+                  </button>
+                )}
+                {onMoveToDone && !item.done && (
+                  <button
+                    onClick={() => {
+                      onMoveToDone();
+                      onClose();
+                    }}
+                    className="flex-1 px-4 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors flex items-center justify-center gap-2"
+                  >
+                    <Check className="w-5 h-5" />
+                    Mark as Done
+                  </button>
+                )}
+              </div>
+              
+              {/* Edit and Delete Buttons */}
+              <div className="flex gap-2">
+                {onEdit && (
+                  <button
+                    onClick={() => {
+                      onEdit();
+                      onClose();
+                    }}
+                    className="flex-1 px-4 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center justify-center gap-2"
+                  >
+                    <Edit className="w-5 h-5" />
+                    Edit
+                  </button>
+                )}
+                {onDelete && (
+                  <button
+                    onClick={() => {
+                      if (confirm("Delete this item?")) {
+                        onDelete();
+                        onClose();
+                      }
+                    }}
+                    className="flex-1 px-4 py-3 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors flex items-center justify-center gap-2"
+                  >
+                    <Trash2 className="w-5 h-5" />
+                    Delete
+                  </button>
+                )}
+              </div>
             </div>
           </>
         )}
@@ -2466,6 +2507,62 @@ export default function ShoppingListDetailPage() {
     }
   };
 
+  const handleMoveToTodo = async (item: ShoppingListItem) => {
+    try {
+      const response = await fetch(`/api/shopping-lists/${id}/items`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          itemIndex: shoppingList?.items.findIndex(i => i === item) ?? -1,
+          item: {
+            ...item,
+            problem: false,
+            done: false,
+          },
+        }),
+      });
+
+      if (response.ok) {
+        await fetchShoppingList();
+      } else {
+        setError("Failed to move item to todo");
+      }
+    } catch (err) {
+      console.error("Failed to move item to todo:", err);
+      setError("Failed to move item to todo");
+    }
+  };
+
+  const handleMoveToDone = async (item: ShoppingListItem) => {
+    try {
+      const response = await fetch(`/api/shopping-lists/${id}/items`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          itemIndex: shoppingList?.items.findIndex(i => i === item) ?? -1,
+          item: {
+            ...item,
+            done: true,
+            problem: false, // Ensure it's not marked as problem when moved to done
+          },
+        }),
+      });
+
+      if (response.ok) {
+        await fetchShoppingList();
+      } else {
+        setError("Failed to mark item as done");
+      }
+    } catch (err) {
+      console.error("Failed to mark item as done:", err);
+      setError("Failed to mark item as done");
+    }
+  };
+
   const handleConfirmQuantity = async (item: ShoppingListItem) => {
     try {
       const response = await fetch(`/api/shopping-lists/${id}/items`, {
@@ -2984,6 +3081,18 @@ export default function ShoppingListDetailPage() {
             onMoveToProblem={async () => {
               if (itemIndex >= 0) {
                 await handleMoveToProblem(selectedItem);
+                setSelectedItem(null);
+              }
+            }}
+            onMoveToTodo={async () => {
+              if (itemIndex >= 0) {
+                await handleMoveToTodo(selectedItem);
+                setSelectedItem(null);
+              }
+            }}
+            onMoveToDone={async () => {
+              if (itemIndex >= 0) {
+                await handleMoveToDone(selectedItem);
                 setSelectedItem(null);
               }
             }}
