@@ -5,7 +5,7 @@ import { useParams } from "next/navigation";
 import Layout from "@/components/Layout";
 import Image from "next/image";
 import Modal from "@/components/ui/Modal";
-import { ShoppingCart, ExternalLink, Barcode, Loader2, Search, Check, Upload, Plus, Edit, Trash2, Scan, X, AlertTriangle, Code } from "lucide-react";
+import { ShoppingCart, ExternalLink, Barcode, Loader2, Search, Check, Upload, Plus, Edit, Trash2, Scan, X, AlertTriangle, Code, Share2 } from "lucide-react";
 import JsonViewerModal from "@/components/JsonViewer";
 import { KrogerProduct } from "@/lib/types/kroger";
 import { BrowserMultiFormatReader } from "@zxing/browser";
@@ -101,6 +101,8 @@ interface ShoppingList {
   name: string;
   locationId: string;
   items: ShoppingListItem[];
+  sharedWith?: string[];
+  sharedItemIndices?: number[];
   createdAt: string;
 }
 
@@ -2657,6 +2659,437 @@ function ScanResultModal({
   );
 }
 
+// Share Shopping List Modal Component
+function ShareShoppingListModal({
+  isOpen,
+  onClose,
+  shoppingList,
+  onShared,
+}: {
+  isOpen: boolean;
+  onClose: () => void;
+  shoppingList: ShoppingList | null;
+  onShared: () => void;
+}) {
+  const [selectedIndices, setSelectedIndices] = useState<Set<number>>(new Set());
+  const [selectedUserIds, setSelectedUserIds] = useState<Set<string>>(new Set());
+  const [users, setUsers] = useState<{ userId: string; email?: string; name?: string; image?: string }[]>([]);
+  const [loadingUsers, setLoadingUsers] = useState(false);
+  const [sharing, setSharing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  // Fetch users when modal opens
+  useEffect(() => {
+    if (isOpen) {
+      fetchUsers();
+      // Initialize with already shared items
+      if (shoppingList?.sharedItemIndices) {
+        setSelectedIndices(new Set(shoppingList.sharedItemIndices));
+      } else {
+        setSelectedIndices(new Set());
+      }
+      setSelectedUserIds(new Set());
+    }
+  }, [isOpen, shoppingList]);
+
+  const fetchUsers = async () => {
+    setLoadingUsers(true);
+    try {
+      const response = await fetch("/api/users");
+      if (!response.ok) {
+        throw new Error("Failed to fetch users");
+      }
+      const data = await response.json();
+      setUsers(data.users || []);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to load users");
+    } finally {
+      setLoadingUsers(false);
+    }
+  };
+
+  const handleToggleUser = (userId: string) => {
+    const newSelected = new Set(selectedUserIds);
+    if (newSelected.has(userId)) {
+      newSelected.delete(userId);
+    } else {
+      newSelected.add(userId);
+    }
+    setSelectedUserIds(newSelected);
+  };
+
+  const handleSelectAllUsers = () => {
+    if (selectedUserIds.size === users.length) {
+      setSelectedUserIds(new Set());
+    } else {
+      setSelectedUserIds(new Set(users.map(u => u.userId)));
+    }
+  };
+
+  // Helper to get primary aisle info
+  const getPrimaryAisle = (item: ShoppingListItem) => {
+    const aisles = item.krogerAisles;
+    if (!aisles || aisles.length === 0) return undefined;
+    
+    return aisles.reduce((smallest, current) => {
+      const smallestNum = parseInt(smallest?.aisleNumber || "999") || 999;
+      const currentNum = parseInt(current?.aisleNumber || "999") || 999;
+      return currentNum < smallestNum ? current : smallest;
+    });
+  };
+
+  // Group items the same way as the main list
+  const getGroupedItems = () => {
+    if (!shoppingList) return [];
+
+    const itemsWithIndices = shoppingList.items.map((item, index) => ({ item, originalIndex: index }));
+    
+    const sortedItemsWithIndices = itemsWithIndices.sort((a, b) => {
+      const aisleA = getPrimaryAisle(a.item);
+      const aisleB = getPrimaryAisle(b.item);
+      
+      const isUnknownA = !aisleA || !aisleA.aisleNumber;
+      const isUnknownB = !aisleB || !aisleB.aisleNumber;
+      
+      if (isUnknownA && !isUnknownB) return -1;
+      if (!isUnknownA && isUnknownB) return 1;
+      if (isUnknownA && isUnknownB) return 0;
+      
+      if (!aisleA || !aisleB) return 0;
+      
+      const aisleNumA = parseInt(aisleA.aisleNumber || "999") || 999;
+      const aisleNumB = parseInt(aisleB.aisleNumber || "999") || 999;
+      if (aisleNumA !== aisleNumB) return aisleNumA - aisleNumB;
+      
+      const bayA = parseInt(aisleA?.bayNumber || "999") || 999;
+      const bayB = parseInt(aisleB?.bayNumber || "999") || 999;
+      if (bayA !== bayB) return bayA - bayB;
+      
+      const shelfA = parseInt(aisleA?.shelfNumber || "999") || 999;
+      const shelfB = parseInt(aisleB?.shelfNumber || "999") || 999;
+      return shelfA - shelfB;
+    });
+
+    const groupedItems: { aisle: string; bay: string; shelf: string; side: string; description: string; items: ShoppingListItem[]; originalIndices: number[] }[] = [];
+    
+    sortedItemsWithIndices.forEach(({ item, originalIndex }) => {
+      const primaryAisle = getPrimaryAisle(item);
+      const aisleNum = primaryAisle?.aisleNumber || "";
+      const bay = primaryAisle?.bayNumber || "";
+      const shelf = primaryAisle?.shelfNumber || "";
+      const side = primaryAisle?.side || "";
+      const description = primaryAisle?.description || "";
+      
+      const lastGroup = groupedItems[groupedItems.length - 1];
+      if (lastGroup && lastGroup.aisle === aisleNum && lastGroup.bay === bay && lastGroup.shelf === shelf) {
+        lastGroup.items.push(item);
+        lastGroup.originalIndices.push(originalIndex);
+      } else {
+        groupedItems.push({ aisle: aisleNum, bay, shelf, side, description, items: [item], originalIndices: [originalIndex] });
+      }
+    });
+
+    if (groupedItems.length === 0 || (groupedItems.length === 1 && !groupedItems[0].aisle)) {
+      groupedItems.length = 0;
+      groupedItems.push({ 
+        aisle: "", 
+        bay: "", 
+        shelf: "", 
+        side: "",
+        description: "",
+        items: sortedItemsWithIndices.map(({ item }) => item),
+        originalIndices: sortedItemsWithIndices.map(({ originalIndex }) => originalIndex)
+      });
+    }
+
+    return groupedItems;
+  };
+
+  const handleToggleItem = (index: number) => {
+    const newSelected = new Set(selectedIndices);
+    if (newSelected.has(index)) {
+      newSelected.delete(index);
+    } else {
+      newSelected.add(index);
+    }
+    setSelectedIndices(newSelected);
+  };
+
+  const handleSelectAll = () => {
+    if (!shoppingList) return;
+    if (selectedIndices.size === shoppingList.items.length) {
+      setSelectedIndices(new Set());
+    } else {
+      setSelectedIndices(new Set(shoppingList.items.map((_, i) => i)));
+    }
+  };
+
+  const handleShare = async () => {
+    if (!shoppingList) return;
+    
+    const userIdsArray = Array.from(selectedUserIds);
+
+    if (userIdsArray.length === 0) {
+      setError("Please select at least one user");
+      return;
+    }
+
+    if (selectedIndices.size === 0) {
+      setError("Please select at least one item to share");
+      return;
+    }
+
+    setSharing(true);
+    setError(null);
+
+    try {
+      const itemIndicesArray = Array.from(selectedIndices);
+      const response = await fetch(`/api/shopping-lists/${shoppingList._id}/share`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          userIds: userIdsArray,
+          itemIndices: itemIndicesArray,
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ error: "Failed to share list" }));
+        throw new Error(errorData.error || "Failed to share list");
+      }
+
+      onShared();
+      onClose();
+      setSelectedUserIds(new Set());
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to share list");
+    } finally {
+      setSharing(false);
+    }
+  };
+
+  if (!isOpen || !shoppingList) return null;
+
+  const groupedItems = getGroupedItems();
+  const allSelected = shoppingList.items.length > 0 && selectedIndices.size === shoppingList.items.length;
+
+  return (
+    <Modal isOpen={isOpen} onClose={onClose} title="Share Shopping List">
+      <div className="space-y-4">
+        {/* Users Selection */}
+        <div>
+          <div className="flex items-center justify-between mb-2">
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+              Users to Share With <span className="text-red-500">*</span>
+            </label>
+            {users.length > 0 && (
+              <button
+                onClick={handleSelectAllUsers}
+                className="text-sm text-blue-600 dark:text-blue-400 hover:underline"
+              >
+                {selectedUserIds.size === users.length ? "Deselect All" : "Select All"}
+              </button>
+            )}
+          </div>
+          {loadingUsers ? (
+            <div className="p-4 text-center text-gray-500 dark:text-gray-400">
+              <Loader2 className="w-5 h-5 animate-spin mx-auto mb-2" />
+              <p className="text-sm">Loading users...</p>
+            </div>
+          ) : users.length === 0 ? (
+            <div className="p-4 text-center text-gray-500 dark:text-gray-400 border border-gray-200 dark:border-gray-700 rounded-lg">
+              <p className="text-sm">No other users found</p>
+            </div>
+          ) : (
+            <div className="max-h-32 overflow-y-auto border border-gray-200 dark:border-gray-700 rounded-lg p-2 space-y-1">
+              {users.map((user) => {
+                const isSelected = selectedUserIds.has(user.userId);
+                const isAlreadyShared = shoppingList.sharedWith?.includes(user.userId);
+                return (
+                  <label
+                    key={user.userId}
+                    className={`flex items-center gap-2 p-2 rounded cursor-pointer transition-colors ${
+                      isSelected
+                        ? "bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800"
+                        : "hover:bg-gray-50 dark:hover:bg-gray-800/50"
+                    }`}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={isSelected}
+                      onChange={() => handleToggleUser(user.userId)}
+                      className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                    />
+                    {user.image && (
+                      <img
+                        src={user.image}
+                        alt={user.name || user.email || user.userId}
+                        className="w-6 h-6 rounded-full"
+                      />
+                    )}
+                    <span className="flex-1 text-sm text-gray-900 dark:text-white">
+                      {user.name || user.email || user.userId}
+                    </span>
+                    {isAlreadyShared && (
+                      <span className="text-xs px-2 py-0.5 bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-400 rounded">
+                        Already Shared
+                      </span>
+                    )}
+                  </label>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
+        {/* Select All Button */}
+        <div className="flex items-center justify-between">
+          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+            Select Items to Share
+          </label>
+          <button
+            onClick={handleSelectAll}
+            className="text-sm text-blue-600 dark:text-blue-400 hover:underline"
+          >
+            {allSelected ? "Deselect All" : "Select All"}
+          </button>
+        </div>
+
+        {/* Error Message */}
+        {error && (
+          <div className="p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
+            <p className="text-sm text-red-600 dark:text-red-400">{error}</p>
+          </div>
+        )}
+
+        {/* Grouped Items List */}
+        <div className="max-h-96 overflow-y-auto space-y-4 border border-gray-200 dark:border-gray-700 rounded-lg p-4">
+          {groupedItems.map((group, groupIndex) => (
+            <div key={groupIndex}>
+              {/* Aisle/Bay/Shelf Header */}
+              {group.aisle && (
+                <div className="pt-2 pb-1 border-b border-gray-200 dark:border-gray-700 mb-2">
+                  <h3 className="font-bold text-gray-900 dark:text-white text-sm">
+                    {(() => {
+                      const aisleNum = parseInt(group.aisle) || 0;
+                      if (aisleNum >= 100 && group.description) {
+                        return `${group.description} | ${group.side || "?"} - Bay ${group.bay || "?"} | Shelf ${group.shelf || "?"}`;
+                      }
+                      return `Aisle ${group.aisle} | ${group.side || "?"} - Bay ${group.bay || "?"} | Shelf ${group.shelf || "?"}`;
+                    })()}
+                  </h3>
+                </div>
+              )}
+              {!group.aisle && groupIndex === 0 && (
+                <div className="pt-2 pb-1 border-b border-gray-200 dark:border-gray-700 mb-2">
+                  <h3 className="font-bold text-gray-900 dark:text-white text-sm">
+                    Unknown Location
+                  </h3>
+                </div>
+              )}
+
+              {/* Items in this group */}
+              <div className="space-y-2">
+                {group.items.map((item, itemIndex) => {
+                  const originalIndex = group.originalIndices[itemIndex];
+                  const isSelected = selectedIndices.has(originalIndex);
+                  const isAlreadyShared = shoppingList.sharedItemIndices?.includes(originalIndex);
+
+                  return (
+                    <label
+                      key={`item-${originalIndex}`}
+                      className={`flex items-start gap-3 p-3 rounded-lg border-2 cursor-pointer transition-colors ${
+                        isSelected
+                          ? "border-blue-500 bg-blue-50 dark:bg-blue-900/20"
+                          : "border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600"
+                      }`}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={isSelected}
+                        onChange={() => handleToggleItem(originalIndex)}
+                        className="mt-1 w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                      />
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-start gap-2">
+                          {/* Product Image */}
+                          <div className="relative flex-shrink-0">
+                            <CustomerBadge customer={item.customer} app={item.app} />
+                            {item.imageUrl ? (
+                              <div className="relative w-16 h-16 bg-white rounded-lg overflow-visible shadow-sm border border-gray-100 dark:border-gray-600">
+                                <Image
+                                  src={item.imageUrl}
+                                  alt={item.found && item.description ? item.description : item.productName}
+                                  fill
+                                  className="object-contain p-1"
+                                  unoptimized
+                                />
+                              </div>
+                            ) : (
+                              <div className="w-16 h-16 bg-gray-100 dark:bg-gray-700 rounded-lg flex items-center justify-center border border-gray-200 dark:border-gray-600 overflow-visible">
+                                <ShoppingCart className="w-5 h-5 text-gray-400" />
+                              </div>
+                            )}
+                          </div>
+
+                          {/* Product Details */}
+                          <div className="flex-1 min-w-0">
+                            <p className="font-medium text-gray-900 dark:text-white text-sm">
+                              {item.found && item.description ? item.description : item.productName}
+                            </p>
+                            {item.brand && (
+                              <p className="text-xs text-gray-500 dark:text-gray-400">{item.brand}</p>
+                            )}
+                            {isAlreadyShared && (
+                              <span className="inline-block mt-1 text-xs px-2 py-0.5 bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-400 rounded">
+                                Already Shared
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    </label>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {/* Action Buttons */}
+        <div className="flex gap-3 pt-4 border-t border-gray-200 dark:border-gray-700">
+          <button
+            onClick={onClose}
+            className="flex-1 px-4 py-2 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
+            disabled={sharing}
+          >
+            Cancel
+          </button>
+          <button
+            onClick={handleShare}
+            disabled={sharing || selectedIndices.size === 0 || selectedUserIds.size === 0}
+            className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2"
+          >
+            {sharing ? (
+              <>
+                <Loader2 className="w-4 h-4 animate-spin" />
+                Sharing...
+              </>
+            ) : (
+              <>
+                <Share2 className="w-4 h-4" />
+                Share ({selectedIndices.size} {selectedIndices.size === 1 ? "item" : "items"} with {selectedUserIds.size} {selectedUserIds.size === 1 ? "user" : "users"})
+              </>
+            )}
+          </button>
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
 export default function ShoppingListDetailPage() {
   const params = useParams();
   const id = params.id as string;
@@ -2674,6 +3107,7 @@ export default function ShoppingListDetailPage() {
   const [scanningItem, setScanningItem] = useState<ShoppingListItem | null>(null);
   const [scanResult, setScanResult] = useState<{ success: boolean; item: ShoppingListItem; scannedBarcode?: string } | null>(null);
   const [customerIdentificationOpen, setCustomerIdentificationOpen] = useState(false);
+  const [shareModalOpen, setShareModalOpen] = useState(false);
   const hasAutoRefreshedRef = useRef(false);
 
   const fetchShoppingList = async () => {
@@ -3117,21 +3551,30 @@ export default function ShoppingListDetailPage() {
                 )}
               </p>
             </div>
-            <div className="flex gap-2 w-full sm:w-auto">
+            <div className="flex flex-col gap-2 w-full sm:w-auto">
               <button
-                onClick={() => setScreenshotUploadOpen(true)}
-                className="flex-1 sm:flex-initial px-4 py-2 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 flex items-center justify-center gap-2 text-sm whitespace-nowrap"
+                onClick={() => setShareModalOpen(true)}
+                className="w-full px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 flex items-center justify-center gap-2 text-sm whitespace-nowrap"
               >
-                <Upload className="w-4 h-4 flex-shrink-0" />
-                <span className="truncate">Add Screenshot</span>
+                <Share2 className="w-4 h-4 flex-shrink-0" />
+                <span className="truncate">Share</span>
               </button>
-              <button
-                onClick={() => setManualEntryOpen(true)}
-                className="flex-1 sm:flex-initial px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center justify-center gap-2 text-sm whitespace-nowrap"
-              >
-                <Plus className="w-4 h-4 flex-shrink-0" />
-                <span className="truncate">Add Manually</span>
-              </button>
+              <div className="flex gap-2 w-full">
+                <button
+                  onClick={() => setScreenshotUploadOpen(true)}
+                  className="flex-1 px-4 py-2 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 flex items-center justify-center gap-2 text-sm whitespace-nowrap"
+                >
+                  <Upload className="w-4 h-4 flex-shrink-0" />
+                  <span className="truncate">Add Screenshot</span>
+                </button>
+                <button
+                  onClick={() => setManualEntryOpen(true)}
+                  className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center justify-center gap-2 text-sm whitespace-nowrap"
+                >
+                  <Plus className="w-4 h-4 flex-shrink-0" />
+                  <span className="truncate">Add Manually</span>
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -3263,21 +3706,30 @@ export default function ShoppingListDetailPage() {
                       <div className="flex items-start justify-between gap-2">
                         <div className="flex-1 min-w-0">
                           {/* Quantity + Kroger Product Name */}
-                          <p className="text-gray-900 dark:text-white leading-snug">
-                            {item.found && item.description ? (
-                              <>
-                                {item.quantity && (
-                                  <span className="font-bold">{item.quantity} </span>
-                                )}
-                                {item.description}
-                              </>
-                            ) : (
-                              <>
-                                <span className="font-bold">{item.quantity || "1 ct"}</span>{" "}
-                                {item.productName}
-                              </>
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <p className="text-gray-900 dark:text-white leading-snug">
+                              {item.found && item.description ? (
+                                <>
+                                  {item.quantity && (
+                                    <span className="font-bold">{item.quantity} </span>
+                                  )}
+                                  {item.description}
+                                </>
+                              ) : (
+                                <>
+                                  <span className="font-bold">{item.quantity || "1 ct"}</span>{" "}
+                                  {item.productName}
+                                </>
+                              )}
+                            </p>
+                            {/* Shared Indicator */}
+                            {shoppingList.sharedItemIndices?.includes(originalIndex) && (
+                              <span className="inline-flex items-center gap-1 text-xs px-2 py-0.5 bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-400 rounded">
+                                <Share2 className="w-3 h-3" />
+                                Shared
+                              </span>
                             )}
-                          </p>
+                          </div>
                           
                           {/* Kroger Size • Price */}
                           {item.found && (
@@ -3503,6 +3955,14 @@ export default function ShoppingListDetailPage() {
           onItemUpdated={fetchShoppingList}
         />
       )}
+
+      {/* Share Shopping List Modal */}
+      <ShareShoppingListModal
+        isOpen={shareModalOpen}
+        onClose={() => setShareModalOpen(false)}
+        shoppingList={shoppingList}
+        onShared={fetchShoppingList}
+      />
     </Layout>
   );
 }

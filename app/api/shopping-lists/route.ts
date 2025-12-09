@@ -14,12 +14,51 @@ export async function GET() {
 
     await connectDB();
 
-    const lists = await ShoppingList.find({ userId: session.user.id })
+    // Find lists where user is owner OR in sharedWith
+    const lists = await ShoppingList.find({
+      $or: [
+        { userId: session.user.id },
+        { sharedWith: session.user.id },
+      ],
+    })
       .sort({ createdAt: -1 })
-      .select("_id name locationId items createdAt")
+      .select("_id name locationId items createdAt sharedWith sharedItemIndices userId")
       .lean();
 
-    return NextResponse.json(lists);
+    // Process lists: filter items for shared lists, add isShared flag
+    const processedLists = lists.map((list) => {
+      const isOwner = list.userId === session.user.id;
+      const isSharedUser = !isOwner && list.sharedWith?.includes(session.user.id);
+
+      if (isSharedUser) {
+        // Filter items to only shared indices
+        const sharedIndices = list.sharedItemIndices || [];
+        const filteredItems = (list.items || []).filter((_, index) =>
+          sharedIndices.includes(index)
+        );
+
+        return {
+          _id: list._id,
+          name: list.name,
+          locationId: list.locationId,
+          items: filteredItems,
+          createdAt: list.createdAt,
+          isShared: true,
+        };
+      }
+
+      // Owner gets full list
+      return {
+        _id: list._id,
+        name: list.name,
+        locationId: list.locationId,
+        items: list.items || [],
+        createdAt: list.createdAt,
+        isShared: false,
+      };
+    });
+
+    return NextResponse.json(processedLists);
   } catch (error) {
     return handleApiError(error);
   }

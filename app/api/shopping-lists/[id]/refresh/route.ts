@@ -22,7 +22,10 @@ export async function POST(
 
     const shoppingList = await ShoppingList.findOne({
       _id: id,
-      userId: session.user.id,
+      $or: [
+        { userId: session.user.id },
+        { sharedWith: session.user.id },
+      ],
     });
 
     if (!shoppingList) {
@@ -32,9 +35,26 @@ export async function POST(
       );
     }
 
+    const isOwner = shoppingList.userId === session.user.id;
+    const isSharedUser = !isOwner && shoppingList.sharedWith?.includes(session.user.id);
+    const sharedIndices = shoppingList.sharedItemIndices || [];
+
+    // Determine which items to refresh
+    const itemsToRefresh = isSharedUser
+      ? shoppingList.items.filter((_, index) => sharedIndices.includes(index))
+      : shoppingList.items;
+
+    // Map original indices to items being refreshed
+    const itemIndexMap = isSharedUser
+      ? shoppingList.items
+          .map((_, index) => ({ originalIndex: index, isShared: sharedIndices.includes(index) }))
+          .filter(({ isShared }) => isShared)
+          .map(({ originalIndex }, newIndex) => ({ originalIndex, newIndex }))
+      : shoppingList.items.map((_, index) => ({ originalIndex: index, newIndex: index }));
+
     // Refresh each item with current Kroger data
     const updatedItems: IShoppingListItem[] = await Promise.all(
-      shoppingList.items.map(async (item) => {
+      itemsToRefresh.map(async (item) => {
         // If item already has a productId, use it to fetch the specific product
         // This preserves manually selected products and prevents them from being overwritten
         if (item.productId && item.found) {
@@ -204,7 +224,16 @@ export async function POST(
     );
 
     // Update the shopping list with refreshed items
-    shoppingList.items = updatedItems;
+    if (isSharedUser) {
+      // For shared users, only update the shared items
+      itemIndexMap.forEach(({ originalIndex, newIndex }) => {
+        shoppingList.items[originalIndex] = updatedItems[newIndex];
+      });
+    } else {
+      // For owner, update all items
+      shoppingList.items = updatedItems;
+    }
+    
     await shoppingList.save();
 
     return NextResponse.json({

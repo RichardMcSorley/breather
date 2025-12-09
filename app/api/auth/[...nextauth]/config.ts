@@ -1,5 +1,7 @@
 import { NextAuthOptions } from "next-auth";
 import GoogleProvider from "next-auth/providers/google";
+import connectDB from "@/lib/mongodb";
+import User from "@/lib/models/User";
 
 export const authOptions: NextAuthOptions = {
   providers: [
@@ -9,6 +11,29 @@ export const authOptions: NextAuthOptions = {
     }),
   ],
   callbacks: {
+    async signIn({ user, account, profile }) {
+      try {
+        await connectDB();
+        
+        // Create or update user in database
+        await User.findOneAndUpdate(
+          { userId: user.id },
+          {
+            userId: user.id,
+            email: user.email || undefined,
+            name: user.name || undefined,
+            image: user.image || undefined,
+          },
+          { upsert: true, new: true }
+        );
+        
+        return true;
+      } catch (error) {
+        console.error("Error creating/updating user:", error);
+        // Don't block sign-in if user creation fails
+        return true;
+      }
+    },
     async session({ session, token }) {
       if (session.user) {
         session.user.id = token.sub as string;

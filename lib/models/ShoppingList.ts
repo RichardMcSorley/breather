@@ -50,6 +50,8 @@ export interface IShoppingList extends Document {
   name: string;
   locationId: string;
   items: IShoppingListItem[];
+  sharedWith?: string[]; // Array of user IDs who have access
+  sharedItemIndices?: number[]; // Array of item indices that are shared
   createdAt: Date;
   updatedAt: Date;
 }
@@ -130,6 +132,15 @@ const ShoppingListSchema: Schema = new Schema(
       required: true,
     },
     items: [ShoppingListItemSchema],
+    sharedWith: {
+      type: [String],
+      default: [],
+      index: true,
+    },
+    sharedItemIndices: {
+      type: [Number],
+      default: [],
+    },
   },
   {
     timestamps: true,
@@ -137,6 +148,7 @@ const ShoppingListSchema: Schema = new Schema(
 );
 
 ShoppingListSchema.index({ userId: 1, createdAt: -1 });
+ShoppingListSchema.index({ sharedWith: 1, createdAt: -1 });
 
 const ShoppingList: Model<IShoppingList> =
   mongoose.models.ShoppingList || mongoose.model<IShoppingList>("ShoppingList", ShoppingListSchema);

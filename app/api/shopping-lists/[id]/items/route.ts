@@ -30,7 +30,10 @@ export async function POST(
 
     const shoppingList = await ShoppingList.findOne({
       _id: id,
-      userId: session.user.id,
+      $or: [
+        { userId: session.user.id },
+        { sharedWith: session.user.id },
+      ],
     });
 
     if (!shoppingList) {
@@ -39,6 +42,9 @@ export async function POST(
         { status: 404 }
       );
     }
+
+    const isOwner = shoppingList.userId === session.user.id;
+    const isSharedUser = !isOwner && shoppingList.sharedWith?.includes(session.user.id);
 
     // Filter out duplicates: same productId, customer, and app
     // First, remove duplicates within the new items batch
@@ -80,7 +86,18 @@ export async function POST(
     });
 
     // Add new items to the existing list (only non-duplicates)
+    const startIndex = shoppingList.items.length;
     shoppingList.items.push(...newItems);
+    
+    // If shared user adds items, automatically add new indices to sharedItemIndices
+    if (isSharedUser && newItems.length > 0) {
+      const currentIndices = shoppingList.sharedItemIndices || [];
+      const newIndices = Array.from({ length: newItems.length }, (_, i) => startIndex + i);
+      shoppingList.sharedItemIndices = [...new Set([...currentIndices, ...newIndices])].sort(
+        (a, b) => a - b
+      );
+    }
+    
     await shoppingList.save();
 
     return NextResponse.json({
@@ -126,7 +143,10 @@ export async function PUT(
 
     const shoppingList = await ShoppingList.findOne({
       _id: id,
-      userId: session.user.id,
+      $or: [
+        { userId: session.user.id },
+        { sharedWith: session.user.id },
+      ],
     });
 
     if (!shoppingList) {
@@ -141,6 +161,20 @@ export async function PUT(
         { error: "Invalid item index" },
         { status: 400 }
       );
+    }
+
+    const isOwner = shoppingList.userId === session.user.id;
+    const isSharedUser = !isOwner && shoppingList.sharedWith?.includes(session.user.id);
+
+    // Shared users can only modify items at shared indices
+    if (isSharedUser) {
+      const sharedIndices = shoppingList.sharedItemIndices || [];
+      if (!sharedIndices.includes(itemIndex)) {
+        return NextResponse.json(
+          { error: "You can only modify shared items" },
+          { status: 403 }
+        );
+      }
     }
 
     // Update the item at the specified index
@@ -181,7 +215,10 @@ export async function DELETE(
 
     const shoppingList = await ShoppingList.findOne({
       _id: id,
-      userId: session.user.id,
+      $or: [
+        { userId: session.user.id },
+        { sharedWith: session.user.id },
+      ],
     });
 
     if (!shoppingList) {
@@ -198,8 +235,31 @@ export async function DELETE(
       );
     }
 
+    const isOwner = shoppingList.userId === session.user.id;
+    const isSharedUser = !isOwner && shoppingList.sharedWith?.includes(session.user.id);
+
+    // Shared users can only delete items at shared indices
+    if (isSharedUser) {
+      const sharedIndices = shoppingList.sharedItemIndices || [];
+      if (!sharedIndices.includes(itemIndex)) {
+        return NextResponse.json(
+          { error: "You can only delete shared items" },
+          { status: 403 }
+        );
+      }
+    }
+
     // Remove the item at the specified index
     shoppingList.items.splice(itemIndex, 1);
+    
+    // Update sharedItemIndices: remove the deleted index and decrement indices after it
+    if (shoppingList.sharedItemIndices && shoppingList.sharedItemIndices.length > 0) {
+      shoppingList.sharedItemIndices = shoppingList.sharedItemIndices
+        .filter((idx: number) => idx !== itemIndex) // Remove the deleted index
+        .map((idx: number) => idx > itemIndex ? idx - 1 : idx) // Decrement indices after deleted item
+        .sort((a: number, b: number) => a - b);
+    }
+    
     await shoppingList.save();
 
     return NextResponse.json({

@@ -21,7 +21,10 @@ export async function GET(
 
     const shoppingList = await ShoppingList.findOne({
       _id: id,
-      userId: session.user.id,
+      $or: [
+        { userId: session.user.id },
+        { sharedWith: session.user.id },
+      ],
     });
 
     if (!shoppingList) {
@@ -31,7 +34,28 @@ export async function GET(
       );
     }
 
-    return NextResponse.json(shoppingList);
+    const isOwner = shoppingList.userId === session.user.id;
+    const isSharedUser = !isOwner && shoppingList.sharedWith?.includes(session.user.id);
+
+    // If shared user, filter items to only shared indices
+    if (isSharedUser) {
+      const sharedIndices = shoppingList.sharedItemIndices || [];
+      const filteredItems = shoppingList.items.filter((_, index) =>
+        sharedIndices.includes(index)
+      );
+
+      return NextResponse.json({
+        ...shoppingList.toObject(),
+        items: filteredItems,
+        isShared: true,
+      });
+    }
+
+    // Owner gets full list
+    return NextResponse.json({
+      ...shoppingList.toObject(),
+      isShared: false,
+    });
   } catch (error) {
     return handleApiError(error);
   }
@@ -51,6 +75,7 @@ export async function DELETE(
 
     await connectDB();
 
+    // Only owner can delete the entire list
     const result = await ShoppingList.deleteOne({
       _id: id,
       userId: session.user.id,
@@ -58,7 +83,7 @@ export async function DELETE(
 
     if (result.deletedCount === 0) {
       return NextResponse.json(
-        { error: "Shopping list not found" },
+        { error: "Shopping list not found or you don't have permission to delete it" },
         { status: 404 }
       );
     }
