@@ -1949,7 +1949,10 @@ function BarcodeScanner({
 }) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const codeReaderRef = useRef<BrowserMultiFormatReader | null>(null);
+  const scanTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const [error, setError] = useState<string>("");
+  const [scannedCode, setScannedCode] = useState<string>("");
+  const [manualUPC, setManualUPC] = useState<string>("");
 
   useEffect(() => {
     if (!isOpen) {
@@ -1959,6 +1962,12 @@ function BarcodeScanner({
         stream.getTracks().forEach(track => track.stop());
         videoRef.current.srcObject = null;
       }
+      if (scanTimeoutRef.current) {
+        clearTimeout(scanTimeoutRef.current);
+        scanTimeoutRef.current = null;
+      }
+      setScannedCode("");
+      setManualUPC("");
       return;
     }
 
@@ -1980,15 +1989,25 @@ function BarcodeScanner({
         videoElement,
         (result, error) => {
           if (result && scanning) {
-            scanning = false;
             const scannedCode = result.getText();
-            // Stop video stream
-            if (videoElement.srcObject) {
-              const stream = videoElement.srcObject as MediaStream;
-              stream.getTracks().forEach(track => track.stop());
-              videoElement.srcObject = null;
+            setScannedCode(scannedCode);
+            // Clear any existing timeout
+            if (scanTimeoutRef.current) {
+              clearTimeout(scanTimeoutRef.current);
             }
-            onScan(scannedCode);
+            // Wait a bit before finalizing to allow for manual override
+            scanTimeoutRef.current = setTimeout(() => {
+              if (scanning) {
+                scanning = false;
+                // Stop video stream
+                if (videoElement.srcObject) {
+                  const stream = videoElement.srcObject as MediaStream;
+                  stream.getTracks().forEach(track => track.stop());
+                  videoElement.srcObject = null;
+                }
+                onScan(scannedCode);
+              }
+            }, 1000);
           }
           if (error && !(error instanceof Error && error.name === "NotFoundException")) {
             // Only show non-"not found" errors
@@ -2004,6 +2023,10 @@ function BarcodeScanner({
     // Cleanup on unmount
     return () => {
       scanning = false;
+      if (scanTimeoutRef.current) {
+        clearTimeout(scanTimeoutRef.current);
+        scanTimeoutRef.current = null;
+      }
       // Stop video stream
       if (videoElement.srcObject) {
         const stream = videoElement.srcObject as MediaStream;
@@ -2012,6 +2035,23 @@ function BarcodeScanner({
       }
     };
   }, [isOpen, onScan]);
+
+  const handleManualOverride = () => {
+    if (manualUPC.trim()) {
+      // Cancel any pending auto-scan
+      if (scanTimeoutRef.current) {
+        clearTimeout(scanTimeoutRef.current);
+        scanTimeoutRef.current = null;
+      }
+      // Stop video stream
+      if (videoRef.current?.srcObject) {
+        const stream = videoRef.current.srcObject as MediaStream;
+        stream.getTracks().forEach(track => track.stop());
+        videoRef.current.srcObject = null;
+      }
+      onScan(manualUPC.trim());
+    }
+  };
 
   if (!isOpen) return null;
 
@@ -2023,6 +2063,14 @@ function BarcodeScanner({
             Point your camera at the barcode
           </p>
         </div>
+
+        {/* Expected UPC Display */}
+        {item.upc && (
+          <div className="p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
+            <p className="text-xs font-medium text-blue-700 dark:text-blue-300 mb-1">Expected UPC:</p>
+            <p className="text-lg font-mono font-bold text-blue-900 dark:text-blue-100">{item.upc}</p>
+          </div>
+        )}
 
         {/* Video preview */}
         <div className="relative w-full max-w-md mx-auto">
@@ -2036,6 +2084,42 @@ function BarcodeScanner({
           {/* Scanning overlay */}
           <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
             <div className="border-2 border-blue-500 rounded-lg w-3/4 h-1/2" />
+          </div>
+        </div>
+
+        {/* Scanned Code Display */}
+        {scannedCode && (
+          <div className="p-3 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg">
+            <p className="text-xs font-medium text-green-700 dark:text-green-300 mb-1">Scanned:</p>
+            <p className="text-lg font-mono font-bold text-green-900 dark:text-green-100">{scannedCode}</p>
+          </div>
+        )}
+
+        {/* Manual Override Section */}
+        <div className="space-y-2">
+          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+            Manual Override UPC
+          </label>
+          <div className="flex gap-2">
+            <input
+              type="text"
+              value={manualUPC}
+              onChange={(e) => setManualUPC(e.target.value)}
+              placeholder="Enter UPC manually"
+              className="flex-1 px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-900 dark:text-gray-100 bg-white dark:bg-gray-800 font-mono"
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && manualUPC.trim()) {
+                  handleManualOverride();
+                }
+              }}
+            />
+            <button
+              onClick={handleManualOverride}
+              disabled={!manualUPC.trim()}
+              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed font-medium"
+            >
+              Override
+            </button>
           </div>
         </div>
 
