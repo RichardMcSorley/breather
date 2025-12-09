@@ -240,8 +240,11 @@ function SearchProductModal({
     }
   };
 
-  const handleSelectProduct = (product: KrogerProduct) => {
-    setSelectedProduct(product);
+  const handleSelectProduct = (productId: string) => {
+    const product = searchResults.find(p => p.productId === productId);
+    if (product) {
+      setSelectedProduct(product);
+    }
   };
 
   const handleSave = async () => {
@@ -411,7 +414,7 @@ function SearchProductModal({
                 return (
                   <div
                     key={product.productId}
-                    onClick={() => handleSelectProduct(product)}
+                    onClick={() => handleSelectProduct(product.productId)}
                     className={`p-3 border rounded-lg cursor-pointer transition-colors ${
                       isSelected
                         ? "border-blue-500 bg-blue-50 dark:bg-blue-900/20"
@@ -752,10 +755,16 @@ function EditItemModal({
               {searchResults.map((product) => {
                 const imageUrl = getImageUrl(product);
                 const isSelected = selectedProduct?.productId === product.productId;
+                const handleProductClick = () => {
+                  const foundProduct = searchResults.find(p => p.productId === product.productId);
+                  if (foundProduct) {
+                    setSelectedProduct(foundProduct);
+                  }
+                };
                 return (
                   <div
                     key={product.productId}
-                    onClick={() => setSelectedProduct(product)}
+                    onClick={handleProductClick}
                     className={`p-3 border rounded-lg cursor-pointer transition-colors ${
                       isSelected
                         ? "border-blue-500 bg-blue-50 dark:bg-blue-900/20"
@@ -1168,10 +1177,16 @@ function ManualEntryModal({
               {searchResults.map((product) => {
                 const imageUrl = getImageUrl(product);
                 const isSelected = selectedProduct?.productId === product.productId;
+                const handleProductClick = () => {
+                  const foundProduct = searchResults.find(p => p.productId === product.productId);
+                  if (foundProduct) {
+                    setSelectedProduct(foundProduct);
+                  }
+                };
                 return (
                   <div
                     key={product.productId}
-                    onClick={() => setSelectedProduct(product)}
+                    onClick={handleProductClick}
                     className={`p-3 border rounded-lg cursor-pointer transition-colors ${
                       isSelected
                         ? "border-blue-500 bg-blue-50 dark:bg-blue-900/20"
