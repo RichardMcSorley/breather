@@ -10,6 +10,47 @@ import { KrogerProduct } from "@/lib/types/kroger";
 import { BrowserMultiFormatReader } from "@zxing/browser";
 import { barcodesMatch } from "@/lib/barcode-utils";
 
+// Audio feedback utilities
+const playBeep = (frequency: number, duration: number, type: "sine" | "square" = "sine") => {
+  try {
+    const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+    const oscillator = audioContext.createOscillator();
+    const gainNode = audioContext.createGain();
+
+    oscillator.connect(gainNode);
+    gainNode.connect(audioContext.destination);
+
+    oscillator.frequency.value = frequency;
+    oscillator.type = type;
+
+    // Fade out to avoid clicks
+    gainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
+    gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + duration);
+
+    oscillator.start(audioContext.currentTime);
+    oscillator.stop(audioContext.currentTime + duration);
+  } catch (error) {
+    // Silently fail if audio context is not available
+    console.debug("Audio playback not available:", error);
+  }
+};
+
+const playSuccessSound = () => {
+  // Play two ascending beeps (success sound)
+  playBeep(523.25, 0.1, "sine"); // C5
+  setTimeout(() => {
+    playBeep(659.25, 0.15, "sine"); // E5
+  }, 100);
+};
+
+const playFailureSound = () => {
+  // Play a low descending beep (error sound)
+  playBeep(392.00, 0.2, "square"); // G4
+  setTimeout(() => {
+    playBeep(311.13, 0.3, "square"); // D#4
+  }, 150);
+};
+
 interface KrogerAisleLocation {
   aisleNumber?: string;
   shelfNumber?: string;
@@ -1713,7 +1754,9 @@ function ScanResultModal({
     E: { bg: "bg-pink-500", text: "text-white", border: "border-pink-600" },
   };
 
-  const colors = customerColorMap[customer] || customerColorMap.A;
+  // Use red colors for failures, customer colors for success
+  const failureColors = { bg: "bg-red-500", text: "text-white", border: "border-red-600" };
+  const colors = success ? (customerColorMap[customer] || customerColorMap.A) : failureColors;
   
   // Get short app name
   const getShortAppName = (appName?: string) => {
@@ -1721,6 +1764,17 @@ function ScanResultModal({
     if (appName === "DoorDash") return "DD";
     return appName || "";
   };
+
+  // Play audio feedback when modal opens
+  useEffect(() => {
+    if (isOpen) {
+      if (success) {
+        playSuccessSound();
+      } else {
+        playFailureSound();
+      }
+    }
+  }, [isOpen, success]);
 
   if (!isOpen) return null;
 
@@ -2042,7 +2096,7 @@ export default function ShoppingListDetailPage() {
     // Close scanner
     setScanningItem(null);
 
-    // Show result modal
+    // Show result modal (audio will play when modal opens)
     setScanResult({
       success,
       item: scanningItem,
