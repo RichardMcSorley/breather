@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import Layout from "@/components/Layout";
 import KrogerStoreSelector from "@/components/KrogerStoreSelector";
+import Modal from "@/components/ui/Modal";
 import { List, ShoppingCart, ChevronRight, Trash2, Upload, Loader2 } from "lucide-react";
 import { KrogerLocation } from "@/lib/types/kroger";
 
@@ -27,7 +28,9 @@ export default function ShoppingListsPage() {
   const [uploadProgress, setUploadProgress] = useState<string>("");
   const [error, setError] = useState<string | null>(null);
   const [selectedLocation, setSelectedLocation] = useState<KrogerLocation | null>(null);
-  const [selectedApp, setSelectedApp] = useState<string>("Instacart");
+  const [screenshotModalOpen, setScreenshotModalOpen] = useState(false);
+  const [modalSelectedApp, setModalSelectedApp] = useState<string>("");
+  const [selectedCustomers, setSelectedCustomers] = useState<string[]>([]);
 
   // Load selected location from localStorage on mount
   useEffect(() => {
@@ -104,6 +107,26 @@ export default function ShoppingListsPage() {
       return;
     }
 
+    // Validate app selection is mandatory
+    if (!modalSelectedApp || modalSelectedApp.trim() === "") {
+      setError("Please select an app (Instacart or DoorDash) before uploading screenshots.");
+      // Reset file input
+      if (fileInputRef.current) {
+        fileInputRef.current.value = "";
+      }
+      return;
+    }
+
+    // Validate customer selection is mandatory
+    if (selectedCustomers.length === 0) {
+      setError("Please select at least one customer (A, B, C, or D) before uploading screenshots.");
+      // Reset file input
+      if (fileInputRef.current) {
+        fileInputRef.current.value = "";
+      }
+      return;
+    }
+
     // Validate all files are images
     for (let i = 0; i < files.length; i++) {
       if (!files[i].type.startsWith("image/")) {
@@ -134,7 +157,8 @@ export default function ShoppingListsPage() {
           body: JSON.stringify({
             screenshot: base64,
             locationId: selectedLocation.locationId,
-            app: selectedApp || undefined,
+            app: modalSelectedApp,
+            customers: selectedCustomers, // Pass selected customers to guide Gemini
           }),
         });
 
@@ -176,6 +200,14 @@ export default function ShoppingListsPage() {
 
       const createData = await createResponse.json();
       
+      // Close modal and reset
+      setScreenshotModalOpen(false);
+      setModalSelectedApp("");
+      setSelectedCustomers([]);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = "";
+      }
+      
       if (createData.shoppingListId || createData._id) {
         router.push(`/shopping-lists/${createData.shoppingListId || createData._id}`);
       }
@@ -184,9 +216,6 @@ export default function ShoppingListsPage() {
     } finally {
       setUploading(false);
       setUploadProgress("");
-      if (fileInputRef.current) {
-        fileInputRef.current.value = "";
-      }
     }
   };
 
@@ -209,6 +238,15 @@ export default function ShoppingListsPage() {
   const handleUploadClick = () => {
     if (!selectedLocation) {
       setError("Please select a store location first");
+      return;
+    }
+    setScreenshotModalOpen(true);
+  };
+
+  const handleModalFileSelect = () => {
+    // Validate app selection before allowing file selection
+    if (!modalSelectedApp || modalSelectedApp.trim() === "") {
+      setError("Please select an app (Instacart or DoorDash) before selecting photos.");
       return;
     }
     fileInputRef.current?.click();
@@ -255,81 +293,25 @@ export default function ShoppingListsPage() {
           onLocationSelected={handleLocationSelected}
         />
 
-        {/* App Selector and Upload Button */}
-        <div className="space-y-3">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-              App
-            </label>
-            <div className="inline-flex rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 p-1 w-fit max-w-full overflow-hidden" role="group">
-              <input
-                type="radio"
-                name="app-selector"
-                id="app-instacart"
-                value="Instacart"
-                checked={selectedApp === "Instacart"}
-                onChange={(e) => setSelectedApp(e.target.value)}
-                className="hidden"
-              />
-              <label
-                htmlFor="app-instacart"
-                className={`px-3 sm:px-4 py-2 text-xs sm:text-sm font-medium rounded-md cursor-pointer transition-colors whitespace-nowrap ${
-                  selectedApp === "Instacart"
-                    ? "bg-green-600 text-white"
-                    : "text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
-                }`}
-              >
-                Instacart
-              </label>
-              
-              <input
-                type="radio"
-                name="app-selector"
-                id="app-doordash"
-                value="DoorDash"
-                checked={selectedApp === "DoorDash"}
-                onChange={(e) => setSelectedApp(e.target.value)}
-                className="hidden"
-              />
-              <label
-                htmlFor="app-doordash"
-                className={`px-3 sm:px-4 py-2 text-xs sm:text-sm font-medium rounded-md cursor-pointer transition-colors whitespace-nowrap ${
-                  selectedApp === "DoorDash"
-                    ? "bg-red-600 text-white"
-                    : "text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
-                }`}
-              >
-                DoorDash
-              </label>
-            </div>
-          </div>
-          <div className="flex gap-3">
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept="image/*"
-              multiple
-              onChange={handleFileSelect}
-              className="hidden"
-            />
-            <button
-              onClick={handleUploadClick}
-              disabled={uploading || !selectedLocation}
-              className="flex-1 px-4 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 text-sm sm:text-base"
-            >
-              {uploading ? (
-                <>
-                  <Loader2 className="w-5 h-5 animate-spin flex-shrink-0" />
-                  <span className="truncate">{uploadProgress || "Processing..."}</span>
-                </>
-              ) : (
-                <>
-                  <Upload className="w-5 h-5 flex-shrink-0" />
-                  <span className="truncate">Upload Screenshots (select multiple)</span>
-                </>
-              )}
-            </button>
-          </div>
+        {/* Upload Button */}
+        <div className="flex gap-3">
+          <button
+            onClick={handleUploadClick}
+            disabled={uploading || !selectedLocation}
+            className="flex-1 px-4 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 text-sm sm:text-base"
+          >
+            {uploading ? (
+              <>
+                <Loader2 className="w-5 h-5 animate-spin flex-shrink-0" />
+                <span className="truncate">{uploadProgress || "Processing..."}</span>
+              </>
+            ) : (
+              <>
+                <Upload className="w-5 h-5 flex-shrink-0" />
+                <span className="truncate">Upload Screenshots (select multiple)</span>
+              </>
+            )}
+          </button>
         </div>
 
         {error && (
@@ -386,6 +368,175 @@ export default function ShoppingListsPage() {
             })}
           </div>
         )}
+
+        {/* Screenshot Upload Modal */}
+        <Modal
+          isOpen={screenshotModalOpen}
+          onClose={() => {
+            setScreenshotModalOpen(false);
+            setModalSelectedApp("");
+            setSelectedCustomers([]);
+            setError(null);
+            if (fileInputRef.current) {
+              fileInputRef.current.value = "";
+            }
+          }}
+          title="Add Screenshot"
+        >
+          <div className="space-y-4">
+            {/* App Selector - Mandatory */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                App <span className="text-red-500">*</span>
+              </label>
+              <div className="flex gap-2">
+                <input
+                  type="radio"
+                  name="app-selector-modal"
+                  id="app-instacart-modal"
+                  value="Instacart"
+                  checked={modalSelectedApp === "Instacart"}
+                  onChange={(e) => {
+                    setModalSelectedApp(e.target.value);
+                    setError(null); // Clear error when app is selected
+                  }}
+                  className="hidden"
+                />
+                <label
+                  htmlFor="app-instacart-modal"
+                  className={`flex-1 px-4 py-2 text-sm font-medium rounded-lg cursor-pointer transition-colors text-center ${
+                    modalSelectedApp === "Instacart"
+                      ? "bg-green-600 text-white"
+                      : "bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600"
+                  }`}
+                >
+                  Instacart
+                </label>
+                
+                <input
+                  type="radio"
+                  name="app-selector-modal"
+                  id="app-doordash-modal"
+                  value="DoorDash"
+                  checked={modalSelectedApp === "DoorDash"}
+                  onChange={(e) => {
+                    setModalSelectedApp(e.target.value);
+                    setError(null); // Clear error when app is selected
+                  }}
+                  className="hidden"
+                />
+                <label
+                  htmlFor="app-doordash-modal"
+                  className={`flex-1 px-4 py-2 text-sm font-medium rounded-lg cursor-pointer transition-colors text-center ${
+                    modalSelectedApp === "DoorDash"
+                      ? "bg-red-600 text-white"
+                      : "bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600"
+                  }`}
+                >
+                  DoorDash
+                </label>
+              </div>
+            </div>
+
+            {/* Customer Selection - Mandatory */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                Customers <span className="text-red-500">*</span>
+              </label>
+              <div className="flex gap-2">
+                {["A", "B", "C", "D"].map((customer) => {
+                  const customerIndex = customer.charCodeAt(0) - 65; // A=0, B=1, C=2, D=3
+                  const isSelected = selectedCustomers.includes(customer);
+                  const shouldBeSelected = selectedCustomers.some(c => {
+                    const cIndex = c.charCodeAt(0) - 65;
+                    return cIndex >= customerIndex;
+                  });
+                  
+                  return (
+                    <button
+                      key={customer}
+                      type="button"
+                      onClick={() => {
+                        const customers = ["A", "B", "C", "D"];
+                        // Cascading selection: selecting D selects A,B,C,D, selecting B selects A,B, etc.
+                        const newSelection = customers.slice(0, customerIndex + 1);
+                        setSelectedCustomers(newSelection);
+                        setError(null); // Clear error when customer is selected
+                      }}
+                      className={`flex-1 px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
+                        isSelected
+                          ? "bg-blue-600 text-white"
+                          : "bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600"
+                      }`}
+                    >
+                      {customer}
+                    </button>
+                  );
+                })}
+              </div>
+              <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                {selectedCustomers.length === 0
+                  ? "Select which customers you have (selecting D selects A, B, C, and D)"
+                  : `Selected: ${selectedCustomers.join(", ")}`}
+              </p>
+            </div>
+
+            {/* File Input */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                Select Screenshots
+              </label>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                multiple
+                onChange={handleFileSelect}
+                disabled={uploading || !modalSelectedApp || selectedCustomers.length === 0}
+                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+              />
+              <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                {!modalSelectedApp 
+                  ? "Please select an app first" 
+                  : selectedCustomers.length === 0
+                  ? "Please select customers first"
+                  : "You can select multiple images at once"}
+              </p>
+            </div>
+
+            {error && (
+              <div className="p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
+                <p className="text-sm text-red-600 dark:text-red-400">{error}</p>
+              </div>
+            )}
+
+            {uploadProgress && (
+              <div className="p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
+                <div className="flex items-center gap-2">
+                  <Loader2 className="w-4 h-4 animate-spin text-blue-600 dark:text-blue-400" />
+                  <p className="text-sm text-blue-600 dark:text-blue-400">{uploadProgress}</p>
+                </div>
+              </div>
+            )}
+
+            <div className="flex gap-2 pt-2">
+              <button
+                onClick={() => {
+                  setScreenshotModalOpen(false);
+                  setModalSelectedApp("");
+                  setError(null);
+                  if (fileInputRef.current) {
+                    fileInputRef.current.value = "";
+                  }
+                }}
+                disabled={uploading}
+                className="flex-1 px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </Modal>
       </div>
     </Layout>
   );

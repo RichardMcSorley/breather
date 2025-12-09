@@ -14,7 +14,7 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { screenshot, locationId, app: selectedApp } = body;
+    const { screenshot, locationId, app: selectedApp, customers } = body;
 
     if (!screenshot) {
       return NextResponse.json(
@@ -31,7 +31,11 @@ export async function POST(request: NextRequest) {
     }
 
     // Extract products from screenshot using Gemini
-    const { products: extractedProducts, app } = await extractProductsFromScreenshot(screenshot);
+    // Pass customers array to guide Gemini on which customer tags to use
+    const { products: extractedProducts, app } = await extractProductsFromScreenshot(
+      screenshot,
+      customers // Array of customer letters (e.g., ["A"] or ["A", "B", "C", "D"])
+    );
 
     if (!extractedProducts || extractedProducts.length === 0) {
       return NextResponse.json({

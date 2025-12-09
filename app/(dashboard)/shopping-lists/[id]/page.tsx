@@ -910,6 +910,7 @@ function ScreenshotUploadModal({
   onItemsAdded: () => void;
 }) {
   const [selectedApp, setSelectedApp] = useState<string>("");
+  const [selectedCustomers, setSelectedCustomers] = useState<string[]>([]);
   const [uploading, setUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState<string>("");
   const [error, setError] = useState<string | null>(null);
@@ -918,6 +919,7 @@ function ScreenshotUploadModal({
   useEffect(() => {
     if (isOpen) {
       setSelectedApp("");
+      setSelectedCustomers([]);
       setUploading(false);
       setUploadProgress("");
       setError(null);
@@ -954,6 +956,12 @@ function ScreenshotUploadModal({
       return;
     }
 
+    // Validate customer selection is mandatory
+    if (selectedCustomers.length === 0) {
+      setError("Please select at least one customer (A, B, C, or D) before uploading screenshots.");
+      return;
+    }
+
     setUploading(true);
     setError(null);
     setUploadProgress(`Processing 1 of ${files.length} screenshots...`);
@@ -978,6 +986,7 @@ function ScreenshotUploadModal({
             screenshot: base64,
             locationId: locationId,
             app: selectedApp,
+            customers: selectedCustomers, // Pass selected customers to guide Gemini
           }),
         });
 
@@ -1077,6 +1086,45 @@ function ScreenshotUploadModal({
           </div>
         </div>
 
+        {/* Customer Selection - Mandatory */}
+        <div>
+          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+            Customers <span className="text-red-500">*</span>
+          </label>
+          <div className="flex gap-2">
+            {["A", "B", "C", "D"].map((customer) => {
+              const customerIndex = customer.charCodeAt(0) - 65; // A=0, B=1, C=2, D=3
+              const isSelected = selectedCustomers.includes(customer);
+              
+              return (
+                <button
+                  key={customer}
+                  type="button"
+                  onClick={() => {
+                    const customers = ["A", "B", "C", "D"];
+                    // Cascading selection: selecting D selects A,B,C,D, selecting B selects A,B, etc.
+                    const newSelection = customers.slice(0, customerIndex + 1);
+                    setSelectedCustomers(newSelection);
+                    setError(null); // Clear error when customer is selected
+                  }}
+                  className={`flex-1 px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
+                    isSelected
+                      ? "bg-blue-600 text-white"
+                      : "bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600"
+                  }`}
+                >
+                  {customer}
+                </button>
+              );
+            })}
+          </div>
+          <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+            {selectedCustomers.length === 0
+              ? "Select which customers you have (selecting D selects A, B, C, and D)"
+              : `Selected: ${selectedCustomers.join(", ")}`}
+          </p>
+        </div>
+
         {/* File Input */}
         <div>
           <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
@@ -1088,11 +1136,15 @@ function ScreenshotUploadModal({
             accept="image/*"
             multiple
             onChange={handleFileSelect}
-            disabled={uploading || !selectedApp}
+            disabled={uploading || !selectedApp || selectedCustomers.length === 0}
             className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
           />
           <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-            You can select multiple images at once
+            {!selectedApp 
+              ? "Please select an app first" 
+              : selectedCustomers.length === 0
+              ? "Please select customers first"
+              : "You can select multiple images at once"}
           </p>
         </div>
 

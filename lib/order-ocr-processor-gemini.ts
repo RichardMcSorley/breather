@@ -171,7 +171,7 @@ const SHOPPING_LIST_SCHEMA = {
 };
 
 // Get the appropriate prompt based on screenshot type - focused only on essential fields
-function getPromptForScreenshotType(type: ScreenshotType): string {
+function getPromptForScreenshotType(type: ScreenshotType, customers?: string[]): string {
   switch (type) {
     case "order":
       return `Extract from this delivery order offer screenshot:
@@ -212,12 +212,23 @@ Extract the customer name, full delivery address, delivery instructions, deliver
 Extract the customer name, pickup address, and restaurant name if shown.`;
 
     case "shopping-list":
+      const customerGuidance = customers && customers.length > 0
+        ? `\n\nCRITICAL CUSTOMER GUIDANCE:
+- The user has indicated they have the following customers: ${customers.join(", ")}
+- ${customers.length === 1 
+    ? `ALL products in this screenshot should be assigned to customer "${customers[0]}" since only one customer is active. Do NOT assign products to other customers (${["A", "B", "C", "D"].filter(c => !customers.includes(c)).join(", ")}).`
+    : `Products should ONLY be assigned to one of these customers: ${customers.join(", ")}. Do NOT assign products to customers not in this list (${["A", "B", "C", "D"].filter(c => !customers.includes(c)).join(", ")}).`
+  }
+- If you cannot clearly see a customer badge on a product, assign it to the first customer in the list (${customers[0]}) as a default.
+- Only extract customer badges that match the provided list.`
+        : "";
+
       return `Extract from this shopping list screenshot:
 - app: Determine which app this is based on the theme/background: "Instacart" if the screenshot has a light background/theme (white or light colors), "DoorDash" if it has a dark background/theme (black or dark colors)
 - products: Array of product objects, each with:
   - productName: The full product name as displayed (e.g., "Ensure® Max Protein Cafe Mocha Nutrition Shakes")
   - searchTerm: A simplified search term for finding the product - just the brand and main product type, remove extra descriptions like "Limited Edition", pack sizes, etc. (e.g., "Ensure Max Protein Mocha", "Dr Pepper Blackberry Zero Sugar", "Coca Cola Cherry Zero Sugar")
-  - customer: The customer letter badge (A, B, C) shown in a colored circle next to the product image. Look for small colored circles with letters. If no badge visible, set to null.
+  - customer: The customer letter badge (A, B, C, D) shown in a colored circle next to the product image. Look for small colored circles with letters. If no badge visible, set to null.
   - quantity: The quantity count shown before the product name (e.g., "1 ct", "2")
   - size: The size/volume info (e.g., "11 fl oz", "12 x 12 fl oz")
   - price: The price shown (e.g., "$13.49")
@@ -225,7 +236,7 @@ Extract the customer name, pickup address, and restaurant name if shown.`;
 
 IMPORTANT: 
 - First, determine the app by looking at the overall theme: light/white background = Instacart, dark/black background = DoorDash
-- Look carefully for customer badges - they are small colored circles (green for A, blue for B, orange for C) with a letter inside, usually positioned near the product image. Extract all products visible.`;
+- Look carefully for customer badges - they are small colored circles (green for A, blue for B, orange for C, purple for D) with a letter inside, usually positioned near the product image. Extract all products visible.${customerGuidance}`;
 
     default:
       throw new Error(`Unknown screenshot type: ${type}`);
@@ -253,7 +264,8 @@ function getSchemaForScreenshotType(type: ScreenshotType): any {
 export async function processOrderScreenshotGemini(
   screenshot: string,
   ocrText?: string,
-  screenshotType: ScreenshotType = "order"
+  screenshotType: ScreenshotType = "order",
+  customers?: string[]
 ): Promise<{
   miles: number;
   money: number;
@@ -292,7 +304,7 @@ export async function processOrderScreenshotGemini(
     const base64ImageData = imageBuffer.toString("base64");
 
     // Get type-specific prompt and schema
-    const prompt = getPromptForScreenshotType(screenshotType);
+    const prompt = getPromptForScreenshotType(screenshotType, customers);
     const schema = getSchemaForScreenshotType(screenshotType);
 
     // Prepare contents with image and prompt
@@ -410,9 +422,10 @@ export interface ExtractedProduct {
 }
 
 export async function extractProductsFromScreenshot(
-  screenshot: string
+  screenshot: string,
+  customers?: string[]
 ): Promise<{ products: ExtractedProduct[]; app?: string }> {
-  const result = await processOrderScreenshotGemini(screenshot, undefined, "shopping-list");
+  const result = await processOrderScreenshotGemini(screenshot, undefined, "shopping-list", customers);
   
   const extractedData = result.metadata?.extractedData || {};
   const products = extractedData.products || [];
