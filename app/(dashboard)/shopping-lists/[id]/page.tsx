@@ -1601,6 +1601,299 @@ function ProductDetailModal({
   );
 }
 
+// Customer Identification Modal Component
+function CustomerIdentificationModal({
+  isOpen,
+  onClose,
+  shoppingListId,
+  locationId,
+  onItemUpdated,
+}: {
+  isOpen: boolean;
+  onClose: () => void;
+  shoppingListId: string;
+  locationId: string;
+  onItemUpdated: () => void;
+}) {
+  const [searchTerm, setSearchTerm] = useState("");
+  const [searching, setSearching] = useState(false);
+  const [matchingItems, setMatchingItems] = useState<ShoppingListItem[]>([]);
+  const [scanning, setScanning] = useState(false);
+  const [scannedBarcode, setScannedBarcode] = useState<string>("");
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+  const codeReaderRef = useRef<BrowserMultiFormatReader | null>(null);
+
+  useEffect(() => {
+    if (!isOpen) {
+      setSearchTerm("");
+      setScanning(false);
+      setScannedBarcode("");
+      setMatchingItems([]);
+      // Cleanup video stream
+      if (videoRef.current?.srcObject) {
+        const stream = videoRef.current.srcObject as MediaStream;
+        stream.getTracks().forEach(track => track.stop());
+        videoRef.current.srcObject = null;
+      }
+      return;
+    }
+  }, [isOpen]);
+
+  // Start barcode scanner when scanning state becomes true
+  useEffect(() => {
+    if (!scanning || !isOpen) {
+      // Cleanup when stopping
+      if (videoRef.current?.srcObject) {
+        const stream = videoRef.current.srcObject as MediaStream;
+        stream.getTracks().forEach(track => track.stop());
+        videoRef.current.srcObject = null;
+      }
+      return;
+    }
+
+    const codeReader = new BrowserMultiFormatReader();
+    codeReaderRef.current = codeReader;
+
+    const videoElement = videoRef.current;
+    if (!videoElement) {
+      console.error("Video element not found");
+      setScanning(false);
+      return;
+    }
+
+    let isScanning = true;
+
+    // Start scanning
+    codeReader
+      .decodeFromVideoDevice(undefined, videoElement, (result, error) => {
+        if (result && isScanning) {
+          isScanning = false;
+          const scannedCode = result.getText();
+          setScannedBarcode(scannedCode);
+          
+          // Find matching items in the done list
+          fetch(`/api/shopping-lists/${shoppingListId}`)
+            .then(res => res.json())
+            .then(data => {
+              const doneItems = data.items.filter((item: ShoppingListItem) => item.done);
+              const matches = doneItems.filter((item: ShoppingListItem) => 
+                item.upc && barcodesMatch(scannedCode, item.upc)
+              );
+              setMatchingItems(matches);
+            })
+            .catch(console.error);
+
+          // Stop video stream
+          if (videoElement.srcObject) {
+            const stream = videoElement.srcObject as MediaStream;
+            stream.getTracks().forEach(track => track.stop());
+            videoElement.srcObject = null;
+          }
+          setScanning(false);
+        }
+        if (error && error.name !== "NotFoundException") {
+          console.error("Scan error:", error);
+        }
+      })
+      .catch((err) => {
+        console.error("Failed to start scanner:", err);
+        setScanning(false);
+      });
+
+    // Cleanup function
+    return () => {
+      isScanning = false;
+      if (videoElement.srcObject) {
+        const stream = videoElement.srcObject as MediaStream;
+        stream.getTracks().forEach(track => track.stop());
+        videoElement.srcObject = null;
+      }
+    };
+  }, [scanning, isOpen, shoppingListId]);
+
+  const handleSearch = async () => {
+    if (!searchTerm.trim() || searchTerm.trim().length < 3) {
+      return;
+    }
+
+    setSearching(true);
+    setMatchingItems([]);
+
+    try {
+      // Fetch the shopping list and filter done items
+      const response = await fetch(`/api/shopping-lists/${shoppingListId}`);
+      
+      if (!response.ok) {
+        throw new Error("Failed to load shopping list");
+      }
+
+      const data = await response.json();
+      const doneItems = data.items.filter((item: ShoppingListItem) => item.done);
+      
+      // Search through done items by product name, description, or UPC
+      const searchLower = searchTerm.toLowerCase().trim();
+      const matches = doneItems.filter((item: ShoppingListItem) => {
+        const productName = (item.productName || "").toLowerCase();
+        const description = (item.description || "").toLowerCase();
+        const upc = (item.upc || "").toLowerCase();
+        const searchTerm = (item.searchTerm || "").toLowerCase();
+        
+        return productName.includes(searchLower) ||
+               description.includes(searchLower) ||
+               upc.includes(searchLower) ||
+               searchTerm.includes(searchLower);
+      });
+      
+      setMatchingItems(matches);
+    } catch (err) {
+      console.error("Search error:", err);
+    } finally {
+      setSearching(false);
+    }
+  };
+
+  const handleBarcodeScan = () => {
+    setScannedBarcode("");
+    setMatchingItems([]);
+    setScanning(true);
+  };
+
+  const handleStopScan = () => {
+    setScanning(false);
+    if (videoRef.current?.srcObject) {
+      const stream = videoRef.current.srcObject as MediaStream;
+      stream.getTracks().forEach(track => track.stop());
+      videoRef.current.srcObject = null;
+    }
+  };
+
+
+
+  if (!isOpen) return null;
+
+  return (
+    <Modal isOpen={isOpen} onClose={onClose} title="Sorting Helper - Find Customer & App">
+      <div className="space-y-4">
+        {/* Search Section */}
+        <div>
+          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+            Search by Product Name or UPC
+          </label>
+          <div className="flex gap-2">
+            <input
+              type="text"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && handleSearch()}
+              placeholder="Enter product name or UPC..."
+              className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
+            />
+            <button
+              onClick={handleSearch}
+              disabled={searching || !searchTerm.trim()}
+              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+            >
+              {searching ? <Loader2 className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />}
+              Search
+            </button>
+          </div>
+        </div>
+
+        {/* Barcode Scan Section */}
+        <div>
+          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+            Or Scan Barcode
+          </label>
+          {!scanning ? (
+            <button
+              onClick={handleBarcodeScan}
+              className="w-full px-4 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 flex items-center justify-center gap-2"
+            >
+              <Scan className="w-5 h-5" />
+              Start Barcode Scan
+            </button>
+          ) : (
+            <div className="space-y-2">
+              <div className="relative">
+                <video
+                  ref={videoRef}
+                  className="w-full rounded-lg border-2 border-gray-300 dark:border-gray-600"
+                  style={{ aspectRatio: "4/3" }}
+                  muted
+                  playsInline
+                />
+                <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                  <div className="border-2 border-green-500 rounded-lg w-3/4 h-1/2" />
+                </div>
+              </div>
+              <button
+                onClick={handleStopScan}
+                className="w-full px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700"
+              >
+                Stop Scanning
+              </button>
+              {scannedBarcode && (
+                <p className="text-sm text-gray-600 dark:text-gray-400">
+                  Scanned: {scannedBarcode}
+                </p>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* Matching Items - Read-only display */}
+        {matchingItems.length > 0 && (
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+              Matching Items ({matchingItems.length})
+            </label>
+            <div className="space-y-2">
+              {matchingItems.map((item, idx) => {
+                const customer = item.customer || "A";
+                const customerBgColor = customerColors[customer] || customerColors.A;
+                const appColor = getAppTagColorForBadge(item.app);
+                return (
+                  <div
+                    key={idx}
+                    className="w-full p-4 rounded-lg border-2 border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50"
+                  >
+                    <p className="font-medium text-gray-900 dark:text-white mb-2">
+                      {item.description || item.productName}
+                    </p>
+                    {item.upc && (
+                      <p className="text-sm text-gray-500 dark:text-gray-400 mb-2">UPC: {item.upc}</p>
+                    )}
+                    <div className="flex items-center gap-3 mt-3">
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Customer:</span>
+                        <span className={`px-3 py-1 rounded-full text-white text-sm font-bold ${customerBgColor}`}>
+                          {customer}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm font-medium text-gray-700 dark:text-gray-300">App:</span>
+                        <span className={`px-3 py-1 rounded text-white text-sm font-semibold ${appColor.bg} ${appColor.text}`}>
+                          {item.app || "?"}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {matchingItems.length === 0 && (searchTerm || scannedBarcode) && !searching && (
+          <div className="text-center py-4 text-gray-500 dark:text-gray-400">
+            <p>No matching items found in done list</p>
+          </div>
+        )}
+      </div>
+    </Modal>
+  );
+}
+
 // Barcode Scanner Component
 function BarcodeScanner({
   isOpen,
@@ -1896,6 +2189,7 @@ export default function ShoppingListDetailPage() {
   const [activeTab, setActiveTab] = useState<"todo" | "problem" | "done">("todo");
   const [scanningItem, setScanningItem] = useState<ShoppingListItem | null>(null);
   const [scanResult, setScanResult] = useState<{ success: boolean; item: ShoppingListItem; scannedBarcode?: string } | null>(null);
+  const [customerIdentificationOpen, setCustomerIdentificationOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const hasAutoRefreshedRef = useRef(false);
 
@@ -2454,6 +2748,19 @@ export default function ShoppingListDetailPage() {
           </div>
         </div>
 
+        {/* Customer Identification Button - Only show on Done tab */}
+        {activeTab === "done" && shoppingList.items.filter(item => item.done).length > 0 && (
+          <div className="mb-4">
+            <button
+              onClick={() => setCustomerIdentificationOpen(true)}
+              className="w-full px-4 py-3 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors flex items-center justify-center gap-2 text-sm font-medium"
+            >
+              <Search className="w-4 h-4" />
+              Identify Customer for Item
+            </button>
+          </div>
+        )}
+
         {error && (
           <div className="mb-4 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
             <p className="text-sm text-red-600 dark:text-red-400">{error}</p>
@@ -2762,6 +3069,17 @@ export default function ShoppingListDetailPage() {
           scannedBarcode={scanResult.scannedBarcode}
           onForceDone={() => handleForceMarkDone(scanResult.item)}
           onConfirmQuantity={() => handleConfirmQuantity(scanResult.item)}
+        />
+      )}
+
+      {/* Customer Identification Modal */}
+      {shoppingList && (
+        <CustomerIdentificationModal
+          isOpen={customerIdentificationOpen}
+          onClose={() => setCustomerIdentificationOpen(false)}
+          shoppingListId={shoppingList._id}
+          locationId={shoppingList.locationId}
+          onItemUpdated={fetchShoppingList}
         />
       )}
     </Layout>
