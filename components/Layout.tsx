@@ -4,7 +4,7 @@ import { useSession, signOut } from "next-auth/react";
 import { usePathname, useRouter } from "next/navigation";
 import Link from "next/link";
 import { ReactNode, useState } from "react";
-import { BarChart3, Clock, FileText, Car, Menu, Settings, Eye, EyeOff } from "lucide-react";
+import { BarChart3, Clock, FileText, Car, Menu, Settings, Eye, EyeOff, ShoppingCart } from "lucide-react";
 import OfflineIndicator from "./OfflineIndicator";
 import ToastContainer from "./ui/Toast";
 import HamburgerMenu from "./HamburgerMenu";
@@ -26,6 +26,7 @@ export default function Layout({ children }: LayoutProps) {
     { href: "/history", label: "Logs", icon: Clock },
     { href: "/bills", label: "Bills", icon: FileText },
     { href: "/mileage", label: "Mileage", icon: Car },
+    { href: "/shopping-lists", label: "Kroger", icon: ShoppingCart },
   ];
 
   return (
@@ -97,7 +98,8 @@ export default function Layout({ children }: LayoutProps) {
       >
         <div className="flex justify-around items-center px-2 py-2" style={{ paddingBottom: `max(0.125rem, calc(env(safe-area-inset-bottom) * 0.3))` }}>
           {navItems.map((item) => {
-            const isActive = pathname === item.href;
+            // For shopping-lists, also match detail pages
+            const isActive = pathname === item.href || (item.href === "/shopping-lists" && pathname?.startsWith("/shopping-lists"));
             return (
               <Link
                 key={item.href}

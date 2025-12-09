@@ -122,3 +122,4 @@ export interface KrogerSearchParams {
   start?: number;
   limit?: number;
 }
+
