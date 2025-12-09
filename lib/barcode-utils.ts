@@ -42,8 +42,7 @@ export function normalizeBarcode(raw: string): string {
   if (digits.length === 13 && digits.startsWith("00")) {
     const body11 = digits.slice(-11); // last 11 digits are the body
     const cd = upcCheckDigit(body11);
-    digits = "0" + body11 + cd; // build proper 12-digit UPC-A
-    return digits;
+    return body11 + cd; // → 12-digit UPC-A
   }
 
   // Case 2: proper EAN-13 that is just '0' + UPC-A
