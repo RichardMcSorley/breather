@@ -86,137 +86,6 @@ const getAppTagColorForBadge = (appName?: string) => {
 };
 
 // Swipeable Item Component
-function SwipeableItem({
-  item,
-  originalIndex,
-  onTap,
-  onEdit,
-  onDelete,
-  children,
-}: {
-  item: ShoppingListItem;
-  originalIndex: number;
-  onTap: () => void;
-  onEdit: () => void;
-  onDelete: () => void;
-  children: React.ReactNode;
-}) {
-  const [swipeOffset, setSwipeOffset] = useState(0);
-  const [touchStart, setTouchStart] = useState<number | null>(null);
-  const [touchEnd, setTouchEnd] = useState<number | null>(null);
-  const [isDragging, setIsDragging] = useState(false);
-  const minSwipeDistance = 50;
-  const maxSwipeDistance = 120;
-
-  const onTouchStart = (e: React.TouchEvent) => {
-    setTouchEnd(null);
-    setTouchStart(e.targetTouches[0].clientX);
-    setIsDragging(true);
-  };
-
-  const onTouchMove = (e: React.TouchEvent) => {
-    if (touchStart === null) return;
-    const currentX = e.targetTouches[0].clientX;
-    setTouchEnd(currentX);
-    
-    const distance = touchStart - currentX;
-    // Limit swipe distance
-    const limitedDistance = Math.max(-maxSwipeDistance, Math.min(maxSwipeDistance, distance));
-    setSwipeOffset(limitedDistance);
-  };
-
-  const onTouchEnd = () => {
-    if (touchStart === null || touchEnd === null) {
-      setIsDragging(false);
-      setSwipeOffset(0);
-      return;
-    }
-    
-    const distance = touchStart - touchEnd;
-    const isLeftSwipe = distance > minSwipeDistance;
-    const isRightSwipe = distance < -minSwipeDistance;
-
-    if (isLeftSwipe) {
-      // Swipe left = delete
-      setSwipeOffset(-maxSwipeDistance);
-      setTimeout(() => {
-        onDelete();
-        setSwipeOffset(0);
-        setIsDragging(false);
-      }, 300);
-    } else if (isRightSwipe) {
-      // Swipe right = edit
-      setSwipeOffset(maxSwipeDistance);
-      setTimeout(() => {
-        onEdit();
-        setSwipeOffset(0);
-        setIsDragging(false);
-      }, 300);
-    } else {
-      // Small movement = tap
-      if (Math.abs(distance) < 10) {
-        onTap();
-      }
-      setSwipeOffset(0);
-      setIsDragging(false);
-    }
-
-    setTouchStart(null);
-    setTouchEnd(null);
-  };
-
-  const handleClick = (e: React.MouseEvent) => {
-    // Only trigger tap if not dragging
-    if (!isDragging && swipeOffset === 0) {
-      onTap();
-    }
-  };
-
-  // Calculate which action is visible based on swipe direction
-  const showEditAction = swipeOffset > 0;
-  const showDeleteAction = swipeOffset < 0;
-
-  return (
-    <div className="relative overflow-hidden rounded-lg mb-2">
-      {/* Action Buttons Background */}
-      <div className="absolute inset-0 flex pointer-events-none">
-        {/* Edit Action (Right side - shows when swiping right) */}
-        <div 
-          className={`flex-1 bg-blue-600 dark:bg-blue-700 flex items-center justify-end pr-4 transition-opacity duration-200 ${
-            showEditAction ? "opacity-100" : "opacity-0"
-          }`}
-        >
-          <Edit className="w-5 h-5 text-white" />
-          <span className="ml-2 text-white text-sm font-medium">Edit</span>
-        </div>
-        {/* Delete Action (Left side - shows when swiping left) */}
-        <div 
-          className={`flex-1 bg-red-600 dark:bg-red-700 flex items-center justify-start pl-4 transition-opacity duration-200 ${
-            showDeleteAction ? "opacity-100" : "opacity-0"
-          }`}
-        >
-          <Trash2 className="w-5 h-5 text-white" />
-          <span className="ml-2 text-white text-sm font-medium">Delete</span>
-        </div>
-      </div>
-
-      {/* Main Content */}
-      <div
-        className="relative bg-white dark:bg-gray-800 transition-transform duration-200 ease-out cursor-pointer"
-        style={{
-          transform: `translateX(${swipeOffset}px)`,
-        }}
-        onTouchStart={onTouchStart}
-        onTouchMove={onTouchMove}
-        onTouchEnd={onTouchEnd}
-        onClick={handleClick}
-      >
-        {children}
-      </div>
-    </div>
-  );
-}
-
 function CustomerBadge({ customer, app }: { customer?: string; app?: string }) {
   if (!customer) return null;
   const bgColor = customerColors[customer] || "bg-gray-500";
@@ -1336,11 +1205,15 @@ function ProductDetailModal({
   locationId,
   isOpen,
   onClose,
+  onEdit,
+  onDelete,
 }: {
   item: ShoppingListItem;
   locationId: string;
   isOpen: boolean;
   onClose: () => void;
+  onEdit?: () => void;
+  onDelete?: () => void;
 }) {
   const [productDetails, setProductDetails] = useState<KrogerProduct | null>(null);
   const [loading, setLoading] = useState(false);
@@ -1382,8 +1255,13 @@ function ProductDetailModal({
     : stockLevel === "TEMPORARILY_OUT_OF_STOCK" ? "text-red-600 dark:text-red-400"
     : "";
 
-  // Get best image
+  // Get best image - prioritize item.imageUrl (same as shown in list), then fall back to product images
   const getImageUrl = () => {
+    // First, use the image from the item (same as shown in the todo list)
+    if (item.imageUrl) {
+      return item.imageUrl;
+    }
+    // Fall back to product images if item doesn't have one
     if (product?.images && product.images.length > 0) {
       const defaultImg = product.images.find(img => img.default) || product.images[0];
       const sizes = ["xlarge", "large", "medium", "small"];
@@ -1393,7 +1271,7 @@ function ProductDetailModal({
       }
       return defaultImg?.sizes?.[0]?.url;
     }
-    return item.imageUrl;
+    return null;
   };
 
   const imageUrl = getImageUrl();
@@ -1486,20 +1364,24 @@ function ProductDetailModal({
           </div>
         ) : (
           <>
-            {/* Image */}
+            {/* Image with Customer Badge and App Tag */}
             <div className="flex justify-center">
               {imageUrl ? (
-                <div className="relative w-48 h-48 bg-white rounded-lg overflow-hidden">
-                  <Image
-                    src={imageUrl}
-                    alt={item.description || item.productName}
-                    fill
-                    className="object-contain p-2"
-                    unoptimized
-                  />
+                <div className="relative w-48 h-48 bg-white rounded-lg overflow-visible">
+                  <CustomerBadge customer={item.customer} app={item.app} />
+                  <div className="relative w-full h-full overflow-hidden rounded-lg">
+                    <Image
+                      src={imageUrl}
+                      alt={item.description || item.productName}
+                      fill
+                      className="object-contain p-2"
+                      unoptimized
+                    />
+                  </div>
                 </div>
               ) : (
-                <div className="w-48 h-48 bg-gray-100 dark:bg-gray-700 rounded-lg flex items-center justify-center">
+                <div className="relative w-48 h-48 bg-gray-100 dark:bg-gray-700 rounded-lg flex items-center justify-center overflow-visible">
+                  <CustomerBadge customer={item.customer} app={item.app} />
                   <ShoppingCart className="w-12 h-12 text-gray-400" />
                 </div>
               )}
@@ -1614,6 +1496,36 @@ function ProductDetailModal({
                 View on Kroger
               </a>
             )}
+
+            {/* Edit and Delete Buttons */}
+            <div className="flex gap-2 pt-2">
+              {onEdit && (
+                <button
+                  onClick={() => {
+                    onEdit();
+                    onClose();
+                  }}
+                  className="flex-1 px-4 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center justify-center gap-2"
+                >
+                  <Edit className="w-5 h-5" />
+                  Edit
+                </button>
+              )}
+              {onDelete && (
+                <button
+                  onClick={() => {
+                    if (confirm("Delete this item?")) {
+                      onDelete();
+                      onClose();
+                    }
+                  }}
+                  className="flex-1 px-4 py-3 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors flex items-center justify-center gap-2"
+                >
+                  <Trash2 className="w-5 h-5" />
+                  Delete
+                </button>
+              )}
+            </div>
           </>
         )}
       </div>
@@ -1751,12 +1663,14 @@ function ScanResultModal({
   success,
   item,
   scannedBarcode,
+  onForceDone,
 }: {
   isOpen: boolean;
   onClose: () => void;
   success: boolean;
   item: ShoppingListItem;
   scannedBarcode?: string;
+  onForceDone?: () => void;
 }) {
   const customer = item.customer || "A";
   const app = item.app || "";
@@ -1835,13 +1749,26 @@ function ScanResultModal({
             )}
           </div>
 
-          {/* OK Button */}
-          <button
-            onClick={onClose}
-            className="w-full px-6 py-4 bg-white/20 backdrop-blur-sm rounded-lg border-2 border-white/30 hover:bg-white/30 transition-colors font-semibold text-lg"
-          >
-            OK
-          </button>
+          {/* Action Buttons */}
+          <div className="flex gap-3">
+            {!success && onForceDone && (
+              <button
+                onClick={() => {
+                  onForceDone();
+                  onClose();
+                }}
+                className="flex-1 px-6 py-4 bg-white/30 backdrop-blur-sm rounded-lg border-2 border-white/40 hover:bg-white/40 transition-colors font-semibold text-lg"
+              >
+                Mark as Done
+              </button>
+            )}
+            <button
+              onClick={onClose}
+              className={`px-6 py-4 bg-white/20 backdrop-blur-sm rounded-lg border-2 border-white/30 hover:bg-white/30 transition-colors font-semibold text-lg ${!success && onForceDone ? "flex-1" : "w-full"}`}
+            >
+              {success ? "OK" : "Try Again"}
+            </button>
+          </div>
         </div>
       </div>
     </div>
@@ -2051,7 +1978,43 @@ export default function ShoppingListDetailPage() {
     const scannedNormalized = normalizeUPC(scannedCode);
     const expectedNormalized = scanningItem.upc ? normalizeUPC(scanningItem.upc) : "";
 
-    const success = Boolean(expectedNormalized && scannedNormalized === expectedNormalized);
+    if (!expectedNormalized) {
+      // No expected UPC to compare against
+      setScanResult({
+        success: false,
+        item: scanningItem,
+        scannedBarcode: scannedCode,
+      });
+      setScanningItem(null);
+      return;
+    }
+
+    // Compare barcodes, handling leading zeros
+    // UPC codes can be stored with or without leading zeros
+    // We'll try multiple comparison strategies
+    
+    // Strategy 1: Exact match
+    const exactMatch = scannedNormalized === expectedNormalized;
+    
+    // Strategy 2: Pad both to the same length (max length) and compare
+    const maxLength = Math.max(scannedNormalized.length, expectedNormalized.length);
+    const scannedPadded = scannedNormalized.padStart(maxLength, "0");
+    const expectedPadded = expectedNormalized.padStart(maxLength, "0");
+    const paddedMatch = scannedPadded === expectedPadded;
+    
+    // Strategy 3: Compare the significant digits (remove leading zeros from both)
+    const scannedTrimmed = scannedNormalized.replace(/^0+/, "") || "0";
+    const expectedTrimmed = expectedNormalized.replace(/^0+/, "") || "0";
+    const trimmedMatch = scannedTrimmed === expectedTrimmed;
+    
+    // Strategy 4: Compare last N digits where N is the length of the shorter code
+    // This handles cases where one has leading zeros and the other doesn't
+    const minLength = Math.min(scannedNormalized.length, expectedNormalized.length);
+    const scannedLastN = scannedNormalized.slice(-minLength);
+    const expectedLastN = expectedNormalized.slice(-minLength);
+    const lastNMatch = scannedLastN === expectedLastN;
+    
+    const success = exactMatch || paddedMatch || trimmedMatch || lastNMatch;
 
     // Close scanner
     setScanningItem(null);
@@ -2090,7 +2053,41 @@ export default function ShoppingListDetailPage() {
   };
 
   const handleScanResultClose = () => {
+    // Capture the result before clearing it
+    const result = scanResult;
     setScanResult(null);
+    
+    // If it was an error, reopen the scanner to try again
+    if (result && !result.success) {
+      setScanningItem(result.item);
+    }
+  };
+
+  const handleForceMarkDone = async (item: ShoppingListItem) => {
+    try {
+      const response = await fetch(`/api/shopping-lists/${id}/items`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          itemIndex: shoppingList?.items.findIndex(i => i === item) ?? -1,
+          item: {
+            ...item,
+            done: true,
+          },
+        }),
+      });
+
+      if (response.ok) {
+        await fetchShoppingList();
+      } else {
+        setError("Failed to mark item as done");
+      }
+    } catch (err) {
+      console.error("Failed to mark item as done:", err);
+      setError("Failed to mark item as done");
+    }
   };
 
   if (loading) {
@@ -2340,46 +2337,51 @@ export default function ShoppingListDetailPage() {
                 // Use the tracked original index from the grouped items
                 const originalIndex = group.originalIndices[index];
 
+                const handleItemClick = () => {
+                  if (item.found) {
+                    setSelectedItem(item);
+                  } else if (originalIndex >= 0) {
+                    setSearchItem({ item, index: originalIndex });
+                  }
+                };
+
+                const handleEdit = () => {
+                  if (originalIndex >= 0) {
+                    setEditItem({ item, index: originalIndex });
+                  }
+                };
+
+                const handleDelete = async () => {
+                  if (originalIndex >= 0) {
+                    try {
+                      const response = await fetch(`/api/shopping-lists/${id}/items`, {
+                        method: "DELETE",
+                        headers: {
+                          "Content-Type": "application/json",
+                        },
+                        body: JSON.stringify({ itemIndex: originalIndex }),
+                      });
+
+                      if (!response.ok) {
+                        throw new Error("Failed to delete item");
+                      }
+
+                      await fetchShoppingList();
+                    } catch (err) {
+                      setError(err instanceof Error ? err.message : "Failed to delete item");
+                    }
+                  }
+                };
+
                 return (
-                  <SwipeableItem
+                  <div
                     key={`${groupIndex}-${index}`}
-                    item={item}
-                    originalIndex={originalIndex}
-                    onTap={() => {
-                      if (item.found) {
-                        setSelectedItem(item);
-                      } else if (originalIndex >= 0) {
-                        setSearchItem({ item, index: originalIndex });
-                      }
-                    }}
-                    onEdit={() => {
-                      if (originalIndex >= 0) {
-                        setEditItem({ item, index: originalIndex });
-                      }
-                    }}
-                    onDelete={async () => {
-                      if (originalIndex >= 0 && confirm("Delete this item?")) {
-                        try {
-                          const response = await fetch(`/api/shopping-lists/${id}/items`, {
-                            method: "DELETE",
-                            headers: {
-                              "Content-Type": "application/json",
-                            },
-                            body: JSON.stringify({ itemIndex: originalIndex }),
-                          });
-
-                          if (!response.ok) {
-                            throw new Error("Failed to delete item");
-                          }
-
-                          await fetchShoppingList();
-                        } catch (err) {
-                          setError(err instanceof Error ? err.message : "Failed to delete item");
-                        }
-                      }
-                    }}
+                    className="mb-2 rounded-lg overflow-hidden"
                   >
-                    <div className="flex gap-4 py-3 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-800/50 rounded-lg transition-colors">
+                    <div 
+                      className="flex gap-4 py-3 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-800/50 rounded-lg transition-colors cursor-pointer"
+                      onClick={handleItemClick}
+                    >
                     {/* Product Image with Customer Badge */}
                     <div className="relative flex-shrink-0">
                       <CustomerBadge customer={item.customer} app={item.app} />
@@ -2487,7 +2489,7 @@ export default function ShoppingListDetailPage() {
                       </div>
                     </div>
                     </div>
-                  </SwipeableItem>
+                  </div>
                 );
               })}
             </div>
@@ -2497,14 +2499,45 @@ export default function ShoppingListDetailPage() {
       </div>
 
       {/* Product Detail Modal */}
-      {selectedItem && (
-        <ProductDetailModal
-          item={selectedItem}
-          locationId={shoppingList.locationId}
-          isOpen={!!selectedItem}
-          onClose={() => setSelectedItem(null)}
-        />
-      )}
+      {selectedItem && (() => {
+        const itemIndex = shoppingList?.items.findIndex(i => i === selectedItem) ?? -1;
+        return (
+          <ProductDetailModal
+            item={selectedItem}
+            locationId={shoppingList.locationId}
+            isOpen={!!selectedItem}
+            onClose={() => setSelectedItem(null)}
+            onEdit={() => {
+              if (itemIndex >= 0) {
+                setEditItem({ item: selectedItem, index: itemIndex });
+                setSelectedItem(null);
+              }
+            }}
+            onDelete={async () => {
+              if (itemIndex >= 0) {
+                try {
+                  const response = await fetch(`/api/shopping-lists/${id}/items`, {
+                    method: "DELETE",
+                    headers: {
+                      "Content-Type": "application/json",
+                    },
+                    body: JSON.stringify({ itemIndex }),
+                  });
+
+                  if (!response.ok) {
+                    throw new Error("Failed to delete item");
+                  }
+
+                  await fetchShoppingList();
+                  setSelectedItem(null);
+                } catch (err) {
+                  setError(err instanceof Error ? err.message : "Failed to delete item");
+                }
+              }
+            }}
+          />
+        );
+      })()}
 
       {/* Search Product Modal for unfound items */}
       {searchItem && (
@@ -2559,6 +2592,7 @@ export default function ShoppingListDetailPage() {
           success={scanResult.success}
           item={scanResult.item}
           scannedBarcode={scanResult.scannedBarcode}
+          onForceDone={() => handleForceMarkDone(scanResult.item)}
         />
       )}
     </Layout>
