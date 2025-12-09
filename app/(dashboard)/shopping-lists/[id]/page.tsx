@@ -5,7 +5,7 @@ import { useParams } from "next/navigation";
 import Layout from "@/components/Layout";
 import Image from "next/image";
 import Modal from "@/components/ui/Modal";
-import { ShoppingCart, ExternalLink, Barcode, Loader2, Search, Check, Upload, Plus, Edit, Trash2, Scan, X } from "lucide-react";
+import { ShoppingCart, ExternalLink, Barcode, Loader2, Search, Check, Upload, Plus, Edit, Trash2, Scan, X, AlertTriangle } from "lucide-react";
 import { KrogerProduct } from "@/lib/types/kroger";
 import { BrowserMultiFormatReader } from "@zxing/browser";
 import { barcodesMatch } from "@/lib/barcode-utils";
@@ -51,6 +51,7 @@ interface ShoppingListItem {
   categories?: string[];
   found: boolean;
   done?: boolean;
+  problem?: boolean;
 }
 
 interface ShoppingList {
@@ -1211,6 +1212,7 @@ function ProductDetailModal({
   onClose,
   onEdit,
   onDelete,
+  onMoveToProblem,
 }: {
   item: ShoppingListItem;
   locationId: string;
@@ -1218,6 +1220,7 @@ function ProductDetailModal({
   onClose: () => void;
   onEdit?: () => void;
   onDelete?: () => void;
+  onMoveToProblem?: () => void;
 }) {
   const [productDetails, setProductDetails] = useState<KrogerProduct | null>(null);
   const [loading, setLoading] = useState(false);
@@ -1509,7 +1512,7 @@ function ProductDetailModal({
               </a>
             )}
 
-            {/* Edit and Delete Buttons */}
+            {/* Edit, Move to Problem, and Delete Buttons */}
             <div className="flex gap-2 pt-2">
               {onEdit && (
                 <button
@@ -1521,6 +1524,18 @@ function ProductDetailModal({
                 >
                   <Edit className="w-5 h-5" />
                   Edit
+                </button>
+              )}
+              {onMoveToProblem && !item.problem && (
+                <button
+                  onClick={() => {
+                    onMoveToProblem();
+                    onClose();
+                  }}
+                  className="flex-1 px-4 py-3 bg-orange-600 text-white rounded-lg hover:bg-orange-700 transition-colors flex items-center justify-center gap-2"
+                >
+                  <AlertTriangle className="w-5 h-5" />
+                  Issue
                 </button>
               )}
               {onDelete && (
@@ -1824,7 +1839,7 @@ export default function ShoppingListDetailPage() {
   const [uploading, setUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState<string>("");
   const [selectedApp, setSelectedApp] = useState<string>("Instacart");
-  const [activeTab, setActiveTab] = useState<"todo" | "done">("todo");
+  const [activeTab, setActiveTab] = useState<"todo" | "problem" | "done">("todo");
   const [scanningItem, setScanningItem] = useState<ShoppingListItem | null>(null);
   const [scanResult, setScanResult] = useState<{ success: boolean; item: ShoppingListItem; scannedBarcode?: string } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -2075,6 +2090,34 @@ export default function ShoppingListDetailPage() {
     }
   };
 
+  const handleMoveToProblem = async (item: ShoppingListItem) => {
+    try {
+      const response = await fetch(`/api/shopping-lists/${id}/items`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          itemIndex: shoppingList?.items.findIndex(i => i === item) ?? -1,
+          item: {
+            ...item,
+            problem: true,
+            done: false, // Ensure it's not marked as done when moved to problem
+          },
+        }),
+      });
+
+      if (response.ok) {
+        await fetchShoppingList();
+      } else {
+        setError("Failed to move item to problem");
+      }
+    } catch (err) {
+      console.error("Failed to move item to problem:", err);
+      setError("Failed to move item to problem");
+    }
+  };
+
   const handleConfirmQuantity = async (item: ShoppingListItem) => {
     try {
       const response = await fetch(`/api/shopping-lists/${id}/items`, {
@@ -2207,14 +2250,22 @@ export default function ShoppingListDetailPage() {
     });
   }
 
-  // Filter items by done status based on active tab
+  // Filter items by status based on active tab
   const filteredGroupedItems = groupedItems.map(group => ({
     ...group,
-    items: group.items.filter(item => 
-      activeTab === "todo" ? !item.done : item.done
-    ),
+    items: group.items.filter(item => {
+      if (activeTab === "todo") return !item.done && !item.problem;
+      if (activeTab === "problem") return item.problem;
+      if (activeTab === "done") return item.done;
+      return false;
+    }),
     originalIndices: group.items
-      .map((item, idx) => item.done === (activeTab === "done") ? group.originalIndices[idx] : -1)
+      .map((item, idx) => {
+        if (activeTab === "todo" && !item.done && !item.problem) return group.originalIndices[idx];
+        if (activeTab === "problem" && item.problem) return group.originalIndices[idx];
+        if (activeTab === "done" && item.done) return group.originalIndices[idx];
+        return -1;
+      })
       .filter(idx => idx !== -1)
   })).filter(group => group.items.length > 0);
 
@@ -2223,7 +2274,7 @@ export default function ShoppingListDetailPage() {
       <div className="max-w-2xl mx-auto px-4">
         {/* Header */}
         <div className="mb-4">
-          {/* Todo/Done Tabs */}
+          {/* Todo/Problem/Done Tabs */}
           <div className="mb-4 flex gap-2 border-b border-gray-200 dark:border-gray-700">
             <button
               onClick={() => setActiveTab("todo")}
@@ -2233,7 +2284,17 @@ export default function ShoppingListDetailPage() {
                   : "text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300"
               }`}
             >
-              Todo ({shoppingList.items.filter(item => !item.done).length})
+              Todo ({shoppingList.items.filter(item => !item.done && !item.problem).length})
+            </button>
+            <button
+              onClick={() => setActiveTab("problem")}
+              className={`px-4 py-2 font-medium text-sm transition-colors ${
+                activeTab === "problem"
+                  ? "text-orange-600 dark:text-orange-400 border-b-2 border-orange-600 dark:border-orange-400"
+                  : "text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300"
+              }`}
+            >
+              Problem ({shoppingList.items.filter(item => item.problem).length})
             </button>
             <button
               onClick={() => setActiveTab("done")}
@@ -2349,7 +2410,7 @@ export default function ShoppingListDetailPage() {
         <div>
           {filteredGroupedItems.length === 0 ? (
             <div className="text-center py-12 text-gray-500 dark:text-gray-400">
-              <p>No {activeTab === "todo" ? "todo" : "completed"} items</p>
+              <p>No {activeTab === "todo" ? "todo" : activeTab === "problem" ? "problem" : "completed"} items</p>
             </div>
           ) : (
             filteredGroupedItems.map((group, groupIndex) => (
@@ -2556,6 +2617,12 @@ export default function ShoppingListDetailPage() {
             onEdit={() => {
               if (itemIndex >= 0) {
                 setEditItem({ item: selectedItem, index: itemIndex });
+                setSelectedItem(null);
+              }
+            }}
+            onMoveToProblem={async () => {
+              if (itemIndex >= 0) {
+                await handleMoveToProblem(selectedItem);
                 setSelectedItem(null);
               }
             }}

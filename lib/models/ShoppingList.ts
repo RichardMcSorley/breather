@@ -42,6 +42,7 @@ export interface IShoppingListItem {
   categories?: string[];
   found: boolean; // Whether Kroger search found a match
   done?: boolean; // Whether item has been scanned and completed
+  problem?: boolean; // Whether item has a problem and needs attention
 }
 
 export interface IShoppingList extends Document {
@@ -104,6 +105,10 @@ const ShoppingListItemSchema = new Schema({
     default: false,
   },
   done: {
+    type: Boolean,
+    default: false,
+  },
+  problem: {
     type: Boolean,
     default: false,
   },
