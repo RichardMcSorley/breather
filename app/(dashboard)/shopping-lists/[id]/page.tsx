@@ -895,6 +895,236 @@ function EditItemModal({
   );
 }
 
+// Screenshot Upload Modal Component
+function ScreenshotUploadModal({
+  locationId,
+  shoppingListId,
+  isOpen,
+  onClose,
+  onItemsAdded,
+}: {
+  locationId: string;
+  shoppingListId: string;
+  isOpen: boolean;
+  onClose: () => void;
+  onItemsAdded: () => void;
+}) {
+  const [selectedApp, setSelectedApp] = useState<string>("");
+  const [uploading, setUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState<string>("");
+  const [error, setError] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (isOpen) {
+      setSelectedApp("");
+      setUploading(false);
+      setUploadProgress("");
+      setError(null);
+      // Reset file input
+      if (fileInputRef.current) {
+        fileInputRef.current.value = "";
+      }
+    }
+  }, [isOpen]);
+
+  const readFileAsBase64 = (file: File): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        const result = event.target?.result as string;
+        if (result) {
+          resolve(result);
+        } else {
+          reject(new Error("Failed to read file"));
+        }
+      };
+      reader.onerror = () => reject(new Error("Failed to read file"));
+      reader.readAsDataURL(file);
+    });
+  };
+
+  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+
+    // Validate app selection is mandatory
+    if (!selectedApp || selectedApp.trim() === "") {
+      setError("Please select an app (Instacart or DoorDash) before uploading screenshots.");
+      return;
+    }
+
+    setUploading(true);
+    setError(null);
+    setUploadProgress(`Processing 1 of ${files.length} screenshots...`);
+
+    try {
+      // Process screenshots one at a time to avoid payload size limits
+      const allItems: any[] = [];
+      
+      for (let i = 0; i < files.length; i++) {
+        setUploadProgress(`Processing ${i + 1} of ${files.length} screenshots...`);
+        
+        // Convert file to base64
+        const base64 = await readFileAsBase64(files[i]);
+        
+        // Process single screenshot
+        const response = await fetch("/api/shopping-lists/process-screenshot", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            screenshot: base64,
+            locationId: locationId,
+            app: selectedApp,
+          }),
+        });
+
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({ error: "Failed to process screenshot" }));
+          throw new Error(errorData.error || `Failed to process screenshot ${i + 1}`);
+        }
+
+        const data = await response.json();
+        if (data.items && data.items.length > 0) {
+          allItems.push(...data.items);
+        }
+      }
+
+      if (allItems.length === 0) {
+        setError("No products found in any of the screenshots");
+        return;
+      }
+
+      setUploadProgress("Adding items to shopping list...");
+
+      // Add items to existing shopping list
+      const addResponse = await fetch(`/api/shopping-lists/${shoppingListId}/items`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          items: allItems,
+        }),
+      });
+
+      if (!addResponse.ok) {
+        const errorData = await addResponse.json().catch(() => ({ error: "Failed to add items" }));
+        throw new Error(errorData.error || "Failed to add items");
+      }
+
+      // Success - close modal and refresh
+      onItemsAdded();
+      onClose();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to process screenshots");
+    } finally {
+      setUploading(false);
+      setUploadProgress("");
+    }
+  };
+
+  return (
+    <Modal isOpen={isOpen} onClose={onClose} title="Add Screenshot">
+      <div className="space-y-4">
+        {/* App Selector - Mandatory */}
+        <div>
+          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+            App <span className="text-red-500">*</span>
+          </label>
+          <div className="flex gap-2">
+            <input
+              type="radio"
+              name="app-selector-screenshot"
+              id="app-instacart-screenshot"
+              value="Instacart"
+              checked={selectedApp === "Instacart"}
+              onChange={(e) => setSelectedApp(e.target.value)}
+              className="hidden"
+            />
+            <label
+              htmlFor="app-instacart-screenshot"
+              className={`flex-1 px-4 py-2 text-sm font-medium rounded-lg cursor-pointer transition-colors text-center ${
+                selectedApp === "Instacart"
+                  ? "bg-green-600 text-white"
+                  : "bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600"
+              }`}
+            >
+              Instacart
+            </label>
+            
+            <input
+              type="radio"
+              name="app-selector-screenshot"
+              id="app-doordash-screenshot"
+              value="DoorDash"
+              checked={selectedApp === "DoorDash"}
+              onChange={(e) => setSelectedApp(e.target.value)}
+              className="hidden"
+            />
+            <label
+              htmlFor="app-doordash-screenshot"
+              className={`flex-1 px-4 py-2 text-sm font-medium rounded-lg cursor-pointer transition-colors text-center ${
+                selectedApp === "DoorDash"
+                  ? "bg-red-600 text-white"
+                  : "bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600"
+              }`}
+            >
+              DoorDash
+            </label>
+          </div>
+        </div>
+
+        {/* File Input */}
+        <div>
+          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+            Select Screenshots
+          </label>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/*"
+            multiple
+            onChange={handleFileSelect}
+            disabled={uploading || !selectedApp}
+            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+          />
+          <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+            You can select multiple images at once
+          </p>
+        </div>
+
+        {error && (
+          <div className="p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
+            <p className="text-sm text-red-600 dark:text-red-400">{error}</p>
+          </div>
+        )}
+
+        {uploadProgress && (
+          <div className="p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
+            <div className="flex items-center gap-2">
+              <Loader2 className="w-4 h-4 animate-spin text-blue-600 dark:text-blue-400" />
+              <p className="text-sm text-blue-600 dark:text-blue-400">{uploadProgress}</p>
+            </div>
+          </div>
+        )}
+
+        <div className="flex gap-2 pt-2">
+          <button
+            onClick={onClose}
+            disabled={uploading}
+            className="flex-1 px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            Cancel
+          </button>
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
 // Manual Entry Modal Component
 function ManualEntryModal({
   locationId,
@@ -902,14 +1132,12 @@ function ManualEntryModal({
   isOpen,
   onClose,
   onItemAdded,
-  selectedApp,
 }: {
   locationId: string;
   shoppingListId: string;
   isOpen: boolean;
   onClose: () => void;
   onItemAdded: () => void;
-  selectedApp: string;
 }) {
   const [productName, setProductName] = useState("");
   const [searching, setSearching] = useState(false);
@@ -919,6 +1147,7 @@ function ManualEntryModal({
   const [searchError, setSearchError] = useState<string | null>(null);
   const [customer, setCustomer] = useState("A");
   const [quantity, setQuantity] = useState("1");
+  const [selectedApp, setSelectedApp] = useState<string>("");
 
   useEffect(() => {
     if (isOpen) {
@@ -928,6 +1157,7 @@ function ManualEntryModal({
       setSearchError(null);
       setCustomer("A");
       setQuantity("1");
+      setSelectedApp(""); // Reset app selection - user must select
     }
   }, [isOpen]);
 
@@ -1020,7 +1250,7 @@ function ManualEntryModal({
         productName: selectedProduct.description || productName,
         customer: customer,
         quantity: quantity,
-        app: selectedApp || undefined,
+        app: selectedApp,
         productId: selectedProduct.productId,
         upc: selectedProduct.upc || krogerItem?.itemId,
         brand: selectedProduct.brand,
@@ -1082,6 +1312,54 @@ function ManualEntryModal({
   return (
     <Modal isOpen={isOpen} onClose={onClose} title="Add Product Manually">
       <div className="space-y-4">
+        {/* App Selector - Mandatory */}
+        <div>
+          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+            App <span className="text-red-500">*</span>
+          </label>
+          <div className="flex gap-2">
+            <input
+              type="radio"
+              name="app-selector-manual"
+              id="app-instacart-manual"
+              value="Instacart"
+              checked={selectedApp === "Instacart"}
+              onChange={(e) => setSelectedApp(e.target.value)}
+              className="hidden"
+            />
+            <label
+              htmlFor="app-instacart-manual"
+              className={`flex-1 px-4 py-2 text-sm font-medium rounded-lg cursor-pointer transition-colors text-center ${
+                selectedApp === "Instacart"
+                  ? "bg-green-600 text-white"
+                  : "bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600"
+              }`}
+            >
+              Instacart
+            </label>
+            
+            <input
+              type="radio"
+              name="app-selector-manual"
+              id="app-doordash-manual"
+              value="DoorDash"
+              checked={selectedApp === "DoorDash"}
+              onChange={(e) => setSelectedApp(e.target.value)}
+              className="hidden"
+            />
+            <label
+              htmlFor="app-doordash-manual"
+              className={`flex-1 px-4 py-2 text-sm font-medium rounded-lg cursor-pointer transition-colors text-center ${
+                selectedApp === "DoorDash"
+                  ? "bg-red-600 text-white"
+                  : "bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600"
+              }`}
+            >
+              DoorDash
+            </label>
+          </div>
+        </div>
+
         {/* Product Name Input */}
         <div>
           <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
@@ -2330,14 +2608,11 @@ export default function ShoppingListDetailPage() {
   const [searchItem, setSearchItem] = useState<{ item: ShoppingListItem; index: number } | null>(null);
   const [editItem, setEditItem] = useState<{ item: ShoppingListItem; index: number } | null>(null);
   const [manualEntryOpen, setManualEntryOpen] = useState(false);
-  const [uploading, setUploading] = useState(false);
-  const [uploadProgress, setUploadProgress] = useState<string>("");
-  const [selectedApp, setSelectedApp] = useState<string>("Instacart");
+  const [screenshotUploadOpen, setScreenshotUploadOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<"todo" | "problem" | "done">("todo");
   const [scanningItem, setScanningItem] = useState<ShoppingListItem | null>(null);
   const [scanResult, setScanResult] = useState<{ success: boolean; item: ShoppingListItem; scannedBarcode?: string } | null>(null);
   const [customerIdentificationOpen, setCustomerIdentificationOpen] = useState(false);
-  const fileInputRef = useRef<HTMLInputElement>(null);
   const hasAutoRefreshedRef = useRef(false);
 
   const fetchShoppingList = async () => {
@@ -2411,103 +2686,11 @@ export default function ShoppingListDetailPage() {
     return `$${price.toFixed(2)}`;
   };
 
-  const readFileAsBase64 = (file: File): Promise<string> => {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = (event) => {
-        const result = event.target?.result as string;
-        if (result) {
-          resolve(result);
-        } else {
-          reject(new Error("Failed to read file"));
-        }
-      };
-      reader.onerror = () => reject(new Error("Failed to read file"));
-      reader.readAsDataURL(file);
-    });
-  };
-
-  const handleScreenshotUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = e.target.files;
-    if (!files || files.length === 0) return;
-
-    if (!shoppingList) return;
-
-    setUploading(true);
-    setError(null);
-    setUploadProgress(`Processing 1 of ${files.length} screenshots...`);
-
-    try {
-      // Process screenshots one at a time to avoid payload size limits
-      const allItems: any[] = [];
-      
-      for (let i = 0; i < files.length; i++) {
-        setUploadProgress(`Processing ${i + 1} of ${files.length} screenshots...`);
-        
-        // Convert file to base64
-        const base64 = await readFileAsBase64(files[i]);
-        
-        // Process single screenshot
-        const response = await fetch("/api/shopping-lists/process-screenshot", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            screenshot: base64,
-            locationId: shoppingList.locationId,
-            app: selectedApp || undefined,
-          }),
-        });
-
-        if (!response.ok) {
-          const errorData = await response.json().catch(() => ({ error: "Failed to process screenshot" }));
-          throw new Error(errorData.error || `Failed to process screenshot ${i + 1}`);
-        }
-
-        const data = await response.json();
-        if (data.items && data.items.length > 0) {
-          allItems.push(...data.items);
-        }
-      }
-
-      if (allItems.length === 0) {
-        setError("No products found in any of the screenshots");
-        return;
-      }
-
-      setUploadProgress("Adding items to shopping list...");
-
-      // Add items to existing shopping list
-      const addResponse = await fetch(`/api/shopping-lists/${id}/items`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          items: allItems,
-        }),
-      });
-
-      if (!addResponse.ok) {
-        const errorData = await addResponse.json().catch(() => ({ error: "Failed to add items" }));
-        throw new Error(errorData.error || "Failed to add items");
-      }
-
-      // Reload the shopping list
-      await fetchShoppingList();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to process screenshots");
-    } finally {
-      setUploading(false);
-      setUploadProgress("");
-      if (fileInputRef.current) {
-        fileInputRef.current.value = "";
-      }
-    }
-  };
-
   const handleManualEntryAdded = async () => {
+    await fetchShoppingList();
+  };
+
+  const handleScreenshotItemsAdded = async () => {
     await fetchShoppingList();
   };
 
@@ -2871,82 +3054,23 @@ export default function ShoppingListDetailPage() {
                     Updating...
                   </span>
                 )}
-                {uploading && (
-                  <span className="ml-2 inline-flex items-center gap-1">
-                    <Loader2 className="w-3 h-3 animate-spin" />
-                    <span>{uploadProgress || "Processing..."}</span>
-                  </span>
-                )}
               </p>
             </div>
-            <div className="flex flex-col gap-2 w-full sm:w-auto">
-              <div className="inline-flex rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 p-1 w-fit" role="group">
-                <input
-                  type="radio"
-                  name="app-selector-detail"
-                  id="app-instacart-detail"
-                  value="Instacart"
-                  checked={selectedApp === "Instacart"}
-                  onChange={(e) => setSelectedApp(e.target.value)}
-                  className="hidden"
-                />
-                <label
-                  htmlFor="app-instacart-detail"
-                  className={`px-3 py-1.5 text-xs font-medium rounded-md cursor-pointer transition-colors whitespace-nowrap ${
-                    selectedApp === "Instacart"
-                      ? "bg-green-600 text-white"
-                      : "text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
-                  }`}
-                >
-                  Instacart
-                </label>
-                
-                <input
-                  type="radio"
-                  name="app-selector-detail"
-                  id="app-doordash-detail"
-                  value="DoorDash"
-                  checked={selectedApp === "DoorDash"}
-                  onChange={(e) => setSelectedApp(e.target.value)}
-                  className="hidden"
-                />
-                <label
-                  htmlFor="app-doordash-detail"
-                  className={`px-3 py-1.5 text-xs font-medium rounded-md cursor-pointer transition-colors whitespace-nowrap ${
-                    selectedApp === "DoorDash"
-                      ? "bg-red-600 text-white"
-                      : "text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
-                  }`}
-                >
-                  DoorDash
-                </label>
-              </div>
-              <div className="flex gap-2 w-full sm:w-auto">
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept="image/*"
-                  multiple
-                  onChange={handleScreenshotUpload}
-                  className="hidden"
-                />
-                <button
-                  onClick={() => fileInputRef.current?.click()}
-                  disabled={uploading}
-                  className="flex-1 sm:flex-initial px-4 py-2 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 text-sm whitespace-nowrap"
-                >
-                  <Upload className="w-4 h-4 flex-shrink-0" />
-                  <span className="truncate">Add Screenshot</span>
-                </button>
-                <button
-                  onClick={() => setManualEntryOpen(true)}
-                  disabled={uploading}
-                  className="flex-1 sm:flex-initial px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 text-sm whitespace-nowrap"
-                >
-                  <Plus className="w-4 h-4 flex-shrink-0" />
-                  <span className="truncate">Add Manually</span>
-                </button>
-              </div>
+            <div className="flex gap-2 w-full sm:w-auto">
+              <button
+                onClick={() => setScreenshotUploadOpen(true)}
+                className="flex-1 sm:flex-initial px-4 py-2 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 flex items-center justify-center gap-2 text-sm whitespace-nowrap"
+              >
+                <Upload className="w-4 h-4 flex-shrink-0" />
+                <span className="truncate">Add Screenshot</span>
+              </button>
+              <button
+                onClick={() => setManualEntryOpen(true)}
+                className="flex-1 sm:flex-initial px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center justify-center gap-2 text-sm whitespace-nowrap"
+              >
+                <Plus className="w-4 h-4 flex-shrink-0" />
+                <span className="truncate">Add Manually</span>
+              </button>
             </div>
           </div>
         </div>
@@ -3241,6 +3365,15 @@ export default function ShoppingListDetailPage() {
         />
       )}
 
+      {/* Screenshot Upload Modal */}
+      <ScreenshotUploadModal
+        locationId={shoppingList.locationId}
+        shoppingListId={shoppingList._id}
+        isOpen={screenshotUploadOpen}
+        onClose={() => setScreenshotUploadOpen(false)}
+        onItemsAdded={handleScreenshotItemsAdded}
+      />
+
       {/* Manual Entry Modal */}
       <ManualEntryModal
         locationId={shoppingList.locationId}
@@ -3248,7 +3381,6 @@ export default function ShoppingListDetailPage() {
         isOpen={manualEntryOpen}
         onClose={() => setManualEntryOpen(false)}
         onItemAdded={handleManualEntryAdded}
-        selectedApp={selectedApp}
       />
 
       {/* Edit Item Modal */}

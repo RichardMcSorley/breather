@@ -40,14 +40,54 @@ export async function POST(
       );
     }
 
-    // Add new items to the existing list
-    shoppingList.items.push(...(items as IShoppingListItem[]));
+    // Filter out duplicates: same productId, customer, and app
+    // First, remove duplicates within the new items batch
+    const seenInBatch = new Set<string>();
+    const uniqueNewItems = (items as IShoppingListItem[]).filter((newItem) => {
+      // Only check for duplicates if productId exists
+      if (!newItem.productId) {
+        return true; // Allow items without productId
+      }
+
+      // Create a unique key: productId + customer + app
+      const key = `${newItem.productId}|${newItem.customer || ""}|${newItem.app || ""}`;
+      
+      if (seenInBatch.has(key)) {
+        return false; // Duplicate within batch
+      }
+      
+      seenInBatch.add(key);
+      return true;
+    });
+
+    // Then, filter out items that already exist in the shopping list
+    const newItems = uniqueNewItems.filter((newItem) => {
+      // Only check for duplicates if productId exists
+      if (!newItem.productId) {
+        return true; // Allow items without productId
+      }
+
+      // Check if a duplicate exists in the existing list
+      const isDuplicate = shoppingList.items.some((existingItem) => {
+        return (
+          existingItem.productId === newItem.productId &&
+          existingItem.customer === newItem.customer &&
+          existingItem.app === newItem.app
+        );
+      });
+
+      return !isDuplicate;
+    });
+
+    // Add new items to the existing list (only non-duplicates)
+    shoppingList.items.push(...newItems);
     await shoppingList.save();
 
     return NextResponse.json({
       success: true,
       itemCount: shoppingList.items.length,
-      addedCount: items.length,
+      addedCount: newItems.length,
+      skippedCount: items.length - newItems.length,
     });
   } catch (error) {
     return handleApiError(error);
