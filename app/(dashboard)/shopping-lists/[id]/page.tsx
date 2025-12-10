@@ -124,9 +124,9 @@ interface ShoppingList {
 
 // Customer badge colors matching Instacart
 const customerColors: Record<string, string> = {
-  A: "bg-green-500",
+  A: "bg-orange-500",
   B: "bg-blue-500",
-  C: "bg-orange-500",
+  C: "bg-green-500",
   D: "bg-purple-500",
   E: "bg-pink-500",
 };
@@ -2917,9 +2917,9 @@ function ScanResultModal({
   
   // Get customer color
   const customerColorMap: Record<string, { bg: string; text: string; border: string }> = {
-    A: { bg: "bg-green-500", text: "text-white", border: "border-green-600" },
+    A: { bg: "bg-orange-500", text: "text-white", border: "border-orange-600" },
     B: { bg: "bg-blue-500", text: "text-white", border: "border-blue-600" },
-    C: { bg: "bg-orange-500", text: "text-white", border: "border-orange-600" },
+    C: { bg: "bg-green-500", text: "text-white", border: "border-green-600" },
     D: { bg: "bg-purple-500", text: "text-white", border: "border-purple-600" },
     E: { bg: "bg-pink-500", text: "text-white", border: "border-pink-600" },
   };

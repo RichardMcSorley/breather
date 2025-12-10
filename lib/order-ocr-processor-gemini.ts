@@ -232,7 +232,7 @@ Extract the customer name, pickup address, and restaurant name if shown.`;
 
 IMPORTANT: 
 - First, determine the app by looking at the overall theme: light/white background = Instacart, dark/black background = DoorDash
-- Look carefully for customer badges - they are small colored circles (green for A, blue for B, orange for C, purple for D) with a letter inside, usually positioned near the product image. Extract all products visible.${customerGuidance}`;
+- Look carefully for customer badges - they are small colored circles (orange for A, blue for B, green for C, purple for D) with a letter inside, usually positioned near the product image. Extract all products visible.${customerGuidance}`;
 
     default:
       throw new Error(`Unknown screenshot type: ${type}`);
