@@ -164,23 +164,16 @@ export default function ShoppingListsPage() {
         return;
       }
 
-      // Collect all items and screenshots
+      // Collect all items (items already have screenshotId from processScreenshots)
       const allItems: any[] = [];
-      const screenshotsToSave: Array<{ id: string; base64: string; app?: string; customers?: string[] }> = [];
-      
       for (const screenshotInfo of screenshotData) {
         allItems.push(...screenshotInfo.items);
-        screenshotsToSave.push({
-          id: screenshotInfo.screenshotId,
-          base64: screenshotInfo.screenshot,
-          app: modalSelectedApp,
-          customers: selectedCustomers,
-        });
       }
 
       setUploadProgress("Creating shopping list...");
 
-      // Create shopping list with all accumulated items and screenshots
+      // Create shopping list with items only (no screenshots to avoid payload size issues)
+      // Screenshots will be added separately below
       const createResponse = await fetch("/api/shopping-lists/create", {
         method: "POST",
         headers: {
@@ -190,7 +183,7 @@ export default function ShoppingListsPage() {
           name: `Shopping List - ${new Date().toLocaleDateString()}`,
           locationId: selectedLocation.locationId,
           items: allItems,
-          screenshots: screenshotsToSave,
+          // Don't send screenshots here - we'll add them separately to avoid 413 errors
         }),
       });
 
@@ -204,6 +197,40 @@ export default function ShoppingListsPage() {
 
       if (!shoppingListId) {
         throw new Error("Failed to get shopping list ID after creation");
+      }
+
+      // Add screenshots separately to avoid payload size issues
+      // The items endpoint will add the screenshot data but skip duplicate items
+      setUploadProgress(`Adding ${screenshotData.length} screenshot(s)...`);
+      for (let i = 0; i < screenshotData.length; i++) {
+        const screenshotInfo = screenshotData[i];
+        setUploadProgress(`Adding screenshot ${i + 1} of ${screenshotData.length}...`);
+        
+        // Group items by screenshotId
+        const itemsForScreenshot = allItems.filter(
+          item => item.screenshotId === screenshotInfo.screenshotId
+        );
+
+        // Add screenshot using the existing endpoint
+        // Duplicate items will be skipped, but screenshot will be added
+        const addResponse = await fetch(`/api/shopping-lists/${shoppingListId}/items`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            items: itemsForScreenshot,
+            screenshotId: screenshotInfo.screenshotId,
+            screenshot: screenshotInfo.screenshot,
+            app: modalSelectedApp,
+            customers: selectedCustomers,
+          }),
+        });
+
+        if (!addResponse.ok) {
+          const errorData = await addResponse.json().catch(() => ({ error: "Failed to add screenshot" }));
+          throw new Error(errorData.error || `Failed to add screenshot ${i + 1}`);
+        }
       }
 
       console.log("🚀 Starting moondream cropping process...", {
