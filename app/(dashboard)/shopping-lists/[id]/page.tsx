@@ -2,10 +2,12 @@
 
 import { useState, useEffect, useRef } from "react";
 import { useParams } from "next/navigation";
+import { useSession } from "next-auth/react";
 import Layout from "@/components/Layout";
 import Image from "next/image";
 import Modal from "@/components/ui/Modal";
-import { ShoppingCart, ExternalLink, Barcode, Loader2, Search, Check, Upload, Plus, Edit, Trash2, Scan, X, AlertTriangle, Code, Share2 } from "lucide-react";
+import { ShoppingCart, ExternalLink, Barcode, Loader2, Search, Check, Upload, Plus, Edit, Trash2, Scan, X, AlertTriangle, Code, Share2, ArrowRight, ChevronDown, ChevronUp, FileImage, Eye, EyeOff } from "lucide-react";
+import { useScreenshotProcessing } from "@/hooks/useScreenshotProcessing";
 import JsonViewerModal from "@/components/JsonViewer";
 import { KrogerProduct } from "@/lib/types/kroger";
 import { BrowserMultiFormatReader } from "@zxing/browser";
@@ -78,6 +80,8 @@ interface ShoppingListItem {
   app?: string; // "Instacart" or "DoorDash"
   quantity?: string;
   aisleLocation?: string;
+  screenshotId?: string; // Reference to the screenshot this item came from
+  croppedImage?: string; // Base64 cropped image from moondream detection
   productId?: string;
   upc?: string;
   brand?: string;
@@ -96,13 +100,25 @@ interface ShoppingListItem {
   problem?: boolean;
 }
 
+interface ShoppingListScreenshot {
+  id: string;
+  base64: string;
+  uploadedAt: string;
+  app?: string;
+  customers?: string[];
+}
+
 interface ShoppingList {
   _id: string;
   name: string;
   locationId: string;
   items: ShoppingListItem[];
+  screenshots?: ShoppingListScreenshot[];
   sharedWith?: string[];
   sharedItemIndices?: number[];
+  sharedItems?: { [userId: string]: number[] } | Map<string, number[]>; // Map of userId to item indices
+  originalIndicesMap?: number[]; // Map from filtered index to original index (for shared users)
+  isShared?: boolean;
   createdAt: string;
 }
 
@@ -129,6 +145,54 @@ const getAppTagColorForBadge = (appName?: string) => {
   if (appName === "Instacart") return { bg: "bg-green-700 dark:bg-green-800", text: "text-white dark:text-white" };
   if (appName === "DoorDash") return { bg: "bg-red-700 dark:bg-red-800", text: "text-white dark:text-white" };
   return { bg: "bg-gray-800 dark:bg-gray-700", text: "text-gray-300 dark:text-gray-300" };
+};
+
+// Generate a consistent color for a user based on their ID
+const getUserColor = (userId: string): string => {
+  // Hash the userId to get a consistent number
+  let hash = 0;
+  for (let i = 0; i < userId.length; i++) {
+    hash = userId.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  
+  // Use a palette of distinct colors
+  const colors = [
+    "bg-blue-500",
+    "bg-green-500",
+    "bg-purple-500",
+    "bg-pink-500",
+    "bg-indigo-500",
+    "bg-yellow-500",
+    "bg-red-500",
+    "bg-teal-500",
+    "bg-orange-500",
+    "bg-cyan-500",
+    "bg-rose-500",
+    "bg-violet-500",
+    "bg-amber-500",
+    "bg-emerald-500",
+    "bg-sky-500",
+    "bg-fuchsia-500",
+  ];
+  
+  // Use absolute value of hash to get index
+  const index = Math.abs(hash) % colors.length;
+  return colors[index];
+};
+
+// Get user initials: first letter of first name and first letter of last name
+const getUserInitials = (name: string | undefined, email: string | undefined, fallback: string): string => {
+  if (name) {
+    const parts = name.trim().split(/\s+/);
+    if (parts.length >= 2) {
+      return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+    }
+    return name.charAt(0).toUpperCase();
+  }
+  if (email) {
+    return email.charAt(0).toUpperCase();
+  }
+  return fallback.charAt(0).toUpperCase();
 };
 
 // Swipeable Item Component
@@ -504,6 +568,7 @@ function EditItemModal({
   isOpen,
   onClose,
   onItemUpdated,
+  shoppingList,
 }: {
   item: ShoppingListItem;
   itemIndex: number;
@@ -512,17 +577,19 @@ function EditItemModal({
   isOpen: boolean;
   onClose: () => void;
   onItemUpdated: () => void;
+  shoppingList?: ShoppingList | null;
 }) {
   const [customer, setCustomer] = useState(item.customer || "A");
   const [quantity, setQuantity] = useState(item.quantity || "1");
   const [app, setApp] = useState(item.app || "");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [productName, setProductName] = useState("");
+  const [productName, setProductName] = useState(item.searchTerm || item.productName || "");
   const [searching, setSearching] = useState(false);
   const [searchResults, setSearchResults] = useState<KrogerProduct[]>([]);
   const [selectedProduct, setSelectedProduct] = useState<KrogerProduct | null>(null);
   const [searchError, setSearchError] = useState<string | null>(null);
+  const [showOriginalScreenshot, setShowOriginalScreenshot] = useState(false);
 
   useEffect(() => {
     if (isOpen) {
@@ -530,10 +597,13 @@ function EditItemModal({
       setQuantity(item.quantity || "1");
       setApp(item.app || "");
       setError(null);
-      setProductName("");
+      // Prefill with searchTerm (original Gemini response) if available, otherwise use productName
+      setProductName(item.searchTerm || item.productName || "");
       setSearchResults([]);
       setSelectedProduct(null);
       setSearchError(null);
+      // Hide original screenshot by default if cropped image exists
+      setShowOriginalScreenshot(false);
     }
   }, [isOpen, item]);
 
@@ -639,11 +709,16 @@ function EditItemModal({
         })) || [];
 
         updatedItem = {
-          searchTerm: productName,
+          // Preserve original Gemini data
+          searchTerm: item.searchTerm || productName, // Keep original searchTerm from Gemini
           productName: selectedProduct.description || productName,
           customer: customer,
-          quantity: quantity,
-          app: app || undefined,
+          quantity: quantity || item.quantity, // Preserve original quantity if not changed
+          app: app || item.app || undefined,
+          // Preserve screenshot and cropped image data
+          screenshotId: item.screenshotId, // Preserve screenshot reference
+          croppedImage: item.croppedImage, // Preserve cropped image
+          // New Kroger product data
           productId: selectedProduct.productId,
           upc: selectedProduct.upc || krogerItem?.itemId,
           brand: selectedProduct.brand,
@@ -690,9 +765,92 @@ function EditItemModal({
     }
   };
 
+  // Find screenshot if item has screenshotId
+  const screenshot = item.screenshotId && shoppingList?.screenshots 
+    ? shoppingList.screenshots.find(s => s.id === item.screenshotId)
+    : null;
+
+  // Determine which image to show by default
+  const hasCroppedImage = !!item.croppedImage;
+  const hasOriginalScreenshot = !!screenshot;
+
   return (
     <Modal isOpen={isOpen} onClose={onClose} title="Edit Item">
       <div className="space-y-4">
+        {/* Screenshot Reference */}
+        {(screenshot || item.croppedImage) && (
+          <div className="space-y-3">
+            {/* Cropped Product Image - Show by default if exists */}
+            {item.croppedImage && (
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  Cropped Product Image
+                </label>
+                <div className="border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden bg-gray-50 dark:bg-gray-900">
+                  <div className="relative inline-block w-full">
+                    <img 
+                      src={item.croppedImage} 
+                      alt="Cropped product" 
+                      className="max-w-full h-auto max-h-64 mx-auto block"
+                    />
+                    {/* Cropped button in bottom left */}
+                    <button
+                      className="absolute bottom-2 left-2 px-2 py-1 text-xs font-medium bg-green-600 text-white rounded hover:bg-green-700 transition-colors shadow-md"
+                      title="This is a cropped product image"
+                    >
+                      Cropped
+                    </button>
+                  </div>
+                </div>
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                  Product detected and cropped from screenshot
+                </p>
+              </div>
+            )}
+            
+            {/* Original Screenshot Reference - Show if no cropped, or if toggled on */}
+            {screenshot && (!hasCroppedImage || showOriginalScreenshot) && (
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  {item.croppedImage ? "Original Screenshot Reference" : "Screenshot Reference"}
+                </label>
+                <div className="border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden bg-gray-50 dark:bg-gray-900">
+                  <img 
+                    src={screenshot.base64} 
+                    alt="Original screenshot" 
+                    className="max-w-full h-auto max-h-64 mx-auto block"
+                  />
+                </div>
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                  {item.croppedImage 
+                    ? "Full screenshot for context" 
+                    : "Use this screenshot to verify the correct product name and quantity"}
+                </p>
+              </div>
+            )}
+
+            {/* Toggle button to show/hide original screenshot (only if cropped exists) */}
+            {hasCroppedImage && hasOriginalScreenshot && (
+              <button
+                onClick={() => setShowOriginalScreenshot(!showOriginalScreenshot)}
+                className="w-full px-3 py-2 text-sm text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-lg transition-colors flex items-center justify-center gap-2"
+              >
+                {showOriginalScreenshot ? (
+                  <>
+                    <ChevronUp className="w-4 h-4" />
+                    Hide Original Screenshot
+                  </>
+                ) : (
+                  <>
+                    <ChevronDown className="w-4 h-4" />
+                    Show Original Screenshot
+                  </>
+                )}
+              </button>
+            )}
+          </div>
+        )}
+
         {/* Current Product Name */}
         <div>
           <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
@@ -788,11 +946,18 @@ function EditItemModal({
                         {product.brand && (
                           <p className="text-xs text-gray-500 dark:text-gray-400">{product.brand}</p>
                         )}
-                        {product.items?.[0]?.price?.regular && (
-                          <p className="text-sm font-semibold text-gray-900 dark:text-white mt-1">
-                            ${product.items[0].price.regular.toFixed(2)}
-                          </p>
-                        )}
+                        <div className="flex items-center gap-2 mt-1 flex-wrap">
+                          {product.items?.[0]?.size && (
+                            <p className="text-xs text-gray-600 dark:text-gray-400">
+                              {product.items[0].size}
+                            </p>
+                          )}
+                          {product.items?.[0]?.price?.regular && (
+                            <p className="text-sm font-semibold text-gray-900 dark:text-white">
+                              ${product.items[0].price.regular.toFixed(2)}
+                            </p>
+                          )}
+                        </div>
                       </div>
                       {isSelected && (
                         <Check className="w-5 h-5 text-blue-600 dark:text-blue-400 flex-shrink-0" />
@@ -914,10 +1079,25 @@ function ScreenshotUploadModal({
 }) {
   const [selectedApp, setSelectedApp] = useState<string>("");
   const [selectedCustomers, setSelectedCustomers] = useState<string[]>([]);
-  const [uploading, setUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState<string>("");
   const [error, setError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Use shared screenshot processing hook
+  const {
+    uploading,
+    setUploading,
+    processingComplete,
+    setProcessingComplete,
+    processScreenshots,
+    cropItems,
+  } = useScreenshotProcessing({
+    locationId,
+    selectedApp,
+    selectedCustomers,
+    onProgress: setUploadProgress,
+    onError: setError,
+  });
 
   useEffect(() => {
     if (isOpen) {
@@ -926,28 +1106,13 @@ function ScreenshotUploadModal({
       setUploading(false);
       setUploadProgress("");
       setError(null);
+      setProcessingComplete(false);
       // Reset file input
       if (fileInputRef.current) {
         fileInputRef.current.value = "";
       }
     }
-  }, [isOpen]);
-
-  const readFileAsBase64 = (file: File): Promise<string> => {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = (event) => {
-        const result = event.target?.result as string;
-        if (result) {
-          resolve(result);
-        } else {
-          reject(new Error("Failed to read file"));
-        }
-      };
-      reader.onerror = () => reject(new Error("Failed to read file"));
-      reader.readAsDataURL(file);
-    });
-  };
+  }, [isOpen, setUploading, setProcessingComplete]);
 
   const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
@@ -967,79 +1132,101 @@ function ScreenshotUploadModal({
 
     setUploading(true);
     setError(null);
+    setProcessingComplete(false);
     setUploadProgress(`Processing 1 of ${files.length} screenshots...`);
 
     try {
-      // Process screenshots one at a time to avoid payload size limits
-      const allItems: any[] = [];
-      
-      for (let i = 0; i < files.length; i++) {
-        setUploadProgress(`Processing ${i + 1} of ${files.length} screenshots...`);
-        
-        // Convert file to base64
-        const base64 = await readFileAsBase64(files[i]);
-        
-        // Process single screenshot
-        const response = await fetch("/api/shopping-lists/process-screenshot", {
+      // Process screenshots using shared hook
+      const screenshotData = await processScreenshots(files);
+
+      console.log("📊 Screenshot processing complete:", {
+        totalScreenshots: files.length,
+        screenshotsWithItems: screenshotData.length,
+        totalItems: screenshotData.reduce((sum, s) => sum + s.items.length, 0),
+      });
+
+      if (screenshotData.length === 0) {
+        console.warn("⚠️ No items found in any screenshots");
+        setError("No products found in any of the screenshots");
+        setUploading(false);
+        return;
+      }
+
+      // Save items to shopping list
+      for (const screenshotInfo of screenshotData) {
+        setUploadProgress(`Saving items from screenshot ${screenshotInfo.screenshotId}...`);
+        const addResponse = await fetch(`/api/shopping-lists/${shoppingListId}/items`, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
           },
           body: JSON.stringify({
-            screenshot: base64,
-            locationId: locationId,
+            items: screenshotInfo.items,
+            screenshotId: screenshotInfo.screenshotId,
+            screenshot: screenshotInfo.screenshot,
             app: selectedApp,
-            customers: selectedCustomers, // Pass selected customers to guide Gemini
+            customers: selectedCustomers,
           }),
         });
 
-        if (!response.ok) {
-          const errorData = await response.json().catch(() => ({ error: "Failed to process screenshot" }));
-          throw new Error(errorData.error || `Failed to process screenshot ${i + 1}`);
+        if (!addResponse.ok) {
+          const errorData = await addResponse.json().catch(() => ({ error: "Failed to add items" }));
+          throw new Error(errorData.error || `Failed to add items from screenshot`);
         }
 
-        const data = await response.json();
-        if (data.items && data.items.length > 0) {
-          allItems.push(...data.items);
-        }
+        console.log(`✅ Saved ${screenshotInfo.items.length} items from screenshot`, {
+          screenshotId: screenshotInfo.screenshotId,
+          itemNames: screenshotInfo.items.map((item: any) => item.productName),
+        });
       }
 
-      if (allItems.length === 0) {
-        setError("No products found in any of the screenshots");
-        return;
-      }
-
-      setUploadProgress("Adding items to shopping list...");
-
-      // Add items to existing shopping list
-      const addResponse = await fetch(`/api/shopping-lists/${shoppingListId}/items`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          items: allItems,
-        }),
+      console.log("🚀 Starting moondream cropping process...", {
+        screenshotDataCount: screenshotData.length,
+        totalScreenshotItems: screenshotData.reduce((sum, s) => sum + s.items.length, 0),
       });
 
-      if (!addResponse.ok) {
-        const errorData = await addResponse.json().catch(() => ({ error: "Failed to add items" }));
-        throw new Error(errorData.error || "Failed to add items");
-      }
+      // Crop items using shared hook
+      await cropItems(shoppingListId, screenshotData);
 
-      // Success - close modal and refresh
+      // Refresh the list when processing completes
+      console.log("✅ All processing complete - refreshing list");
+      setProcessingComplete(true);
+      setUploadProgress("✅ All items processed and cropped! Refreshing list...");
+      // Refresh the shopping list to show new items and cropped images
       onItemsAdded();
-      onClose();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to process screenshots");
+      // Don't close modal on error either - let user see the error
     } finally {
       setUploading(false);
-      setUploadProgress("");
+      // Keep progress message visible instead of clearing it
+      // setUploadProgress("");
     }
   };
 
+  // Allow closing the modal - refresh list when closing
+  const handleClose = () => {
+    // If processing is complete, refresh the list before closing
+    if (processingComplete) {
+      console.log("✅ Processing complete, refreshing list and closing modal");
+      onItemsAdded(); // Refresh the shopping list
+    } else if (!uploading) {
+      // Allow canceling if not currently uploading
+      console.log("✅ Canceling - refreshing list and closing modal");
+      onItemsAdded(); // Refresh the shopping list in case any items were added
+    } else {
+      // During active upload, still allow canceling but warn user
+      console.log("⚠️ Closing modal during upload - items may still be processing");
+      // Don't refresh yet - let background processing continue
+    }
+    onClose();
+  };
+
+  // Only prevent close during active upload, allow closing otherwise
+  const shouldPreventClose = uploading;
+  
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title="Add Screenshot">
+    <Modal isOpen={isOpen} onClose={handleClose} title="Add Screenshot" preventClose={shouldPreventClose}>
       <div className="space-y-4">
         {/* App Selector - Mandatory */}
         <div>
@@ -1168,11 +1355,11 @@ function ScreenshotUploadModal({
 
         <div className="flex gap-2 pt-2">
           <button
-            onClick={onClose}
+            onClick={handleClose}
             disabled={uploading}
             className="flex-1 px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            Cancel
+            {processingComplete ? "Close" : uploading ? "Processing..." : "Cancel"}
           </button>
         </div>
       </div>
@@ -1534,11 +1721,18 @@ function ManualEntryModal({
                         {product.brand && (
                           <p className="text-xs text-gray-500 dark:text-gray-400">{product.brand}</p>
                         )}
-                        {product.items?.[0]?.price?.regular && (
-                          <p className="text-sm font-semibold text-gray-900 dark:text-white mt-1">
-                            ${product.items[0].price.regular.toFixed(2)}
-                          </p>
-                        )}
+                        <div className="flex items-center gap-2 mt-1 flex-wrap">
+                          {product.items?.[0]?.size && (
+                            <p className="text-xs text-gray-600 dark:text-gray-400">
+                              {product.items[0].size}
+                            </p>
+                          )}
+                          {product.items?.[0]?.price?.regular && (
+                            <p className="text-sm font-semibold text-gray-900 dark:text-white">
+                              ${product.items[0].price.regular.toFixed(2)}
+                            </p>
+                          )}
+                        </div>
                       </div>
                       {isSelected && (
                         <Check className="w-5 h-5 text-blue-600 dark:text-blue-400 flex-shrink-0" />
@@ -1595,6 +1789,7 @@ function ProductDetailModal({
   onMoveToProblem,
   onMoveToTodo,
   onMoveToDone,
+  onScan,
 }: {
   item: ShoppingListItem;
   locationId: string;
@@ -1605,6 +1800,7 @@ function ProductDetailModal({
   onMoveToProblem?: () => void;
   onMoveToTodo?: () => void;
   onMoveToDone?: () => void;
+  onScan?: () => void;
 }) {
   const [productDetails, setProductDetails] = useState<KrogerProduct | null>(null);
   const [loading, setLoading] = useState(false);
@@ -1747,6 +1943,22 @@ function ProductDetailModal({
 
   const normalizedUpc = upc ? normalizeUPC(upc) : null;
 
+  // Check cropped image height for modal
+  const modalItemId = `modal-item-${item.productId || Math.random()}`;
+  const [modalImageHeight, setModalImageHeight] = useState<number | null>(null);
+  
+  useEffect(() => {
+    if (item.croppedImage && !modalImageHeight) {
+      const img = document.createElement('img') as HTMLImageElement;
+      img.onload = () => {
+        setModalImageHeight(img.naturalHeight);
+      };
+      img.src = item.croppedImage;
+    }
+  }, [item.croppedImage, modalImageHeight]);
+
+  const isModalImageTooSmall = modalImageHeight !== null && modalImageHeight < 300;
+
   return (
     <Modal isOpen={isOpen} onClose={onClose} title="">
       <div className="space-y-4 relative">
@@ -1764,108 +1976,190 @@ function ProductDetailModal({
           </div>
         ) : (
           <>
-            {/* Image with Customer Badge and App Tag */}
-            <div className="flex justify-center">
-              {imageUrl ? (
-                <div className="relative w-48 h-48 bg-white rounded-lg overflow-visible">
-                  <CustomerBadge customer={item.customer} app={item.app} />
-                  <div className="relative w-full h-full overflow-hidden rounded-lg">
-                    <Image
-                      src={imageUrl}
-                      alt={item.description || item.productName}
-                      fill
-                      className="object-contain p-2"
-                      unoptimized
-                    />
+            {/* Cropped Image at Top - Larger version */}
+            {item.croppedImage ? (
+              <div className="w-full bg-white dark:bg-gray-50 border border-gray-200 dark:border-gray-300 rounded-lg overflow-hidden mb-4 relative">
+                {/* Image Too Small Indicator Badge */}
+                {isModalImageTooSmall && (
+                  <div className="absolute top-2 right-2 z-10">
+                    <div className="px-2 py-1 bg-red-500 text-white text-xs font-medium rounded-md shadow-md flex items-center gap-1">
+                      <AlertTriangle className="w-3 h-3" />
+                      Image may be cut off
+                    </div>
+                  </div>
+                )}
+                <img
+                  src={item.croppedImage}
+                  alt={item.found && item.description ? item.description : item.productName}
+                  className="w-full h-auto max-h-96 object-contain mx-auto block"
+                />
+              </div>
+            ) : item.screenshotId ? (
+              <div className="w-full bg-gray-100 dark:bg-gray-200 border border-gray-200 dark:border-gray-300 rounded-lg overflow-hidden mb-4 py-3 px-4 relative">
+                {/* Missing Cropped Image Indicator Badge */}
+                <div className="absolute top-2 left-2 z-10">
+                  <div className="px-2 py-1 bg-yellow-500 text-white text-xs font-medium rounded-md shadow-md flex items-center gap-1">
+                    <AlertTriangle className="w-3 h-3" />
+                    No cropped image
                   </div>
                 </div>
-              ) : (
-                <div className="relative w-48 h-48 bg-gray-100 dark:bg-gray-700 rounded-lg flex items-center justify-center overflow-visible">
+                <div className="text-center">
+                  <p className="text-sm font-medium text-gray-700 dark:text-gray-800">
+                    No cropped image available
+                  </p>
+                  <p className="text-xs text-gray-600 dark:text-gray-700 mt-1">
+                    Cropping was not successful
+                  </p>
+                </div>
+              </div>
+            ) : null}
+
+            {/* Info Card Layout - Similar to List View */}
+            <div className="bg-white dark:bg-gray-100 rounded-lg border border-gray-200 dark:border-gray-300 p-4 relative overflow-visible">
+              {/* Customer Badge - Positioned to the top left */}
+              <div className="absolute top-2 left-2 z-20" style={{ pointerEvents: 'none' }}>
+                <div style={{ pointerEvents: 'auto' }}>
                   <CustomerBadge customer={item.customer} app={item.app} />
-                  <ShoppingCart className="w-12 h-12 text-gray-400" />
                 </div>
-              )}
-            </div>
-
-            {/* Product Info */}
-            <div className="text-center">
-              {item.brand && (
-                <p className="text-sm text-gray-500 dark:text-gray-400 uppercase tracking-wide">
-                  {item.brand}
-                </p>
-              )}
-              <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
-                {item.description || item.productName}
-              </h3>
-              {item.size && (
-                <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-                  {item.size}
-                </p>
-              )}
-            </div>
-
-            {/* Price */}
-            <div className="text-center">
-              {price?.promo && price.promo !== price.regular ? (
-                <div className="flex items-center justify-center gap-2">
-                  <span className="text-2xl font-bold text-gray-900 dark:text-white">
-                    {formatPrice(price.promo)}
-                  </span>
-                  <span className="text-lg text-gray-400 line-through">
-                    {formatPrice(price.regular)}
-                  </span>
+              </div>
+              <div className="flex gap-4">
+                {/* Product Image - Positioned to the left */}
+                <div className="relative flex-shrink-0">
+                  {imageUrl ? (
+                    <div className="relative w-24 h-24 bg-white rounded-lg overflow-visible shadow-sm border border-gray-100 dark:border-gray-600">
+                      <Image
+                        src={imageUrl}
+                        alt={item.found && item.description ? item.description : item.productName}
+                        fill
+                        className="object-contain p-2"
+                        unoptimized
+                      />
+                    </div>
+                  ) : (
+                    <div className="w-24 h-24 bg-gray-100 dark:bg-gray-700 rounded-lg flex items-center justify-center border border-gray-200 dark:border-gray-600 overflow-visible">
+                      <ShoppingCart className="w-8 h-8 text-gray-400" />
+                    </div>
+                  )}
                 </div>
-              ) : (
-                <span className="text-2xl font-bold text-gray-900 dark:text-white">
-                  {formatPrice(price?.regular || item.price)}
-                </span>
-              )}
+
+                {/* Product Details */}
+                <div className="flex-1 min-w-0">
+                  {/* Quantity + Product Name */}
+                  <p className="text-gray-900 dark:text-gray-900 leading-snug break-words mb-2">
+                    {item.found && item.description ? (
+                      <>
+                        {item.quantity && (
+                          <span className="font-bold text-lg">{item.quantity} </span>
+                        )}
+                        <span className="text-base">{item.description}</span>
+                      </>
+                    ) : (
+                      <>
+                        <span className="font-bold text-lg">{item.quantity || "1 ct"}</span>{" "}
+                        <span className="text-base">{item.productName}</span>
+                      </>
+                    )}
+                  </p>
+
+                  {/* Size • Price • Stock Level */}
+                  {item.found && (
+                    <p className="text-sm text-gray-600 dark:text-gray-700 mb-1 flex items-center gap-1 flex-wrap">
+                      <span>
+                        {item.size}
+                        {item.size && (item.price || item.promoPrice) && " • "}
+                        {item.promoPrice ? (
+                          <span className="text-gray-600 dark:text-gray-700">
+                            {formatPrice(item.promoPrice)}
+                          </span>
+                        ) : item.price ? (
+                          <span>{formatPrice(item.price)}</span>
+                        ) : null}
+                      </span>
+                      {/* Stock Level Indicator */}
+                      {item.stockLevel && (
+                        <>
+                          {(item.size || item.price || item.promoPrice) && (
+                            <span className="text-gray-600 dark:text-gray-700">•</span>
+                          )}
+                          <span className={item.stockLevel === "HIGH" ? "text-green-600 dark:text-green-400" : item.stockLevel === "LOW" ? "text-yellow-600 dark:text-yellow-400" : item.stockLevel === "TEMPORARILY_OUT_OF_STOCK" ? "text-red-600 dark:text-red-400" : ""}>
+                            {item.stockLevel === "HIGH" ? "✓ In Stock" : item.stockLevel === "LOW" ? "⚠ Low Stock" : item.stockLevel === "TEMPORARILY_OUT_OF_STOCK" ? "✗ Out of Stock" : ""}
+                          </span>
+                        </>
+                      )}
+                    </p>
+                  )}
+
+                  {/* Compact Aisle Locations */}
+                  {item.found && item.krogerAisles && item.krogerAisles.length > 0 && (
+                    <div className="mt-2 space-y-1">
+                      <p className="text-xs font-medium text-gray-600 dark:text-gray-700 mb-1">
+                        📍 Store Locations
+                      </p>
+                      {item.krogerAisles.map((aisle, idx) => {
+                        const locationParts: string[] = [];
+                        
+                        if (aisle.aisleNumber && parseInt(aisle.aisleNumber) < 100) {
+                          locationParts.push(`Aisle ${aisle.aisleNumber}`);
+                        } else if (aisle.description) {
+                          locationParts.push(aisle.description);
+                        }
+                        
+                        if (aisle.shelfNumber) {
+                          locationParts.push(`Shelf ${aisle.shelfNumber}`);
+                        }
+                        
+                        if (aisle.side) {
+                          locationParts.push(`Side ${aisle.side}`);
+                        }
+                        
+                        if (aisle.bayNumber) {
+                          locationParts.push(`Bay ${aisle.bayNumber}`);
+                        }
+                        
+                        const locationText = locationParts.join(" - ");
+                        
+                        return locationText ? (
+                          <p key={idx} className="text-xs text-gray-600 dark:text-gray-700">
+                            {locationText}
+                          </p>
+                        ) : null;
+                      })}
+                    </div>
+                  )}
+                </div>
+              </div>
             </div>
 
-            {/* Stock Level */}
-            {stockLevelText && (
-              <div className={`text-center text-sm font-medium ${stockLevelColor}`}>
-                {stockLevelText}
-              </div>
-            )}
+            {/* Scan and Barcode Section */}
+            <div className="space-y-2">
+              {/* Scan Button */}
+              {onScan && item.upc && (
+                <button
+                  onClick={() => {
+                    onScan();
+                    onClose();
+                  }}
+                  className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                >
+                  <Scan className="w-5 h-5" />
+                  Scan Barcode
+                </button>
+              )}
 
-            {/* Aisle Locations from Kroger */}
-            {product?.aisleLocations && product.aisleLocations.length > 0 && (
-              <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-3">
-                <p className="text-sm font-medium text-gray-900 dark:text-white mb-2">
-                  📍 Store Location
-                </p>
-                {product.aisleLocations.map((aisle, idx) => (
-                  <div key={idx} className="text-sm text-gray-600 dark:text-gray-400">
-                    {aisle.number && `Aisle ${aisle.number}`}
-                    {aisle.description && ` - ${aisle.description}`}
-                    {aisle.shelfNumber && ` • Shelf ${aisle.shelfNumber}`}
-                    {aisle.side && ` (Side ${aisle.side})`}
-                  </div>
-                ))}
-              </div>
-            )}
-
-            {/* Original Aisle from Screenshot */}
-            {item.aisleLocation && (
-              <div className="text-sm text-gray-500 dark:text-gray-400 text-center">
-                Original: {item.aisleLocation}
-              </div>
-            )}
-
-            {/* Barcode */}
-            {upc && (
-              <button
-                onClick={() => setShowBarcode(!showBarcode)}
-                className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
-              >
-                <Barcode className="w-5 h-5" />
-                {showBarcode ? "Hide Barcode" : `UPC: ${upc}`}
-              </button>
-            )}
+              {/* Barcode Display Toggle */}
+              {upc && (
+                <button
+                  onClick={() => setShowBarcode(!showBarcode)}
+                  className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-100 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
+                >
+                  <Barcode className="w-5 h-5" />
+                  {showBarcode ? "Hide Barcode" : `UPC: ${upc}`}
+                </button>
+              )}
+            </div>
 
             {showBarcode && upc && normalizedUpc && (
-              <div className="text-center bg-white p-4 rounded-lg">
+              <div className="text-center bg-white dark:bg-gray-100 p-4 rounded-lg">
                 {getBarcodeUrl(upc) ? (
                   <img
                     src={getBarcodeUrl(upc)!}
@@ -1873,11 +2167,11 @@ function ProductDetailModal({
                     className="mx-auto"
                   />
                 ) : (
-                  <p className="text-gray-500">Unable to generate barcode</p>
+                  <p className="text-gray-700 dark:text-gray-800">Unable to generate barcode</p>
                 )}
-                <p className="font-mono text-sm text-gray-700 mt-2">{normalizedUpc.code}</p>
+                <p className="font-mono text-sm text-gray-800 dark:text-gray-900 mt-2">{normalizedUpc.code}</p>
                 {normalizedUpc.code !== upc.replace(/\D/g, "") && (
-                  <p className="text-xs text-gray-500 mt-1">
+                  <p className="text-xs text-gray-600 dark:text-gray-700 mt-1">
                     Original: {upc} (check digit corrected)
                   </p>
                 )}
@@ -1906,6 +2200,20 @@ function ProductDetailModal({
 
             {/* Status Change and Action Buttons */}
             <div className="space-y-2 pt-2">
+              {/* Edit Button */}
+              {onEdit && (
+                <button
+                  onClick={() => {
+                    onEdit();
+                    onClose();
+                  }}
+                  className="w-full px-4 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center justify-center gap-2"
+                >
+                  <Edit className="w-5 h-5" />
+                  Edit
+                </button>
+              )}
+              
               {/* Status Change Buttons */}
               <div className="flex gap-2">
                 {onMoveToTodo && (item.done || item.problem) && (
@@ -1917,7 +2225,7 @@ function ProductDetailModal({
                     className="flex-1 px-4 py-3 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors flex items-center justify-center gap-2"
                   >
                     <Check className="w-5 h-5" />
-                    Move to Todo
+                    Todo
                   </button>
                 )}
                 {onMoveToProblem && !item.problem && (
@@ -1929,7 +2237,7 @@ function ProductDetailModal({
                     className="flex-1 px-4 py-3 bg-orange-600 text-white rounded-lg hover:bg-orange-700 transition-colors flex items-center justify-center gap-2"
                   >
                     <AlertTriangle className="w-5 h-5" />
-                    Move to Problem
+                    Problem
                   </button>
                 )}
                 {onMoveToDone && !item.done && (
@@ -1941,40 +2249,26 @@ function ProductDetailModal({
                     className="flex-1 px-4 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors flex items-center justify-center gap-2"
                   >
                     <Check className="w-5 h-5" />
-                    Mark as Done
+                    Done
                   </button>
                 )}
               </div>
               
-              {/* Edit and Delete Buttons */}
-              <div className="flex gap-2">
-                {onEdit && (
-                  <button
-                    onClick={() => {
-                      onEdit();
+              {/* Delete Button */}
+              {onDelete && (
+                <button
+                  onClick={() => {
+                    if (confirm("Delete this item?")) {
+                      onDelete();
                       onClose();
-                    }}
-                    className="flex-1 px-4 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center justify-center gap-2"
-                  >
-                    <Edit className="w-5 h-5" />
-                    Edit
-                  </button>
-                )}
-                {onDelete && (
-                  <button
-                    onClick={() => {
-                      if (confirm("Delete this item?")) {
-                        onDelete();
-                        onClose();
-                      }
-                    }}
-                    className="flex-1 px-4 py-3 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors flex items-center justify-center gap-2"
-                  >
-                    <Trash2 className="w-5 h-5" />
-                    Delete
-                  </button>
-                )}
-              </div>
+                    }
+                  }}
+                  className="w-full px-4 py-3 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors flex items-center justify-center gap-2"
+                >
+                  <Trash2 className="w-5 h-5" />
+                  Delete
+                </button>
+              )}
             </div>
           </>
         )}
@@ -2460,30 +2754,9 @@ function BarcodeScanner({
               }}
               className="w-full px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 font-medium mb-2"
             >
-              Use Expected UPC ({item.upc})
-            </button>
-          )}
-          <div className="flex gap-2">
-            <input
-              type="text"
-              value={manualUPC}
-              onChange={(e) => setManualUPC(e.target.value)}
-              placeholder="Enter UPC manually"
-              className="flex-1 px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-900 dark:text-gray-100 bg-white dark:bg-gray-800 font-mono"
-              onKeyDown={(e) => {
-                if (e.key === "Enter" && manualUPC.trim()) {
-                  handleManualOverride();
-                }
-              }}
-            />
-            <button
-              onClick={handleManualOverride}
-              disabled={!manualUPC.trim()}
-              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed font-medium"
-            >
               Override
             </button>
-          </div>
+          )}
         </div>
 
         {error && (
@@ -2514,6 +2787,7 @@ function ScanResultModal({
   scannedBarcode,
   onForceDone,
   onConfirmQuantity,
+  shoppingList,
 }: {
   isOpen: boolean;
   onClose: () => void;
@@ -2522,7 +2796,10 @@ function ScanResultModal({
   scannedBarcode?: string;
   onForceDone?: () => void;
   onConfirmQuantity?: () => void;
+  shoppingList?: ShoppingList | null;
 }) {
+  const [viewingScreenshot, setViewingScreenshot] = useState<string | null>(null);
+  const [showOriginalScreenshot, setShowOriginalScreenshot] = useState(false);
   const customer = item.customer || "A";
   const app = item.app || "";
   
@@ -2546,6 +2823,9 @@ function ScanResultModal({
     return appName || "";
   };
 
+  // Get app badge colors (matching list view)
+  const appBadgeColors = getAppTagColorForBadge(app);
+
   // Play audio feedback when modal opens
   useEffect(() => {
     if (isOpen) {
@@ -2554,6 +2834,8 @@ function ScanResultModal({
       } else {
         playFailureSound();
       }
+      // Reset showOriginalScreenshot when modal opens
+      setShowOriginalScreenshot(false);
     }
   }, [isOpen, success]);
 
@@ -2570,7 +2852,7 @@ function ScanResultModal({
           {/* App Name - Prominent */}
           {app && (
             <div className="mb-4">
-              <div className="inline-block px-6 py-3 bg-white/20 backdrop-blur-sm rounded-lg border-2 border-white/30">
+              <div className={`inline-block px-6 py-3 rounded-lg ${appBadgeColors.bg} ${appBadgeColors.text}`}>
                 <p className="text-2xl font-bold">{getShortAppName(app)}</p>
               </div>
             </div>
@@ -2608,18 +2890,49 @@ function ScanResultModal({
           {/* Product Name */}
           <div className="pt-4 border-t border-white/30">
             <p className="text-lg font-semibold opacity-90">{item.productName}</p>
-            {item.description && item.description !== item.productName && (
-              <p className="text-sm opacity-75 mt-1">{item.description}</p>
-            )}
           </div>
 
-          {/* Quantity Confirmation (only for successful scans) */}
-          {success && (
-            <div className="pt-4 border-t border-white/30">
-              <p className="text-lg font-semibold opacity-90 mb-2">Confirm Quantity:</p>
-              <p className="text-2xl font-bold opacity-95">{item.quantity || "1"}</p>
-            </div>
-          )}
+          {/* Image Display (only for successful scans) */}
+          {success && (item.croppedImage || (item.screenshotId && shoppingList?.screenshots)) && (() => {
+            const screenshot = item.screenshotId && shoppingList?.screenshots 
+              ? shoppingList.screenshots.find(s => s.id === item.screenshotId)
+              : null;
+            const hasCroppedImage = !!item.croppedImage;
+            // Always show cropped image inline if available, otherwise show full screenshot
+            const imageToShow = hasCroppedImage ? item.croppedImage : screenshot?.base64;
+            
+            return (
+              <div className="pt-4 border-t border-white/30">
+                <div className="space-y-3">
+                  {/* Show Full Screenshot button - only show if cropped image exists */}
+                  {hasCroppedImage && screenshot && (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setShowOriginalScreenshot(true);
+                        setViewingScreenshot(screenshot.base64);
+                      }}
+                      className="w-full px-4 py-2 bg-white/20 backdrop-blur-sm rounded-lg border-2 border-white/30 hover:bg-white/30 transition-colors flex items-center justify-center gap-2 text-sm font-medium"
+                    >
+                      <Eye className="w-4 h-4" />
+                      Show Full Screenshot
+                    </button>
+                  )}
+                  
+                  {/* Image Display - Always show cropped image if available, otherwise full screenshot */}
+                  {imageToShow && (
+                    <div className="rounded-lg overflow-hidden bg-white/10 backdrop-blur-sm border-2 border-white/20">
+                      <img 
+                        src={imageToShow} 
+                        alt={hasCroppedImage ? "Cropped product image" : "Original screenshot"} 
+                        className="w-full h-auto max-h-64 object-contain mx-auto block"
+                      />
+                    </div>
+                  )}
+                </div>
+              </div>
+            );
+          })()}
 
           {/* Action Buttons */}
           <div className="flex gap-3">
@@ -2642,20 +2955,672 @@ function ScanResultModal({
                 }}
                 className="w-full px-6 py-4 bg-white/30 backdrop-blur-sm rounded-lg border-2 border-white/40 hover:bg-white/40 transition-colors font-semibold text-lg"
               >
-                OK
+                Confirm QTY from Screenshot
               </button>
             ) : (
               <button
                 onClick={onClose}
                 className={`px-6 py-4 bg-white/20 backdrop-blur-sm rounded-lg border-2 border-white/30 hover:bg-white/30 transition-colors font-semibold text-lg ${!success && onForceDone ? "flex-1" : "w-full"}`}
               >
-                {success ? "OK" : "Try Again"}
+                {success ? "Confirm QTY from Screenshot" : "Try Again"}
               </button>
             )}
           </div>
         </div>
       </div>
+
+      {/* Screenshot Viewer Modal */}
+      {viewingScreenshot && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/70" onClick={() => setViewingScreenshot(null)} />
+          <div className="relative bg-white dark:bg-gray-800 rounded-lg max-w-4xl max-h-[90vh] overflow-auto">
+            <div className="sticky top-0 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 p-4 flex items-center justify-between">
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                {item.croppedImage && !showOriginalScreenshot ? "Cropped Product Image" : "Original Screenshot"}
+              </h3>
+              <div className="flex items-center gap-2">
+                {/* Toggle Original Screenshot - Only show if cropped image exists */}
+                {item.croppedImage && (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setShowOriginalScreenshot(!showOriginalScreenshot);
+                    }}
+                    className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
+                    title={showOriginalScreenshot ? "Show cropped image" : "Show original screenshot"}
+                  >
+                    {showOriginalScreenshot ? (
+                      <EyeOff className="w-5 h-5 text-gray-500 dark:text-gray-400" />
+                    ) : (
+                      <Eye className="w-5 h-5 text-gray-500 dark:text-gray-400" />
+                    )}
+                  </button>
+                )}
+                <button
+                  onClick={() => {
+                    setViewingScreenshot(null);
+                    setShowOriginalScreenshot(false);
+                  }}
+                  className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
+                >
+                  <X className="w-5 h-5 text-gray-500 dark:text-gray-400" />
+                </button>
+              </div>
+            </div>
+            <div className="p-4">
+              <img 
+                src={item.croppedImage && !showOriginalScreenshot ? item.croppedImage : viewingScreenshot} 
+                alt={item.croppedImage && !showOriginalScreenshot ? "Cropped product image" : "Original screenshot"} 
+                className="max-w-full h-auto rounded-lg"
+                style={{ maxHeight: 'calc(90vh - 100px)' }}
+              />
+            </div>
+          </div>
+        </div>
+      )}
     </div>
+  );
+}
+
+// Auto Split Algorithm
+interface AisleGroup {
+  aisleNumber: string;
+  itemIndices: number[];
+  description?: string;
+}
+
+interface UserSplit {
+  userId: string;
+  aisleGroups: AisleGroup[];
+}
+
+type SplitMode = 'round-robin' | 'per-item-evenly' | 'aisles-sequential';
+
+function calculateAutoSplit(
+  items: ShoppingListItem[],
+  selectedUserIds: string[],
+  currentUserId: string,
+  sharedItemIndices: number[],
+  mode: SplitMode = 'round-robin'
+): UserSplit[] {
+  // Helper to get primary aisle info
+  const getPrimaryAisle = (item: ShoppingListItem) => {
+    const aisles = item.krogerAisles;
+    if (!aisles || aisles.length === 0) return undefined;
+    
+    return aisles.reduce((smallest, current) => {
+      const smallestNum = parseInt(smallest?.aisleNumber || "999") || 999;
+      const currentNum = parseInt(current?.aisleNumber || "999") || 999;
+      return currentNum < smallestNum ? current : smallest;
+    });
+  };
+
+  // Filter out already shared items
+  const nonSharedItems = items
+    .map((item, index) => ({ item, originalIndex: index }))
+    .filter(({ originalIndex }) => !sharedItemIndices.includes(originalIndex));
+
+  // Group items by aisle
+  const aisleMap = new Map<string, { itemIndices: number[]; description?: string }>();
+  const unknownLocationIndices: number[] = [];
+
+  nonSharedItems.forEach(({ item, originalIndex }) => {
+    const primaryAisle = getPrimaryAisle(item);
+    const aisleNumber = primaryAisle?.aisleNumber || "";
+    
+    if (!aisleNumber) {
+      unknownLocationIndices.push(originalIndex);
+    } else {
+      if (!aisleMap.has(aisleNumber)) {
+        aisleMap.set(aisleNumber, {
+          itemIndices: [],
+          description: primaryAisle?.description,
+        });
+      }
+      aisleMap.get(aisleNumber)!.itemIndices.push(originalIndex);
+    }
+  });
+
+  // Convert map to array and sort by aisle number
+  const aisleGroups: AisleGroup[] = Array.from(aisleMap.entries())
+    .map(([aisleNumber, data]) => ({
+      aisleNumber,
+      itemIndices: data.itemIndices,
+      description: data.description,
+    }))
+    .sort((a, b) => {
+      const numA = parseInt(a.aisleNumber) || 999;
+      const numB = parseInt(b.aisleNumber) || 999;
+      return numA - numB;
+    });
+
+  // Add unknown location as a group if there are items
+  if (unknownLocationIndices.length > 0) {
+    aisleGroups.push({
+      aisleNumber: "",
+      itemIndices: unknownLocationIndices,
+    });
+  }
+
+  // Create user list: main user first, then selected users
+  const allUserIds = [currentUserId, ...selectedUserIds];
+  
+  // Initialize user splits
+  const userSplits: UserSplit[] = allUserIds.map(userId => ({
+    userId,
+    aisleGroups: [],
+  }));
+
+  if (mode === 'round-robin') {
+    // Round Robin: Distribute aisles round-robin
+    aisleGroups.forEach((aisleGroup, index) => {
+      const userIndex = index % allUserIds.length;
+      userSplits[userIndex].aisleGroups.push(aisleGroup);
+    });
+  } else if (mode === 'per-item-evenly') {
+    // Per Item Evenly: Flatten items, distribute evenly, regroup by aisle per user
+    const allItemIndices: { index: number; aisleNumber: string; description?: string }[] = [];
+    
+    aisleGroups.forEach(group => {
+      group.itemIndices.forEach(itemIndex => {
+        allItemIndices.push({
+          index: itemIndex,
+          aisleNumber: group.aisleNumber,
+          description: group.description,
+        });
+      });
+    });
+
+    // Distribute items evenly across users
+    const userItemMap = new Map<string, Map<string, { itemIndices: number[]; description?: string }>>();
+    allUserIds.forEach(userId => {
+      userItemMap.set(userId, new Map());
+    });
+
+    allItemIndices.forEach((item, index) => {
+      const userIndex = index % allUserIds.length;
+      const userId = allUserIds[userIndex];
+      const aisleMap = userItemMap.get(userId)!;
+      
+      if (!aisleMap.has(item.aisleNumber)) {
+        aisleMap.set(item.aisleNumber, {
+          itemIndices: [],
+          description: item.description,
+        });
+      }
+      aisleMap.get(item.aisleNumber)!.itemIndices.push(item.index);
+    });
+
+    // Convert back to UserSplit format
+    userSplits.forEach(split => {
+      const aisleMap = userItemMap.get(split.userId)!;
+      const groups: AisleGroup[] = Array.from(aisleMap.entries())
+        .map(([aisleNumber, data]) => ({
+          aisleNumber,
+          itemIndices: data.itemIndices,
+          description: data.description,
+        }))
+        .sort((a, b) => {
+          const numA = parseInt(a.aisleNumber) || 999;
+          const numB = parseInt(b.aisleNumber) || 999;
+          return numA - numB;
+        });
+      split.aisleGroups = groups;
+    });
+  } else if (mode === 'aisles-sequential') {
+    // Aisles Sequential: Split aisles into equal parts sequentially
+    const sortedAisleGroups = [...aisleGroups].sort((a, b) => {
+      // Put unknown aisles at the end
+      if (!a.aisleNumber) return 1;
+      if (!b.aisleNumber) return -1;
+      const numA = parseInt(a.aisleNumber) || 999;
+      const numB = parseInt(b.aisleNumber) || 999;
+      return numA - numB;
+    });
+
+    const numUsers = allUserIds.length;
+    const itemsPerUser = Math.ceil(sortedAisleGroups.length / numUsers);
+
+    sortedAisleGroups.forEach((aisleGroup, index) => {
+      const userIndex = Math.min(Math.floor(index / itemsPerUser), numUsers - 1);
+      userSplits[userIndex].aisleGroups.push(aisleGroup);
+    });
+  }
+
+  return userSplits;
+}
+
+// Auto Split Modal Component
+function AutoSplitModal({
+  isOpen,
+  onClose,
+  shoppingList,
+  selectedUserIds,
+  users,
+  currentUserId,
+  onApplySplit,
+}: {
+  isOpen: boolean;
+  onClose: () => void;
+  shoppingList: ShoppingList | null;
+  selectedUserIds: Set<string>;
+  users: { userId: string; email?: string; name?: string; image?: string }[];
+  currentUserId: string | undefined;
+  onApplySplit: (itemIndices: Set<number>, itemUserMap?: Map<number, string>) => void;
+}) {
+  const [expandedUsers, setExpandedUsers] = useState<Set<string>>(new Set());
+  const [expandedAisles, setExpandedAisles] = useState<Set<string>>(new Set());
+  const [unselectedIndices, setUnselectedIndices] = useState<Set<number>>(new Set());
+  const [userSplits, setUserSplits] = useState<UserSplit[]>([]);
+  const [splitMode, setSplitMode] = useState<SplitMode>('round-robin');
+
+  // Helper to get primary aisle info
+  const getPrimaryAisle = (item: ShoppingListItem) => {
+    const aisles = item.krogerAisles;
+    if (!aisles || aisles.length === 0) return undefined;
+    
+    return aisles.reduce((smallest, current) => {
+      const smallestNum = parseInt(smallest?.aisleNumber || "999") || 999;
+      const currentNum = parseInt(current?.aisleNumber || "999") || 999;
+      return currentNum < smallestNum ? current : smallest;
+    });
+  };
+
+  // Calculate initial split when modal opens or mode changes
+  useEffect(() => {
+    if (isOpen && shoppingList && currentUserId && selectedUserIds.size > 0) {
+      const sharedItemIndices = shoppingList.sharedItemIndices || [];
+      const split = calculateAutoSplit(
+        shoppingList.items,
+        Array.from(selectedUserIds),
+        currentUserId,
+        sharedItemIndices,
+        splitMode
+      );
+      setUserSplits(split);
+      // Expand all users by default
+      setExpandedUsers(new Set(split.map(s => s.userId)));
+      setUnselectedIndices(new Set());
+    } else if (isOpen) {
+      // Reset state when modal opens but conditions aren't met
+      setUserSplits([]);
+      setExpandedUsers(new Set());
+      setUnselectedIndices(new Set());
+    }
+  }, [isOpen, shoppingList, selectedUserIds, currentUserId, splitMode]);
+
+  const toggleUserExpanded = (userId: string) => {
+    const newExpanded = new Set(expandedUsers);
+    if (newExpanded.has(userId)) {
+      newExpanded.delete(userId);
+    } else {
+      newExpanded.add(userId);
+    }
+    setExpandedUsers(newExpanded);
+  };
+
+  const toggleAisleExpanded = (userId: string, aisleNumber: string) => {
+    const key = `${userId}-${aisleNumber}`;
+    const newExpanded = new Set(expandedAisles);
+    if (newExpanded.has(key)) {
+      newExpanded.delete(key);
+    } else {
+      newExpanded.add(key);
+    }
+    setExpandedAisles(newExpanded);
+  };
+
+  const toggleItemSelection = (itemIndex: number) => {
+    const newUnselected = new Set(unselectedIndices);
+    if (newUnselected.has(itemIndex)) {
+      newUnselected.delete(itemIndex);
+    } else {
+      newUnselected.add(itemIndex);
+    }
+    setUnselectedIndices(newUnselected);
+  };
+
+  const moveAisleToUser = (fromUserId: string, toUserId: string, aisleIndex: number) => {
+    const newSplits = [...userSplits];
+    const fromUserIndex = newSplits.findIndex(s => s.userId === fromUserId);
+    const toUserIndex = newSplits.findIndex(s => s.userId === toUserId);
+    
+    if (fromUserIndex === -1 || toUserIndex === -1) return;
+    
+    const aisleGroup = newSplits[fromUserIndex].aisleGroups[aisleIndex];
+    newSplits[fromUserIndex].aisleGroups.splice(aisleIndex, 1);
+    newSplits[toUserIndex].aisleGroups.push(aisleGroup);
+    
+    setUserSplits(newSplits);
+  };
+
+  const getUserName = (userId: string): string => {
+    if (userId === currentUserId) return "Me";
+    const user = users.find(u => u.userId === userId);
+    return user?.name || user?.email || userId;
+  };
+
+  const handleApplySplit = () => {
+    if (!shoppingList || !currentUserId) return;
+    
+    // Only collect item indices assigned to selected users (exclude current user)
+    // Items assigned to "Me" shouldn't be shared
+    const allIndices = new Set<number>();
+    const itemUserMap = new Map<number, string>();
+    
+    userSplits.forEach(split => {
+      // Only include items from users that are selected in "Users to Share With"
+      // Skip items assigned to the current user (they don't need to be shared)
+      if (split.userId !== currentUserId && selectedUserIds.has(split.userId)) {
+        split.aisleGroups.forEach(group => {
+          group.itemIndices.forEach(index => {
+            if (!unselectedIndices.has(index)) {
+              allIndices.add(index);
+              itemUserMap.set(index, split.userId);
+            }
+          });
+        });
+      }
+    });
+    
+    onApplySplit(allIndices, itemUserMap);
+    onClose();
+  };
+
+  if (!isOpen) return null;
+
+  // Show error message if shopping list is not available
+  if (!shoppingList) {
+    return (
+      <Modal isOpen={isOpen} onClose={onClose} title="Auto Split Preview" zIndex={10000}>
+        <div className="p-4 text-center">
+          <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
+            Shopping list is not available. Please try again.
+          </p>
+          <button
+            onClick={onClose}
+            className="px-4 py-2 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
+          >
+            Close
+          </button>
+        </div>
+      </Modal>
+    );
+  }
+
+  // Show loading state if currentUserId is not yet available
+  if (!currentUserId) {
+    return (
+      <Modal isOpen={isOpen} onClose={onClose} title="Auto Split Preview" zIndex={10000}>
+        <div className="p-4 text-center">
+          <Loader2 className="w-6 h-6 animate-spin mx-auto mb-2 text-gray-500" />
+          <p className="text-sm text-gray-600 dark:text-gray-400">Loading...</p>
+        </div>
+      </Modal>
+    );
+  }
+
+  // Show message if no users are selected
+  if (selectedUserIds.size === 0) {
+    return (
+      <Modal isOpen={isOpen} onClose={onClose} title="Auto Split Preview" zIndex={10000}>
+        <div className="p-4 text-center">
+          <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
+            Please select at least one user to share with before using auto split.
+          </p>
+          <button
+            onClick={onClose}
+            className="px-4 py-2 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
+          >
+            Close
+          </button>
+        </div>
+      </Modal>
+    );
+  }
+
+  const getTotalItemsForUser = (split: UserSplit): number => {
+    return split.aisleGroups.reduce((sum, group) => {
+      const selectedCount = group.itemIndices.filter(idx => !unselectedIndices.has(idx)).length;
+      return sum + selectedCount;
+    }, 0);
+  };
+
+  const getAisleDisplayName = (aisleNumber: string, description?: string): string => {
+    if (!aisleNumber) return "Unknown Location";
+    const aisleNum = parseInt(aisleNumber) || 0;
+    if (aisleNum >= 100 && description) {
+      return description;
+    }
+    return `Aisle ${aisleNumber}`;
+  };
+
+  return (
+    <Modal isOpen={isOpen} onClose={onClose} title="Auto Split Preview" zIndex={10000}>
+      <div className="space-y-4">
+        <p className="text-sm text-gray-600 dark:text-gray-400">
+          Items have been automatically split. Review and adjust as needed.
+        </p>
+
+        {/* Mode Selector */}
+        <div className="space-y-2">
+          <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
+            Split Mode:
+          </label>
+          <div className="flex flex-col gap-2">
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="radio"
+                name="splitMode"
+                value="round-robin"
+                checked={splitMode === 'round-robin'}
+                onChange={(e) => setSplitMode(e.target.value as SplitMode)}
+                className="w-4 h-4 text-blue-600 border-gray-300 focus:ring-blue-500"
+              />
+              <span className="text-sm text-gray-700 dark:text-gray-300">
+                Round Robin - Distribute aisles round-robin across users
+              </span>
+            </label>
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="radio"
+                name="splitMode"
+                value="per-item-evenly"
+                checked={splitMode === 'per-item-evenly'}
+                onChange={(e) => setSplitMode(e.target.value as SplitMode)}
+                className="w-4 h-4 text-blue-600 border-gray-300 focus:ring-blue-500"
+              />
+              <span className="text-sm text-gray-700 dark:text-gray-300">
+                Per Item Evenly - Distribute individual items evenly (not grouped by aisle)
+              </span>
+            </label>
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="radio"
+                name="splitMode"
+                value="aisles-sequential"
+                checked={splitMode === 'aisles-sequential'}
+                onChange={(e) => setSplitMode(e.target.value as SplitMode)}
+                className="w-4 h-4 text-blue-600 border-gray-300 focus:ring-blue-500"
+              />
+              <span className="text-sm text-gray-700 dark:text-gray-300">
+                Aisles Sequential - Split aisles sequentially into equal parts
+              </span>
+            </label>
+          </div>
+        </div>
+
+        <div className="max-h-96 overflow-y-auto space-y-3 border border-gray-200 dark:border-gray-700 rounded-lg p-4">
+          {userSplits.map((split) => {
+            const isExpanded = expandedUsers.has(split.userId);
+            const totalItems = getTotalItemsForUser(split);
+            const totalAisles = split.aisleGroups.length;
+
+            return (
+              <div
+                key={split.userId}
+                className="border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden"
+              >
+                <button
+                  onClick={() => toggleUserExpanded(split.userId)}
+                  className="w-full px-4 py-3 bg-gray-50 dark:bg-gray-800 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors flex items-center justify-between"
+                >
+                  <div className="flex items-center gap-3">
+                    <div className={`w-8 h-8 rounded-full ${getUserColor(split.userId)} flex items-center justify-center`}>
+                      <span className="text-xs text-white font-medium">
+                        {getUserInitials(
+                          split.userId === currentUserId ? undefined : users.find(u => u.userId === split.userId)?.name,
+                          split.userId === currentUserId ? undefined : users.find(u => u.userId === split.userId)?.email,
+                          split.userId
+                        )}
+                      </span>
+                    </div>
+                    <div className="text-left">
+                      <div className="font-semibold text-gray-900 dark:text-white">
+                        {getUserName(split.userId)}
+                      </div>
+                      <div className="text-xs text-gray-500 dark:text-gray-400">
+                        {totalAisles} {totalAisles === 1 ? "aisle" : "aisles"}, {totalItems} {totalItems === 1 ? "item" : "items"}
+                      </div>
+                    </div>
+                  </div>
+                  {isExpanded ? (
+                    <ChevronUp className="w-5 h-5 text-gray-500" />
+                  ) : (
+                    <ChevronDown className="w-5 h-5 text-gray-500" />
+                  )}
+                </button>
+
+                {isExpanded && (
+                  <div className="p-4 space-y-3 bg-white dark:bg-gray-900">
+                    {split.aisleGroups.map((group, groupIndex) => {
+                      const aisleKey = `${split.userId}-${group.aisleNumber}`;
+                      const isAisleExpanded = expandedAisles.has(aisleKey);
+                      const selectedItems = group.itemIndices.filter(idx => !unselectedIndices.has(idx));
+                      const aisleDisplayName = getAisleDisplayName(group.aisleNumber, group.description);
+
+                      return (
+                        <div
+                          key={groupIndex}
+                          className="border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden"
+                        >
+                          <div className="px-3 py-2 bg-gray-50 dark:bg-gray-800 flex items-center justify-between">
+                            <button
+                              onClick={() => toggleAisleExpanded(split.userId, group.aisleNumber)}
+                              className="flex items-center gap-2 flex-1 text-left"
+                            >
+                              {isAisleExpanded ? (
+                                <ChevronUp className="w-4 h-4 text-gray-500" />
+                              ) : (
+                                <ChevronDown className="w-4 h-4 text-gray-500" />
+                              )}
+                              <span className="font-medium text-sm text-gray-900 dark:text-white">
+                                {aisleDisplayName}
+                              </span>
+                              <span className="text-xs text-gray-500 dark:text-gray-400">
+                                ({selectedItems.length} {selectedItems.length === 1 ? "item" : "items"})
+                              </span>
+                            </button>
+                            <div className="flex items-center gap-2">
+                              {userSplits.map((otherSplit) => {
+                                if (otherSplit.userId === split.userId) return null;
+                                return (
+                                  <button
+                                    key={otherSplit.userId}
+                                    onClick={() => moveAisleToUser(split.userId, otherSplit.userId, groupIndex)}
+                                    className="px-2 py-1 text-xs bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded hover:bg-blue-200 dark:hover:bg-blue-900/50 transition-colors"
+                                    title={`Move to ${getUserName(otherSplit.userId)}`}
+                                  >
+                                    → {getUserName(otherSplit.userId)}
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          </div>
+
+                          {isAisleExpanded && (
+                            <div className="p-3 space-y-2 bg-white dark:bg-gray-900">
+                              {group.itemIndices.map((itemIndex) => {
+                                const item = shoppingList.items[itemIndex];
+                                const isUnselected = unselectedIndices.has(itemIndex);
+                                
+                                return (
+                                  <label
+                                    key={itemIndex}
+                                    className={`flex items-start gap-3 p-2 rounded-lg border-2 cursor-pointer transition-colors ${
+                                      isUnselected
+                                        ? "border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50 opacity-60"
+                                        : "border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-900/20"
+                                    }`}
+                                  >
+                                    <input
+                                      type="checkbox"
+                                      checked={!isUnselected}
+                                      onChange={() => toggleItemSelection(itemIndex)}
+                                      className="mt-1 w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                                    />
+                                    <div className="flex-1 min-w-0">
+                                      <div className="flex items-start gap-2">
+                                        <div className="absolute flex-shrink-0 top-2 right-2">
+                                          <CustomerBadge customer={item.customer} app={item.app} />
+                                          {item.imageUrl ? (
+                                            <div className="relative w-12 h-12 bg-white rounded-lg overflow-visible shadow-sm border border-gray-100 dark:border-gray-600">
+                                              <Image
+                                                src={item.imageUrl}
+                                                alt={item.found && item.description ? item.description : item.productName}
+                                                fill
+                                                className="object-contain p-1"
+                                                unoptimized
+                                              />
+                                            </div>
+                                          ) : (
+                                            <div className="w-12 h-12 bg-gray-100 dark:bg-gray-700 rounded-lg flex items-center justify-center border border-gray-200 dark:border-gray-600 overflow-visible">
+                                              <ShoppingCart className="w-4 h-4 text-gray-400" />
+                                            </div>
+                                          )}
+                                        </div>
+                                        <div className="flex-1 min-w-0">
+                                          <p className="font-medium text-gray-900 dark:text-white text-sm">
+                                            {item.found && item.description ? item.description : item.productName}
+                                          </p>
+                                          {item.brand && (
+                                            <p className="text-xs text-gray-500 dark:text-gray-400">{item.brand}</p>
+                                          )}
+                                        </div>
+                                      </div>
+                                    </div>
+                                  </label>
+                                );
+                              })}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+
+        <div className="flex gap-3 pt-4 border-t border-gray-200 dark:border-gray-700">
+          <button
+            onClick={onClose}
+            className="flex-1 px-4 py-2 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={handleApplySplit}
+            className="flex-1 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors flex items-center justify-center gap-2"
+          >
+            <Check className="w-4 h-4" />
+            Apply Split
+          </button>
+        </div>
+      </div>
+    </Modal>
   );
 }
 
@@ -2671,24 +3636,25 @@ function ShareShoppingListModal({
   shoppingList: ShoppingList | null;
   onShared: () => void;
 }) {
+  const { data: session } = useSession();
   const [selectedIndices, setSelectedIndices] = useState<Set<number>>(new Set());
   const [selectedUserIds, setSelectedUserIds] = useState<Set<string>>(new Set());
   const [users, setUsers] = useState<{ userId: string; email?: string; name?: string; image?: string }[]>([]);
   const [loadingUsers, setLoadingUsers] = useState(false);
   const [sharing, setSharing] = useState(false);
+  const [unsharing, setUnsharing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [autoSplitModalOpen, setAutoSplitModalOpen] = useState(false);
+  const [itemUserAssignments, setItemUserAssignments] = useState<Map<number, string>>(new Map());
 
   // Fetch users when modal opens
   useEffect(() => {
     if (isOpen) {
       fetchUsers();
-      // Initialize with already shared items
-      if (shoppingList?.sharedItemIndices) {
-        setSelectedIndices(new Set(shoppingList.sharedItemIndices));
-      } else {
-        setSelectedIndices(new Set());
-      }
+      // Don't pre-select already shared items - start with empty selection
+      setSelectedIndices(new Set());
       setSelectedUserIds(new Set());
+      setItemUserAssignments(new Map());
     }
   }, [isOpen, shoppingList]);
 
@@ -2817,10 +3783,18 @@ function ShareShoppingListModal({
 
   const handleSelectAll = () => {
     if (!shoppingList) return;
-    if (selectedIndices.size === shoppingList.items.length) {
+    const sharedItemIndices = shoppingList.sharedItemIndices || [];
+    const nonSharedIndices = shoppingList.items
+      .map((_, i) => i)
+      .filter(i => !sharedItemIndices.includes(i));
+    
+    // If all non-shared items are selected, deselect all
+    const allNonSharedSelected = nonSharedIndices.every(i => selectedIndices.has(i));
+    if (allNonSharedSelected) {
       setSelectedIndices(new Set());
     } else {
-      setSelectedIndices(new Set(shoppingList.items.map((_, i) => i)));
+      // Select all non-shared items (don't auto-select already-shared items)
+      setSelectedIndices(new Set(nonSharedIndices));
     }
   };
 
@@ -2843,21 +3817,81 @@ function ShareShoppingListModal({
     setError(null);
 
     try {
-      const itemIndicesArray = Array.from(selectedIndices);
-      const response = await fetch(`/api/shopping-lists/${shoppingList._id}/share`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          userIds: userIdsArray,
-          itemIndices: itemIndicesArray,
-        }),
-      });
+      // If we have item-user assignments from auto-split, share items with their assigned users
+      // Otherwise, share all items with all selected users (legacy behavior)
+      if (itemUserAssignments.size > 0) {
+        // Group items by assigned user
+        const itemsByUser = new Map<string, number[]>();
+        
+        selectedIndices.forEach(itemIndex => {
+          const assignedUserId = itemUserAssignments.get(itemIndex);
+          if (assignedUserId && selectedUserIds.has(assignedUserId)) {
+            if (!itemsByUser.has(assignedUserId)) {
+              itemsByUser.set(assignedUserId, []);
+            }
+            itemsByUser.get(assignedUserId)!.push(itemIndex);
+          }
+        });
 
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ error: "Failed to share list" }));
-        throw new Error(errorData.error || "Failed to share list");
+        // Share items with each user separately (sequential to avoid version conflicts)
+        for (const [userId, itemIndices] of itemsByUser.entries()) {
+          const response = await fetch(`/api/shopping-lists/${shoppingList._id}/share`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              userIds: [userId],
+              itemIndices: itemIndices,
+            }),
+          });
+
+          if (!response.ok) {
+            const errorData = await response.json().catch(() => ({ error: "Failed to share list" }));
+            throw new Error(errorData.error || "Failed to share list");
+          }
+        }
+
+        // Also handle any items that don't have assignments (shouldn't happen, but just in case)
+        const unassignedItems = Array.from(selectedIndices).filter(
+          idx => !itemUserAssignments.has(idx)
+        );
+        if (unassignedItems.length > 0) {
+          // Share unassigned items with all selected users
+          const response = await fetch(`/api/shopping-lists/${shoppingList._id}/share`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              userIds: userIdsArray,
+              itemIndices: unassignedItems,
+            }),
+          });
+
+          if (!response.ok) {
+            const errorData = await response.json().catch(() => ({ error: "Failed to share list" }));
+            throw new Error(errorData.error || "Failed to share list");
+          }
+        }
+      } else {
+        // Legacy behavior: share all items with all selected users
+        const itemIndicesArray = Array.from(selectedIndices);
+        const response = await fetch(`/api/shopping-lists/${shoppingList._id}/share`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            userIds: userIdsArray,
+            itemIndices: itemIndicesArray,
+          }),
+        });
+
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({ error: "Failed to share list" }));
+          throw new Error(errorData.error || "Failed to share list");
+        }
       }
 
       onShared();
@@ -2870,14 +3904,145 @@ function ShareShoppingListModal({
     }
   };
 
+  const handleUnshareAll = async () => {
+    if (!shoppingList) return;
+
+    setUnsharing(true);
+    setError(null);
+
+    try {
+      const response = await fetch(`/api/shopping-lists/${shoppingList._id}/share`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          itemIndices: [],
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ error: "Failed to unshare items" }));
+        throw new Error(errorData.error || "Failed to unshare items");
+      }
+
+      onShared();
+      onClose();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to unshare items");
+    } finally {
+      setUnsharing(false);
+    }
+  };
+
   if (!isOpen || !shoppingList) return null;
 
-  const groupedItems = getGroupedItems();
-  const allSelected = shoppingList.items.length > 0 && selectedIndices.size === shoppingList.items.length;
+  const allGroupedItems = getGroupedItems();
+  const sharedItemIndices = shoppingList.sharedItemIndices || [];
+  
+  // Separate items into non-shared and already-shared groups
+  const nonSharedGroups: typeof allGroupedItems = [];
+  const alreadySharedGroups: typeof allGroupedItems = [];
+  
+  allGroupedItems.forEach((group) => {
+    const nonSharedItems: ShoppingListItem[] = [];
+    const nonSharedIndices: number[] = [];
+    const sharedItems: ShoppingListItem[] = [];
+    const sharedIndices: number[] = [];
+    
+    group.items.forEach((item, idx) => {
+      const originalIndex = group.originalIndices[idx];
+      if (sharedItemIndices.includes(originalIndex)) {
+        sharedItems.push(item);
+        sharedIndices.push(originalIndex);
+      } else {
+        nonSharedItems.push(item);
+        nonSharedIndices.push(originalIndex);
+      }
+    });
+    
+    if (nonSharedItems.length > 0) {
+      nonSharedGroups.push({
+        ...group,
+        items: nonSharedItems,
+        originalIndices: nonSharedIndices,
+      });
+    }
+    
+    if (sharedItems.length > 0) {
+      alreadySharedGroups.push({
+        ...group,
+        items: sharedItems,
+        originalIndices: sharedIndices,
+      });
+    }
+  });
+  
+  // Check if all non-shared items are selected (for Select All button)
+  const sharedItemIndicesForCheck = shoppingList.sharedItemIndices || [];
+  const nonSharedIndicesForCheck = shoppingList.items
+    .map((_, i) => i)
+    .filter(i => !sharedItemIndicesForCheck.includes(i));
+  const allNonSharedSelected = nonSharedIndicesForCheck.length > 0 && 
+    nonSharedIndicesForCheck.every(i => selectedIndices.has(i));
+  
+  // Helper function to get which users an item is shared with
+  const getUsersItemIsSharedWith = (itemIndex: number): typeof users => {
+    const sharedUsers: typeof users = [];
+    
+    // Use new sharedItems structure if available
+    if (shoppingList.sharedItems) {
+      const sharedItemsMap = shoppingList.sharedItems instanceof Map 
+        ? Object.fromEntries(shoppingList.sharedItems) 
+        : shoppingList.sharedItems;
+      
+      Object.entries(sharedItemsMap).forEach(([userId, indices]) => {
+        if (Array.isArray(indices) && indices.includes(itemIndex)) {
+          const user = users.find(u => u.userId === userId);
+          if (user) {
+            sharedUsers.push(user);
+          }
+        }
+      });
+    } else {
+      // Fallback to old structure for backward compatibility
+      if (shoppingList.sharedItemIndices?.includes(itemIndex) && shoppingList.sharedWith) {
+        shoppingList.sharedWith.forEach(userId => {
+          const user = users.find(u => u.userId === userId);
+          if (user) {
+            sharedUsers.push(user);
+          }
+        });
+      }
+    }
+    
+    return sharedUsers;
+  };
+
+  // Get users who the list is shared with
+  const sharedWithUsers = (shoppingList.sharedWith || [])
+    .map(userId => users.find(u => u.userId === userId))
+    .filter(Boolean) as typeof users;
+
+  const handleApplyAutoSplit = (itemIndices: Set<number>, itemUserMap?: Map<number, string>) => {
+    setSelectedIndices(itemIndices);
+    setItemUserAssignments(itemUserMap || new Map());
+    setAutoSplitModalOpen(false);
+  };
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title="Share Shopping List">
-      <div className="space-y-4">
+    <>
+      <AutoSplitModal
+        isOpen={autoSplitModalOpen}
+        onClose={() => setAutoSplitModalOpen(false)}
+        shoppingList={shoppingList}
+        selectedUserIds={selectedUserIds}
+        users={users}
+        currentUserId={session?.user?.id}
+        onApplySplit={handleApplyAutoSplit}
+      />
+      <Modal isOpen={isOpen} onClose={onClose} title="Share Shopping List">
+        <div className="space-y-4">
         {/* Users Selection */}
         <div>
           <div className="flex items-center justify-between mb-2">
@@ -2922,13 +4087,11 @@ function ShareShoppingListModal({
                       onChange={() => handleToggleUser(user.userId)}
                       className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
                     />
-                    {user.image && (
-                      <img
-                        src={user.image}
-                        alt={user.name || user.email || user.userId}
-                        className="w-6 h-6 rounded-full"
-                      />
-                    )}
+                    <div className={`w-6 h-6 rounded-full ${getUserColor(user.userId)} flex items-center justify-center`}>
+                      <span className="text-xs text-white font-medium">
+                        {getUserInitials(user.name, user.email, user.userId)}
+                      </span>
+                    </div>
                     <span className="flex-1 text-sm text-gray-900 dark:text-white">
                       {user.name || user.email || user.userId}
                     </span>
@@ -2944,6 +4107,18 @@ function ShareShoppingListModal({
           )}
         </div>
 
+        {/* Auto Split Button */}
+        <div className="flex justify-end">
+          <button
+            onClick={() => setAutoSplitModalOpen(true)}
+            disabled={selectedUserIds.size === 0}
+            className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors flex items-center gap-2 text-sm"
+          >
+            <ArrowRight className="w-4 h-4" />
+            Auto Split
+          </button>
+        </div>
+
         {/* Select All Button */}
         <div className="flex items-center justify-between">
           <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
@@ -2953,7 +4128,7 @@ function ShareShoppingListModal({
             onClick={handleSelectAll}
             className="text-sm text-blue-600 dark:text-blue-400 hover:underline"
           >
-            {allSelected ? "Deselect All" : "Select All"}
+            {allNonSharedSelected ? "Deselect All" : "Select All"}
           </button>
         </div>
 
@@ -2966,7 +4141,8 @@ function ShareShoppingListModal({
 
         {/* Grouped Items List */}
         <div className="max-h-96 overflow-y-auto space-y-4 border border-gray-200 dark:border-gray-700 rounded-lg p-4">
-          {groupedItems.map((group, groupIndex) => (
+          {/* Non-Shared Items */}
+          {nonSharedGroups.map((group, groupIndex) => (
             <div key={groupIndex}>
               {/* Aisle/Bay/Shelf Header */}
               {group.aisle && (
@@ -3015,7 +4191,7 @@ function ShareShoppingListModal({
                       <div className="flex-1 min-w-0">
                         <div className="flex items-start gap-2">
                           {/* Product Image */}
-                          <div className="relative flex-shrink-0">
+                          <div className="absolute flex-shrink-0 top-2 right-2">
                             <CustomerBadge customer={item.customer} app={item.app} />
                             {item.imageUrl ? (
                               <div className="relative w-16 h-16 bg-white rounded-lg overflow-visible shadow-sm border border-gray-100 dark:border-gray-600">
@@ -3042,11 +4218,77 @@ function ShareShoppingListModal({
                             {item.brand && (
                               <p className="text-xs text-gray-500 dark:text-gray-400">{item.brand}</p>
                             )}
-                            {isAlreadyShared && (
-                              <span className="inline-block mt-1 text-xs px-2 py-0.5 bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-400 rounded">
-                                Already Shared
-                              </span>
+                            {/* Show which user this item is assigned to (from auto-split) or will be shared with */}
+                            {isSelected && (
+                              <div className="mt-2 flex items-center gap-2 flex-wrap">
+                                {itemUserAssignments.has(originalIndex) ? (
+                                  <>
+                                    <span className="text-xs text-blue-600 dark:text-blue-400 font-medium">Assigned to:</span>
+                                    {(() => {
+                                      const assignedUserId = itemUserAssignments.get(originalIndex);
+                                      const assignedUser = users.find(u => u.userId === assignedUserId);
+                                      if (!assignedUser) return null;
+                                      return (
+                                        <div className="flex items-center gap-1">
+                                          <div className={`w-4 h-4 rounded-full ${getUserColor(assignedUser.userId)} flex items-center justify-center`}>
+                                            <span className="text-[10px] text-white font-medium">
+                                              {getUserInitials(assignedUser.name, assignedUser.email, assignedUser.userId)}
+                                            </span>
+                                          </div>
+                                          <span className="text-xs text-blue-600 dark:text-blue-400 font-medium">
+                                            {assignedUser.name || assignedUser.email || assignedUser.userId}
+                                          </span>
+                                        </div>
+                                      );
+                                    })()}
+                                  </>
+                                ) : selectedUserIds.size > 0 ? (
+                                  <>
+                                    <span className="text-xs text-blue-600 dark:text-blue-400 font-medium">Will share with:</span>
+                                    {Array.from(selectedUserIds).map((userId) => {
+                                      const user = users.find(u => u.userId === userId);
+                                      if (!user) return null;
+                                      return (
+                                        <div key={userId} className="flex items-center gap-1">
+                                          <div className={`w-4 h-4 rounded-full ${getUserColor(user.userId)} flex items-center justify-center`}>
+                                            <span className="text-[10px] text-white font-medium">
+                                              {getUserInitials(user.name, user.email, user.userId)}
+                                            </span>
+                                          </div>
+                                          <span className="text-xs text-blue-600 dark:text-blue-400 font-medium">
+                                            {user.name || user.email || user.userId}
+                                          </span>
+                                        </div>
+                                      );
+                                    })}
+                                  </>
+                                ) : null}
+                              </div>
                             )}
+                            {/* Show who it's shared with if already shared */}
+                            {isAlreadyShared && (() => {
+                              const itemSharedUsers = getUsersItemIsSharedWith(originalIndex);
+                              return itemSharedUsers.length > 0 ? (
+                                <div className="mt-2 flex items-center gap-2 flex-wrap">
+                                  <span className="text-xs text-gray-500 dark:text-gray-400">Shared with:</span>
+                                  {itemSharedUsers.map((user) => (
+                                    <div
+                                      key={user.userId}
+                                      className="flex items-center gap-1"
+                                    >
+                                      <div className={`w-4 h-4 rounded-full ${getUserColor(user.userId)} flex items-center justify-center`}>
+                                        <span className="text-[10px] text-white font-medium">
+                                          {getUserInitials(user.name, user.email, user.userId)}
+                                        </span>
+                                      </div>
+                                      <span className="text-xs text-gray-600 dark:text-gray-400">
+                                        {user.name || user.email || user.userId}
+                                      </span>
+                                    </div>
+                                  ))}
+                                </div>
+                              ) : null;
+                            })()}
                           </div>
                         </div>
                       </div>
@@ -3056,6 +4298,173 @@ function ShareShoppingListModal({
               </div>
             </div>
           ))}
+
+          {/* Already Shared Items Section */}
+          {alreadySharedGroups.length > 0 && (
+            <div className="mt-6 pt-4 border-t-2 border-green-500 dark:border-green-600">
+              <div className="mb-3 flex items-center gap-2">
+                <Share2 className="w-4 h-4 text-green-600 dark:text-green-400" />
+                <h3 className="text-sm font-bold text-green-600 dark:text-green-400">
+                  Already Shared Items
+                </h3>
+              </div>
+              {alreadySharedGroups.map((group, groupIndex) => (
+                <div key={`shared-${groupIndex}`}>
+                  {/* Aisle/Bay/Shelf Header */}
+                  {group.aisle && (
+                    <div className="pt-2 pb-1 border-b border-gray-200 dark:border-gray-700 mb-2">
+                      <h3 className="font-bold text-gray-900 dark:text-white text-sm">
+                        {(() => {
+                          const aisleNum = parseInt(group.aisle) || 0;
+                          if (aisleNum >= 100 && group.description) {
+                            return `${group.description} | ${group.side || "?"} - Bay ${group.bay || "?"} | Shelf ${group.shelf || "?"}`;
+                          }
+                          return `Aisle ${group.aisle} | ${group.side || "?"} - Bay ${group.bay || "?"} | Shelf ${group.shelf || "?"}`;
+                        })()}
+                      </h3>
+                    </div>
+                  )}
+                  {!group.aisle && groupIndex === 0 && (
+                    <div className="pt-2 pb-1 border-b border-gray-200 dark:border-gray-700 mb-2">
+                      <h3 className="font-bold text-gray-900 dark:text-white text-sm">
+                        Unknown Location
+                      </h3>
+                    </div>
+                  )}
+
+                  {/* Items in this group */}
+                  <div className="space-y-2">
+                    {group.items.map((item, itemIndex) => {
+                      const originalIndex = group.originalIndices[itemIndex];
+                      const isSelected = selectedIndices.has(originalIndex);
+
+                      return (
+                        <label
+                          key={`shared-item-${originalIndex}`}
+                          className={`flex items-start gap-3 p-3 rounded-lg border-2 cursor-pointer transition-colors ${
+                            isSelected
+                              ? "border-blue-500 bg-blue-50 dark:bg-blue-900/20"
+                              : "border-green-200 dark:border-green-800/30 bg-green-50/50 dark:bg-green-900/10 hover:border-green-300 dark:hover:border-green-700/50"
+                          }`}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={isSelected}
+                            onChange={() => handleToggleItem(originalIndex)}
+                            className="mt-1 w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                          />
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-start gap-2">
+                              {/* Product Image */}
+                              <div className="absolute flex-shrink-0 top-2 right-2">
+                                <CustomerBadge customer={item.customer} app={item.app} />
+                                {item.imageUrl ? (
+                                  <div className="relative w-16 h-16 bg-white rounded-lg overflow-visible shadow-sm border border-gray-100 dark:border-gray-600">
+                                    <Image
+                                      src={item.imageUrl}
+                                      alt={item.found && item.description ? item.description : item.productName}
+                                      fill
+                                      className="object-contain p-1"
+                                      unoptimized
+                                    />
+                                  </div>
+                                ) : (
+                                  <div className="w-16 h-16 bg-gray-100 dark:bg-gray-700 rounded-lg flex items-center justify-center border border-gray-200 dark:border-gray-600 overflow-visible">
+                                    <ShoppingCart className="w-5 h-5 text-gray-400" />
+                                  </div>
+                                )}
+                              </div>
+
+                              {/* Product Details */}
+                              <div className="flex-1 min-w-0">
+                                <p className="font-medium text-gray-900 dark:text-white text-sm">
+                                  {item.found && item.description ? item.description : item.productName}
+                                </p>
+                                {item.brand && (
+                                  <p className="text-xs text-gray-500 dark:text-gray-400">{item.brand}</p>
+                                )}
+                                {/* Show which user this item is assigned to (from auto-split) or will be shared with */}
+                                {isSelected && (
+                                  <div className="mt-2 flex items-center gap-2 flex-wrap">
+                                    {itemUserAssignments.has(originalIndex) ? (
+                                      <>
+                                        <span className="text-xs text-blue-600 dark:text-blue-400 font-medium">Assigned to:</span>
+                                        {(() => {
+                                          const assignedUserId = itemUserAssignments.get(originalIndex);
+                                          const assignedUser = users.find(u => u.userId === assignedUserId);
+                                          if (!assignedUser) return null;
+                                          return (
+                                            <div className="flex items-center gap-1">
+                                              <div className={`w-4 h-4 rounded-full ${getUserColor(assignedUser.userId)} flex items-center justify-center`}>
+                                                <span className="text-[10px] text-white font-medium">
+                                                  {getUserInitials(assignedUser.name, assignedUser.email, assignedUser.userId)}
+                                                </span>
+                                              </div>
+                                              <span className="text-xs text-blue-600 dark:text-blue-400 font-medium">
+                                                {assignedUser.name || assignedUser.email || assignedUser.userId}
+                                              </span>
+                                            </div>
+                                          );
+                                        })()}
+                                      </>
+                                    ) : selectedUserIds.size > 0 ? (
+                                      <>
+                                        <span className="text-xs text-blue-600 dark:text-blue-400 font-medium">Will share with:</span>
+                                        {Array.from(selectedUserIds).map((userId) => {
+                                          const user = users.find(u => u.userId === userId);
+                                          if (!user) return null;
+                                          return (
+                                            <div key={userId} className="flex items-center gap-1">
+                                              <div className={`w-4 h-4 rounded-full ${getUserColor(user.userId)} flex items-center justify-center`}>
+                                                <span className="text-[10px] text-white font-medium">
+                                                  {getUserInitials(user.name, user.email, user.userId)}
+                                                </span>
+                                              </div>
+                                              <span className="text-xs text-blue-600 dark:text-blue-400 font-medium">
+                                                {user.name || user.email || user.userId}
+                                              </span>
+                                            </div>
+                                          );
+                                        })}
+                                      </>
+                                    ) : null}
+                                  </div>
+                                )}
+                                {/* Show who it's shared with */}
+                                {(() => {
+                                  const itemSharedUsers = getUsersItemIsSharedWith(originalIndex);
+                                  return itemSharedUsers.length > 0 ? (
+                                    <div className="mt-2 flex items-center gap-2 flex-wrap">
+                                      <span className="text-xs text-gray-500 dark:text-gray-400">Shared with:</span>
+                                      {itemSharedUsers.map((user) => (
+                                        <div
+                                          key={user.userId}
+                                          className="flex items-center gap-1"
+                                        >
+                                          <div className={`w-4 h-4 rounded-full ${getUserColor(user.userId)} flex items-center justify-center`}>
+                                            <span className="text-[10px] text-white font-medium">
+                                              {getUserInitials(user.name, user.email, user.userId)}
+                                            </span>
+                                          </div>
+                                          <span className="text-xs text-gray-600 dark:text-gray-400">
+                                            {user.name || user.email || user.userId}
+                                          </span>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  ) : null;
+                                })()}
+                              </div>
+                            </div>
+                          </div>
+                        </label>
+                      );
+                    })}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
 
         {/* Action Buttons */}
@@ -3063,13 +4472,32 @@ function ShareShoppingListModal({
           <button
             onClick={onClose}
             className="flex-1 px-4 py-2 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
-            disabled={sharing}
+            disabled={sharing || unsharing}
           >
             Cancel
           </button>
+          {sharedItemIndices.length > 0 && (
+            <button
+              onClick={handleUnshareAll}
+              disabled={sharing || unsharing}
+              className="px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2"
+            >
+              {unsharing ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  Unsharing...
+                </>
+              ) : (
+                <>
+                  <X className="w-4 h-4" />
+                  Unshare All
+                </>
+              )}
+            </button>
+          )}
           <button
             onClick={handleShare}
-            disabled={sharing || selectedIndices.size === 0 || selectedUserIds.size === 0}
+            disabled={sharing || unsharing || selectedIndices.size === 0 || selectedUserIds.size === 0}
             className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2"
           >
             {sharing ? (
@@ -3087,6 +4515,7 @@ function ShareShoppingListModal({
         </div>
       </div>
     </Modal>
+    </>
   );
 }
 
@@ -3105,10 +4534,15 @@ export default function ShoppingListDetailPage() {
   const [screenshotUploadOpen, setScreenshotUploadOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<"todo" | "problem" | "done">("todo");
   const [scanningItem, setScanningItem] = useState<ShoppingListItem | null>(null);
+  const [croppingItemIndex, setCroppingItemIndex] = useState<number | null>(null);
   const [scanResult, setScanResult] = useState<{ success: boolean; item: ShoppingListItem; scannedBarcode?: string } | null>(null);
   const [customerIdentificationOpen, setCustomerIdentificationOpen] = useState(false);
   const [shareModalOpen, setShareModalOpen] = useState(false);
+  const [users, setUsers] = useState<{ userId: string; email?: string; name?: string; image?: string }[]>([]);
+  const [viewingScreenshot, setViewingScreenshot] = useState<{ base64: string; item: ShoppingListItem; itemIndex: number } | null>(null); // screenshot and item to view
+  const [showOriginalScreenshot, setShowOriginalScreenshot] = useState(false);
   const hasAutoRefreshedRef = useRef(false);
+  const previousItemsRef = useRef<string>('');
 
   const fetchShoppingList = async () => {
     try {
@@ -3120,12 +4554,142 @@ export default function ShoppingListDetailPage() {
       }
 
       const data = await response.json();
+      
+      // Log prettified response in browser console
+      console.log("Shopping List Response:", data);
+      
+      // Check if items have croppedImage
+      if (data.items && Array.isArray(data.items)) {
+        const itemsWithCropped = data.items.filter((item: any) => item.croppedImage);
+        console.log(`Items with cropped images: ${itemsWithCropped.length} of ${data.items.length}`);
+        if (itemsWithCropped.length > 0) {
+          console.log("Sample item with cropped image:", {
+            productName: itemsWithCropped[0].productName,
+            hasCroppedImage: !!itemsWithCropped[0].croppedImage,
+            croppedImageLength: itemsWithCropped[0].croppedImage?.length || 0,
+          });
+        }
+      }
+      
       setShoppingList(data);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load shopping list");
     } finally {
       setLoading(false);
     }
+  };
+
+  const fetchUsers = async () => {
+    try {
+      const response = await fetch("/api/users");
+      if (!response.ok) {
+        throw new Error("Failed to fetch users");
+      }
+      const data = await response.json();
+      setUsers(data.users || []);
+    } catch (err) {
+      console.error("Failed to fetch users:", err);
+    }
+  };
+
+  // Helper function to get which users an item is shared with
+  const getUsersItemIsSharedWith = (itemIndex: number): typeof users => {
+    if (!shoppingList) return [];
+    const sharedUsers: typeof users = [];
+    
+    // Use new sharedItems structure if available
+    if (shoppingList.sharedItems) {
+      const sharedItemsMap = shoppingList.sharedItems instanceof Map 
+        ? Object.fromEntries(shoppingList.sharedItems) 
+        : shoppingList.sharedItems;
+      
+      Object.entries(sharedItemsMap).forEach(([userId, indices]) => {
+        if (Array.isArray(indices) && indices.includes(itemIndex)) {
+          const user = users.find(u => u.userId === userId);
+          if (user) {
+            sharedUsers.push(user);
+          }
+        }
+      });
+    } else {
+      // Fallback to old structure for backward compatibility
+      if (shoppingList.sharedItemIndices?.includes(itemIndex) && shoppingList.sharedWith) {
+        shoppingList.sharedWith.forEach(userId => {
+          const user = users.find(u => u.userId === userId);
+          if (user) {
+            sharedUsers.push(user);
+          }
+        });
+      }
+    }
+    
+    return sharedUsers;
+  };
+
+  // Fetch user info for specific user IDs (e.g., users in sharedWith)
+  const fetchUsersByIds = async (userIds: string[]) => {
+    if (!userIds || userIds.length === 0) return;
+    
+    try {
+      const response = await fetch("/api/users/by-ids", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ userIds }),
+      });
+      if (!response.ok) {
+        throw new Error("Failed to fetch users by IDs");
+      }
+      const data = await response.json();
+      const fetchedUsers = data.users || [];
+      
+      // Merge with existing users, avoiding duplicates
+      setUsers((prevUsers) => {
+        const existingUserIds = new Set(prevUsers.map((u) => u.userId));
+        const newUsers = fetchedUsers.filter(
+          (u: { userId: string }) => !existingUserIds.has(u.userId)
+        );
+        return [...prevUsers, ...newUsers];
+      });
+    } catch (err) {
+      console.error("Failed to fetch users by IDs:", err);
+    }
+  };
+
+  // Fetch users when component mounts and when shopping list changes
+  useEffect(() => {
+    fetchUsers();
+  }, []);
+
+  // Fetch user info for all users in sharedWith and sharedItems when shopping list is loaded
+  useEffect(() => {
+    const userIdsToFetch = new Set<string>();
+    
+    // Add users from sharedWith (backward compatibility)
+    if (shoppingList?.sharedWith && shoppingList.sharedWith.length > 0) {
+      shoppingList.sharedWith.forEach(userId => userIdsToFetch.add(userId));
+    }
+    
+    // Add users from sharedItems (new structure)
+    if (shoppingList?.sharedItems) {
+      const sharedItemsMap = shoppingList.sharedItems instanceof Map 
+        ? Object.fromEntries(shoppingList.sharedItems) 
+        : shoppingList.sharedItems;
+      Object.keys(sharedItemsMap).forEach(userId => userIdsToFetch.add(userId));
+    }
+    
+    if (userIdsToFetch.size > 0) {
+      fetchUsersByIds(Array.from(userIdsToFetch));
+    }
+  }, [shoppingList?.sharedWith, shoppingList?.sharedItems]);
+
+  // Helper to get original index from filtered index (for shared users)
+  const getOriginalIndex = (filteredIndex: number): number => {
+    if (!shoppingList?.isShared || !shoppingList?.originalIndicesMap) {
+      return filteredIndex; // Owner sees full list, no mapping needed
+    }
+    return shoppingList.originalIndicesMap[filteredIndex] ?? filteredIndex;
   };
 
   useEffect(() => {
@@ -3186,7 +4750,60 @@ export default function ShoppingListDetailPage() {
   };
 
   const handleScreenshotItemsAdded = async () => {
+    console.log("🔄 Refreshing shopping list after items added...");
     await fetchShoppingList();
+    console.log("✅ Shopping list refreshed");
+  };
+
+  const handleCropItem = async (item: ShoppingListItem, itemIndex: number) => {
+    if (!shoppingList || !item.screenshotId) {
+      console.error("Cannot crop: missing shopping list or screenshotId");
+      return;
+    }
+
+    // Find the screenshot
+    const screenshot = shoppingList.screenshots?.find(s => s.id === item.screenshotId);
+    if (!screenshot) {
+      console.error("Cannot crop: screenshot not found");
+      return;
+    }
+
+    setCroppingItemIndex(itemIndex);
+    try {
+      console.log(`Cropping item ${itemIndex}:`, {
+        productName: item.productName,
+        screenshotId: item.screenshotId,
+      });
+
+      const cropResponse = await fetch("/api/shopping-lists/crop-item", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          shoppingListId: shoppingList._id,
+          itemIndex,
+          screenshotBase64: screenshot.base64,
+          productName: item.searchTerm || item.productName, // Use searchTerm (original Gemini response) instead of matched productName
+        }),
+      });
+
+      if (!cropResponse.ok) {
+        const errorText = await cropResponse.text();
+        throw new Error(errorText || "Failed to crop item");
+      }
+
+      const cropData = await cropResponse.json();
+      console.log(`✅ Crop response:`, cropData);
+
+      // Refresh the shopping list to show the cropped image
+      await fetchShoppingList();
+    } catch (err) {
+      console.error(`❌ Error cropping item:`, err);
+      setError(err instanceof Error ? err.message : "Failed to crop item");
+    } finally {
+      setCroppingItemIndex(null);
+    }
   };
 
   const handleScanBarcode = (item: ShoppingListItem) => {
@@ -3244,7 +4861,7 @@ export default function ShoppingListDetailPage() {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          itemIndex: shoppingList?.items.findIndex(i => i === item) ?? -1,
+          itemIndex: getOriginalIndex(shoppingList?.items.findIndex(i => i === item) ?? -1),
           item: {
             ...item,
             done: true,
@@ -3263,6 +4880,92 @@ export default function ShoppingListDetailPage() {
     }
   };
 
+  // Helper to detect duplicates based on productId, app, and customer
+  const getDuplicateInfo = (item: ShoppingListItem, allItems: ShoppingListItem[]): { isDuplicate: boolean; duplicateCount: number } => {
+    if (!item.productId || !item.app || !item.customer) {
+      return { isDuplicate: false, duplicateCount: 0 };
+    }
+
+    const duplicates = allItems.filter(otherItem => 
+      otherItem.productId === item.productId &&
+      otherItem.app === item.app &&
+      otherItem.customer === item.customer
+    );
+
+    return {
+      isDuplicate: duplicates.length > 1,
+      duplicateCount: duplicates.length
+    };
+  };
+
+  // State to track cropped image heights
+  const [croppedImageHeights, setCroppedImageHeights] = useState<Map<string, number>>(new Map<string, number>());
+
+  // Recalculate image heights when shopping list changes
+  useEffect(() => {
+    if (!shoppingList || !shoppingList.items) return;
+
+    // Create a signature of items to detect changes
+    const itemsSignature = shoppingList.items.map((item, idx) => 
+      `${idx}-${item.croppedImage ? item.croppedImage.substring(0, 100) : 'no-image'}`
+    ).join('|');
+
+    // Only recalculate if items have actually changed
+    if (previousItemsRef.current === itemsSignature) return;
+    previousItemsRef.current = itemsSignature;
+
+    // Clear existing heights to force recalculation
+    setCroppedImageHeights(new Map<string, number>());
+
+    // Check all items with cropped images
+    shoppingList.items.forEach((item, index) => {
+      if (item.croppedImage) {
+        const itemId = `item-${index}`;
+        const img = document.createElement('img') as HTMLImageElement;
+        img.onload = () => {
+          const height = img.naturalHeight;
+          setCroppedImageHeights(prev => {
+            const newMap = new Map<string, number>(prev);
+            newMap.set(itemId, height);
+            return newMap;
+          });
+        };
+        img.onerror = () => {
+          // If image fails to load, mark as invalid
+          setCroppedImageHeights(prev => {
+            const newMap = new Map<string, number>(prev);
+            newMap.set(itemId, 0);
+            return newMap;
+          });
+        };
+        img.src = item.croppedImage;
+      }
+    });
+  }, [shoppingList]);
+
+  // Helper to check if cropped image height is too small
+  const checkCroppedImageHeight = (croppedImage: string, itemId: string) => {
+    if (!croppedImage || croppedImageHeights.has(itemId)) return;
+
+    const img = document.createElement('img') as HTMLImageElement;
+    img.onload = () => {
+      const height = img.naturalHeight;
+      setCroppedImageHeights(prev => {
+        const newMap = new Map<string, number>(prev);
+        newMap.set(itemId, height);
+        return newMap;
+      });
+    };
+    img.src = croppedImage;
+  };
+
+  // Helper to check if image height is suspiciously small
+  const isCroppedImageTooSmall = (item: ShoppingListItem, itemId: string): boolean => {
+    if (!item.croppedImage) return false;
+    const height = croppedImageHeights.get(itemId);
+    return height !== undefined && height < 300;
+  };
+
   const handleMoveToProblem = async (item: ShoppingListItem) => {
     try {
       const response = await fetch(`/api/shopping-lists/${id}/items`, {
@@ -3271,7 +4974,7 @@ export default function ShoppingListDetailPage() {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          itemIndex: shoppingList?.items.findIndex(i => i === item) ?? -1,
+          itemIndex: getOriginalIndex(shoppingList?.items.findIndex(i => i === item) ?? -1),
           item: {
             ...item,
             problem: true,
@@ -3299,7 +5002,7 @@ export default function ShoppingListDetailPage() {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          itemIndex: shoppingList?.items.findIndex(i => i === item) ?? -1,
+          itemIndex: getOriginalIndex(shoppingList?.items.findIndex(i => i === item) ?? -1),
           item: {
             ...item,
             problem: false,
@@ -3327,7 +5030,7 @@ export default function ShoppingListDetailPage() {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          itemIndex: shoppingList?.items.findIndex(i => i === item) ?? -1,
+          itemIndex: getOriginalIndex(shoppingList?.items.findIndex(i => i === item) ?? -1),
           item: {
             ...item,
             done: true,
@@ -3355,7 +5058,7 @@ export default function ShoppingListDetailPage() {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          itemIndex: shoppingList?.items.findIndex(i => i === item) ?? -1,
+          itemIndex: getOriginalIndex(shoppingList?.items.findIndex(i => i === item) ?? -1),
           item: {
             ...item,
             done: true,
@@ -3408,6 +5111,9 @@ export default function ShoppingListDetailPage() {
   };
 
   // Create items with their original indices before sorting
+  // Get all items for duplicate detection (across all tabs) - define before return
+  const allItemsForDuplicateCheck = shoppingList.items;
+
   const itemsWithIndices = shoppingList.items.map((item, index) => ({ item, originalIndex: index }));
   
   // Sort items by: 1) Aisle number (unknowns first), 2) Bay number, 3) Shelf number
@@ -3443,60 +5149,64 @@ export default function ShoppingListDetailPage() {
     return shelfA - shelfB;
   });
   
-  const sortedItems = sortedItemsWithIndices.map(({ item }) => item);
 
-  // Group sorted items by aisle + bay + shelf for section headers
-  const groupedItems: { aisle: string; bay: string; shelf: string; side: string; description: string; items: ShoppingListItem[]; originalIndices: number[] }[] = [];
-  
-  sortedItemsWithIndices.forEach(({ item, originalIndex }) => {
-    const primaryAisle = getPrimaryAisle(item);
-    const aisleNum = primaryAisle?.aisleNumber || "";
-    const bay = primaryAisle?.bayNumber || "";
-    const shelf = primaryAisle?.shelfNumber || "";
-    const side = primaryAisle?.side || "";
-    const description = primaryAisle?.description || "";
+  // Helper function to group items by aisle/bay/shelf
+  const groupItemsByAisle = (itemsWithIndices: { item: ShoppingListItem; originalIndex: number }[]) => {
+    const grouped: { aisle: string; bay: string; shelf: string; side: string; description: string; items: ShoppingListItem[]; originalIndices: number[] }[] = [];
     
-    const lastGroup = groupedItems[groupedItems.length - 1];
-    if (lastGroup && lastGroup.aisle === aisleNum && lastGroup.bay === bay && lastGroup.shelf === shelf) {
-      lastGroup.items.push(item);
-      lastGroup.originalIndices.push(originalIndex);
-    } else {
-      groupedItems.push({ aisle: aisleNum, bay, shelf, side, description, items: [item], originalIndices: [originalIndex] });
-    }
-  });
-
-  // If no aisle groupings, just show all items
-  if (groupedItems.length === 0 || (groupedItems.length === 1 && !groupedItems[0].aisle)) {
-    groupedItems.length = 0;
-    groupedItems.push({ 
-      aisle: "", 
-      bay: "", 
-      shelf: "", 
-      side: "",
-      description: "",
-      items: sortedItems,
-      originalIndices: sortedItemsWithIndices.map(({ originalIndex }) => originalIndex)
+    itemsWithIndices.forEach(({ item, originalIndex }) => {
+      const primaryAisle = getPrimaryAisle(item);
+      const aisleNum = primaryAisle?.aisleNumber || "";
+      const bay = primaryAisle?.bayNumber || "";
+      const shelf = primaryAisle?.shelfNumber || "";
+      const side = primaryAisle?.side || "";
+      const description = primaryAisle?.description || "";
+      
+      const lastGroup = grouped[grouped.length - 1];
+      if (lastGroup && lastGroup.aisle === aisleNum && lastGroup.bay === bay && lastGroup.shelf === shelf) {
+        lastGroup.items.push(item);
+        lastGroup.originalIndices.push(originalIndex);
+      } else {
+        grouped.push({ aisle: aisleNum, bay, shelf, side, description, items: [item], originalIndices: [originalIndex] });
+      }
     });
-  }
+
+    if (grouped.length === 0 || (grouped.length === 1 && !grouped[0].aisle)) {
+      grouped.length = 0;
+      grouped.push({ 
+        aisle: "", 
+        bay: "", 
+        shelf: "", 
+        side: "",
+        description: "",
+        items: itemsWithIndices.map(({ item }) => item),
+        originalIndices: itemsWithIndices.map(({ originalIndex }) => originalIndex)
+      });
+    }
+
+    return grouped;
+  };
 
   // Filter items by status based on active tab
-  const filteredGroupedItems = groupedItems.map(group => ({
-    ...group,
-    items: group.items.filter(item => {
-      if (activeTab === "todo") return !item.done && !item.problem;
-      if (activeTab === "problem") return item.problem;
-      if (activeTab === "done") return item.done;
-      return false;
-    }),
-    originalIndices: group.items
-      .map((item, idx) => {
-        if (activeTab === "todo" && !item.done && !item.problem) return group.originalIndices[idx];
-        if (activeTab === "problem" && item.problem) return group.originalIndices[idx];
-        if (activeTab === "done" && item.done) return group.originalIndices[idx];
-        return -1;
-      })
-      .filter(idx => idx !== -1)
-  })).filter(group => group.items.length > 0);
+  const filteredItemsWithIndices = sortedItemsWithIndices.filter(({ item }) => {
+    if (activeTab === "todo") return !item.done && !item.problem;
+    if (activeTab === "problem") return item.problem;
+    if (activeTab === "done") return item.done;
+    return false;
+  });
+
+  // Separate shared and non-shared items
+  const sharedItemIndices = shoppingList.sharedItemIndices || [];
+  const nonSharedItems = filteredItemsWithIndices.filter(({ originalIndex }) => 
+    !sharedItemIndices.includes(originalIndex)
+  );
+  const sharedItems = filteredItemsWithIndices.filter(({ originalIndex }) => 
+    sharedItemIndices.includes(originalIndex)
+  );
+
+  // Group each set separately
+  const nonSharedGroupedItems = groupItemsByAisle(nonSharedItems).filter(group => group.items.length > 0);
+  const sharedGroupedItems = groupItemsByAisle(sharedItems).filter(group => group.items.length > 0);
 
   return (
     <Layout>
@@ -3600,12 +5310,14 @@ export default function ShoppingListDetailPage() {
 
         {/* Items */}
         <div>
-          {filteredGroupedItems.length === 0 ? (
+          {nonSharedGroupedItems.length === 0 && sharedGroupedItems.length === 0 ? (
             <div className="text-center py-12 text-gray-500 dark:text-gray-400">
               <p>No {activeTab === "todo" ? "todo" : activeTab === "problem" ? "problem" : "completed"} items</p>
             </div>
           ) : (
-            filteredGroupedItems.map((group, groupIndex) => (
+            <>
+              {/* Non-Shared Items */}
+              {nonSharedGroupedItems.map((group, groupIndex) => (
             <div key={groupIndex}>
               {/* Aisle/Bay/Shelf Header - Instacart Style */}
               {group.aisle && (
@@ -3672,90 +5384,199 @@ export default function ShoppingListDetailPage() {
                   }
                 };
 
+                // Check for duplicates
+                const duplicateInfo = getDuplicateInfo(item, allItemsForDuplicateCheck);
+                // Check if missing cropped image (has screenshotId but no croppedImage)
+                const missingCroppedImage = item.screenshotId && !item.croppedImage;
+                // Check cropped image height
+                const itemId = `item-${originalIndex}`;
+                if (item.croppedImage) {
+                  checkCroppedImageHeight(item.croppedImage, itemId);
+                }
+                const isImageTooSmall = isCroppedImageTooSmall(item, itemId);
+
                 return (
                   <div
                     key={`${groupIndex}-${index}`}
-                    className="mb-2 rounded-lg overflow-hidden"
+                    className="mb-2 rounded-lg"
                   >
+                    {/* Single Card with Cropped Image at Top and Product Info Below */}
                     <div 
-                      className="flex gap-4 py-3 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-800/50 rounded-lg transition-colors cursor-pointer"
+                      className={`bg-white dark:bg-gray-100 hover:bg-gray-50 dark:hover:bg-gray-200 rounded-lg transition-colors cursor-pointer relative border-2 overflow-hidden ${
+                        isImageTooSmall ? "border-red-400 dark:border-red-500" : missingCroppedImage ? "border-yellow-400 dark:border-yellow-500" : duplicateInfo.isDuplicate ? "border-orange-400 dark:border-orange-500" : "border-gray-200 dark:border-gray-300"
+                      }`}
                       onClick={handleItemClick}
                     >
-                    {/* Product Image with Customer Badge */}
-                    <div className="relative flex-shrink-0">
-                      <CustomerBadge customer={item.customer} app={item.app} />
-                      {item.imageUrl ? (
-                        <div className="relative w-20 h-20 bg-white rounded-lg overflow-visible shadow-sm border border-gray-100 dark:border-gray-600">
-                          <Image
-                            src={item.imageUrl}
+                      {/* Cropped Image at Top - Inside the card */}
+                      {item.croppedImage ? (
+                        <div className="w-full bg-white dark:bg-gray-50 border-b border-gray-200 dark:border-gray-300 rounded-t-lg overflow-hidden relative">
+                          {/* Duplicate Indicator Badge - Top left of cropped image */}
+                          {duplicateInfo.isDuplicate && (
+                            <div className="absolute top-2 left-2 z-10">
+                              <div className="px-2 py-1 bg-orange-500 text-white text-xs font-medium rounded-md shadow-md flex items-center gap-1">
+                                <AlertTriangle className="w-3 h-3" />
+                                Duplicate ({duplicateInfo.duplicateCount})
+                              </div>
+                            </div>
+                          )}
+                          {/* Image Too Small Indicator Badge */}
+                          {isImageTooSmall && (
+                            <div className="absolute top-2 left-2 z-10" style={{ top: duplicateInfo.isDuplicate ? '2.5rem' : '0.5rem' }}>
+                              <div className="px-2 py-1 bg-red-500 text-white text-xs font-medium rounded-md shadow-md flex items-center gap-1">
+                                <AlertTriangle className="w-3 h-3" />
+                                Image may be cut off
+                              </div>
+                            </div>
+                          )}
+                          <img
+                            src={item.croppedImage}
                             alt={item.found && item.description ? item.description : item.productName}
-                            fill
-                            className="object-contain p-2"
-                            unoptimized
+                            className="w-full h-auto max-h-64 object-contain mx-auto block"
                           />
                         </div>
-                      ) : (
-                        <div className="w-20 h-20 bg-gray-100 dark:bg-gray-700 rounded-lg flex items-center justify-center border border-gray-200 dark:border-gray-600 overflow-visible">
-                          <ShoppingCart className="w-6 h-6 text-gray-400" />
+                      ) : item.screenshotId ? (
+                        <div className="w-full bg-gray-100 dark:bg-gray-200 border-b border-gray-200 dark:border-gray-300 rounded-t-lg overflow-hidden relative py-3 px-4">
+                          {/* Duplicate Indicator Badge - Top left of no cropped image section */}
+                          {duplicateInfo.isDuplicate && (
+                            <div className="absolute top-2 left-2 z-10">
+                              <div className="px-2 py-1 bg-orange-500 text-white text-xs font-medium rounded-md shadow-md flex items-center gap-1">
+                                <AlertTriangle className="w-3 h-3" />
+                                Duplicate ({duplicateInfo.duplicateCount})
+                              </div>
+                            </div>
+                          )}
+                          {/* Missing Cropped Image Indicator Badge */}
+                          <div className="absolute top-2 left-2 z-10" style={{ top: duplicateInfo.isDuplicate ? '2.5rem' : '0.5rem' }}>
+                            <div className="px-2 py-1 bg-yellow-500 text-white text-xs font-medium rounded-md shadow-md flex items-center gap-1">
+                              <AlertTriangle className="w-3 h-3" />
+                              No cropped image
+                            </div>
+                          </div>
+                          <div className="text-center">
+                            <p className="text-sm font-medium text-gray-700 dark:text-gray-800">
+                              No cropped image available
+                            </p>
+                            <p className="text-xs text-gray-600 dark:text-gray-700 mt-1">
+                              Cropping was not successful
+                            </p>
+                          </div>
                         </div>
-                      )}
-                    </div>
+                      ) : null}
+                      
+                      {/* Product Info Section Below Cropped Image */}
+                      <div className="flex gap-4 py-3 px-3 relative overflow-visible">
+                        {/* Action Buttons - Positioned in top right of card */}
+                        <div className="absolute top-2 right-2 flex items-start gap-2 z-10">
+                          {/* Scan Button - Only show for todo items with UPC */}
+                          {activeTab === "todo" && item.upc && (
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleScanBarcode(item);
+                              }}
+                              className="px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2 text-sm whitespace-nowrap shadow-md"
+                            >
+                              <Scan className="w-4 h-4 flex-shrink-0" />
+                              <span className="hidden sm:inline">Scan</span>
+                            </button>
+                          )}
+                        </div>
+                        {/* Customer Badge - Positioned to the top left */}
+                        <div className="absolute top-2 left-2 z-20" style={{ pointerEvents: 'none' }}>
+                          <div style={{ pointerEvents: 'auto' }}>
+                            <CustomerBadge customer={item.customer} app={item.app} />
+                          </div>
+                        </div>
+                        {/* Product Image - Positioned to the left */}
+                        <div className="relative flex-shrink-0">
+                          {item.imageUrl ? (
+                            <div className="relative w-20 h-20 bg-white rounded-lg overflow-visible shadow-sm border border-gray-100 dark:border-gray-600">
+                              <Image
+                                src={item.imageUrl}
+                                alt={item.found && item.description ? item.description : item.productName}
+                                fill
+                                className="object-contain p-2"
+                                unoptimized
+                              />
+                            </div>
+                          ) : (
+                            <div className="w-20 h-20 bg-gray-100 dark:bg-gray-700 rounded-lg flex items-center justify-center border border-gray-200 dark:border-gray-600 overflow-visible">
+                              <ShoppingCart className="w-6 h-6 text-gray-400" />
+                            </div>
+                          )}
+                        </div>
 
-                    {/* Product Details */}
-                    <div className="flex-1 min-w-0 pt-1">
-                      <div className="flex items-start justify-between gap-2">
-                        <div className="flex-1 min-w-0">
+                        {/* Product Details */}
+                        <div className="flex-1 min-w-0 pt-1">
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="flex-1 min-w-0">
                           {/* Quantity + Kroger Product Name */}
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <p className="text-gray-900 dark:text-white leading-snug">
-                              {item.found && item.description ? (
+                          <p className="text-gray-900 dark:text-gray-900 leading-snug break-words">
+                            {item.found && item.description ? (
+                              <>
+                                {item.quantity && (
+                                  <span className="font-bold text-lg">{item.quantity} </span>
+                                )}
+                                <span className="text-base">{item.description}</span>
+                              </>
+                            ) : (
+                              <>
+                                <span className="font-bold text-lg">{item.quantity || "1 ct"}</span>{" "}
+                                <span className="text-base">{item.productName}</span>
+                              </>
+                            )}
+                          </p>
+
+                          {/* Shared With Info */}
+                          {(() => {
+                            const itemSharedUsers = getUsersItemIsSharedWith(originalIndex);
+                            return itemSharedUsers.length > 0 ? (
+                              <div className="mt-2 flex items-center gap-2 flex-wrap">
+                                <span className="text-xs text-gray-500 dark:text-gray-400">Shared with:</span>
+                                {itemSharedUsers.map((user) => (
+                                  <div
+                                    key={user.userId}
+                                    className="flex items-center gap-1"
+                                  >
+                                    <div className={`w-4 h-4 rounded-full ${getUserColor(user.userId)} flex items-center justify-center`}>
+                                      <span className="text-[10px] text-white font-medium">
+                                        {getUserInitials(user.name, user.email, user.userId)}
+                                      </span>
+                                    </div>
+                                    <span className="text-xs text-gray-600 dark:text-gray-700">
+                                      {user.name || user.email || user.userId}
+                                    </span>
+                                  </div>
+                                ))}
+                              </div>
+                            ) : null;
+                          })()}
+                          
+                          {/* Kroger Size • Price • Stock Level */}
+                          {item.found && (
+                            <p className="text-sm text-gray-600 dark:text-gray-700 mt-1 whitespace-nowrap flex items-center gap-1 flex-wrap">
+                              <span>
+                                {item.size}
+                                {item.size && (item.price || item.promoPrice) && " • "}
+                                {item.promoPrice ? (
+                                  <span className="text-gray-600 dark:text-gray-700">
+                                    {formatPrice(item.promoPrice)}
+                                  </span>
+                                ) : item.price ? (
+                                  <span>{formatPrice(item.price)}</span>
+                                ) : null}
+                              </span>
+                              {/* Stock Level Indicator - on same line */}
+                              {item.stockLevel && (
                                 <>
-                                  {item.quantity && (
-                                    <span className="font-bold">{item.quantity} </span>
+                                  {(item.size || item.price || item.promoPrice) && (
+                                    <span className="text-gray-600 dark:text-gray-700">•</span>
                                   )}
-                                  {item.description}
-                                </>
-                              ) : (
-                                <>
-                                  <span className="font-bold">{item.quantity || "1 ct"}</span>{" "}
-                                  {item.productName}
+                                  <span className={item.stockLevel === "HIGH" ? "text-green-600 dark:text-green-400" : item.stockLevel === "LOW" ? "text-yellow-600 dark:text-yellow-400" : item.stockLevel === "TEMPORARILY_OUT_OF_STOCK" ? "text-red-600 dark:text-red-400" : ""}>
+                                    {item.stockLevel === "HIGH" ? "✓ In Stock" : item.stockLevel === "LOW" ? "⚠ Low Stock" : item.stockLevel === "TEMPORARILY_OUT_OF_STOCK" ? "✗ Out of Stock" : ""}
+                                  </span>
                                 </>
                               )}
-                            </p>
-                            {/* Shared Indicator */}
-                            {shoppingList.sharedItemIndices?.includes(originalIndex) && (
-                              <span className="inline-flex items-center gap-1 text-xs px-2 py-0.5 bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-400 rounded">
-                                <Share2 className="w-3 h-3" />
-                                Shared
-                              </span>
-                            )}
-                          </div>
-                          
-                          {/* Kroger Size • Price */}
-                          {item.found && (
-                            <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-                              {item.size}
-                              {item.size && (item.price || item.promoPrice) && " • "}
-                              {item.promoPrice ? (
-                                <span className="text-gray-500 dark:text-gray-400">
-                                  {formatPrice(item.promoPrice)}
-                                </span>
-                              ) : item.price ? (
-                                <span>{formatPrice(item.price)}</span>
-                              ) : null}
-                            </p>
-                          )}
-
-                          {/* Stock Level Indicator */}
-                          {item.found && item.stockLevel && (
-                            <p className="text-xs mt-1">
-                              {item.stockLevel === "HIGH" ? (
-                                <span className="text-green-600 dark:text-green-400">✓ In Stock</span>
-                              ) : item.stockLevel === "LOW" ? (
-                                <span className="text-yellow-600 dark:text-yellow-400">⚠ Low Stock</span>
-                              ) : item.stockLevel === "TEMPORARILY_OUT_OF_STOCK" ? (
-                                <span className="text-red-600 dark:text-red-400">✗ Out of Stock</span>
-                              ) : null}
                             </p>
                           )}
 
@@ -3763,6 +5584,12 @@ export default function ShoppingListDetailPage() {
                           {item.found && item.krogerAisles?.[0] && (() => {
                             const aisle = item.krogerAisles[0];
                             const locationParts: string[] = [];
+                            
+                            if (aisle.aisleNumber && parseInt(aisle.aisleNumber) < 100) {
+                              locationParts.push(`Aisle ${aisle.aisleNumber}`);
+                            } else if (aisle.description) {
+                              locationParts.push(aisle.description);
+                            }
                             
                             if (aisle.shelfNumber) {
                               locationParts.push(`Shelf ${aisle.shelfNumber}`);
@@ -3781,7 +5608,7 @@ export default function ShoppingListDetailPage() {
                             const locationText = locationParts.join(" - ");
                             
                             return locationText ? (
-                              <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">
+                              <p className="text-sm text-gray-600 dark:text-gray-700 mt-0.5 whitespace-nowrap">
                                 {locationText}
                               </p>
                             ) : null;
@@ -3793,35 +5620,350 @@ export default function ShoppingListDetailPage() {
                               Not found at Kroger
                             </p>
                           )}
+                            </div>
+                          </div>
                         </div>
-                        {/* Scan Button - Only show for todo items with UPC */}
-                        {activeTab === "todo" && item.upc && (
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleScanBarcode(item);
-                            }}
-                            className="flex-shrink-0 px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2 text-sm"
-                          >
-                            <Scan className="w-4 h-4" />
-                            Scan
-                          </button>
-                        )}
                       </div>
-                    </div>
                     </div>
                   </div>
                 );
               })}
             </div>
-          ))
+          ))}
+
+              {/* Shared Items Section */}
+              {sharedGroupedItems.length > 0 && (
+                <div className="mt-8 pt-6 border-t-2 border-green-500 dark:border-green-600">
+                  <div className="mb-4 flex items-center gap-2">
+                    <Share2 className="w-5 h-5 text-green-600 dark:text-green-400" />
+                    <h2 className="text-lg font-bold text-green-600 dark:text-green-400">
+                      Shared Items
+                    </h2>
+                  </div>
+                  {sharedGroupedItems.map((group, groupIndex) => (
+                    <div key={`shared-${groupIndex}`}>
+                      {/* Aisle/Bay/Shelf Header - Instacart Style */}
+                      {group.aisle && (
+                        <div className="pt-4 pb-2 border-b border-gray-200 dark:border-gray-700 mb-2">
+                          <h2 className="font-bold text-gray-900 dark:text-white text-base">
+                            {(() => {
+                              const aisleNum = parseInt(group.aisle) || 0;
+                              // If aisle number is 100+, show only the area description
+                              if (aisleNum >= 100 && group.description) {
+                                return `${group.description} | ${group.side || "?"} - Bay ${group.bay || "?"} | Shelf ${group.shelf || "?"}`;
+                              }
+                              // Otherwise show the full format with aisle number
+                              return `Aisle ${group.aisle} | ${group.side || "?"} - Bay ${group.bay || "?"} | Shelf ${group.shelf || "?"}`;
+                            })()}
+                          </h2>
+                        </div>
+                      )}
+                      {!group.aisle && groupIndex === 0 && (
+                        <div className="pt-4 pb-2 border-b border-gray-200 dark:border-gray-700 mb-2">
+                          <h2 className="font-bold text-gray-900 dark:text-white text-base">
+                            Unknown Location
+                          </h2>
+                        </div>
+                      )}
+                      
+                      {/* Items in this aisle */}
+                      {group.items.map((item, index) => {
+                        // Use the tracked original index from the grouped items
+                        const originalIndex = group.originalIndices[index];
+
+                        const handleItemClick = () => {
+                          if (item.found) {
+                            setSelectedItem(item);
+                          } else if (originalIndex >= 0) {
+                            setSearchItem({ item, index: originalIndex });
+                          }
+                        };
+
+                        const handleEdit = () => {
+                          if (originalIndex >= 0) {
+                            setEditItem({ item, index: originalIndex });
+                          }
+                        };
+
+                        const handleDelete = async () => {
+                          if (originalIndex >= 0) {
+                            try {
+                              const response = await fetch(`/api/shopping-lists/${id}/items`, {
+                                method: "DELETE",
+                                headers: {
+                                  "Content-Type": "application/json",
+                                },
+                                body: JSON.stringify({ itemIndex: originalIndex }),
+                              });
+
+                              if (!response.ok) {
+                                throw new Error("Failed to delete item");
+                              }
+
+                              await fetchShoppingList();
+                            } catch (err) {
+                              setError(err instanceof Error ? err.message : "Failed to delete item");
+                            }
+                          }
+                        };
+
+                        // Check for duplicates
+                        const duplicateInfo = getDuplicateInfo(item, allItemsForDuplicateCheck);
+                        // Check if missing cropped image (has screenshotId but no croppedImage)
+                        const missingCroppedImage = item.screenshotId && !item.croppedImage;
+                        // Check cropped image height
+                        const itemId = `shared-item-${originalIndex}`;
+                        if (item.croppedImage) {
+                          checkCroppedImageHeight(item.croppedImage, itemId);
+                        }
+                        const isImageTooSmall = isCroppedImageTooSmall(item, itemId);
+
+                        return (
+                          <div
+                            key={`shared-${groupIndex}-${index}`}
+                            className="mb-2 rounded-lg"
+                          >
+                            {/* Single Card with Cropped Image at Top and Product Info Below */}
+                            <div 
+                              className={`bg-white dark:bg-gray-100 hover:bg-gray-50 dark:hover:bg-gray-200 rounded-lg transition-colors cursor-pointer relative border-2 overflow-hidden ${
+                                isImageTooSmall ? "border-red-400 dark:border-red-500" : missingCroppedImage ? "border-yellow-400 dark:border-yellow-500" : duplicateInfo.isDuplicate ? "border-orange-400 dark:border-orange-500" : "border-gray-200 dark:border-gray-300"
+                              }`}
+                              onClick={handleItemClick}
+                            >
+                              {/* Cropped Image at Top - Inside the card */}
+                              {item.croppedImage ? (
+                                <div className="w-full bg-white dark:bg-gray-50 border-b border-gray-200 dark:border-gray-300 rounded-t-lg overflow-hidden relative">
+                                  {/* Duplicate Indicator Badge - Top left of cropped image */}
+                                  {duplicateInfo.isDuplicate && (
+                                    <div className="absolute top-2 left-2 z-10">
+                                      <div className="px-2 py-1 bg-orange-500 text-white text-xs font-medium rounded-md shadow-md flex items-center gap-1">
+                                        <AlertTriangle className="w-3 h-3" />
+                                        Duplicate ({duplicateInfo.duplicateCount})
+                                      </div>
+                                    </div>
+                                  )}
+                                  {/* Image Too Small Indicator Badge */}
+                                  {isImageTooSmall && (
+                                    <div className="absolute top-2 left-2 z-10" style={{ top: duplicateInfo.isDuplicate ? '2.5rem' : '0.5rem' }}>
+                                      <div className="px-2 py-1 bg-red-500 text-white text-xs font-medium rounded-md shadow-md flex items-center gap-1">
+                                        <AlertTriangle className="w-3 h-3" />
+                                        Image may be cut off
+                                      </div>
+                                    </div>
+                                  )}
+                                  <img
+                                    src={item.croppedImage}
+                                    alt={item.found && item.description ? item.description : item.productName}
+                                    className="w-full h-auto max-h-64 object-contain mx-auto block"
+                                  />
+                                </div>
+                              ) : item.screenshotId ? (
+                                <div className="w-full bg-gray-100 dark:bg-gray-200 border-b border-gray-200 dark:border-gray-300 rounded-t-lg overflow-hidden relative py-3 px-4">
+                                  {/* Duplicate Indicator Badge - Top left of no cropped image section */}
+                                  {duplicateInfo.isDuplicate && (
+                                    <div className="absolute top-2 left-2 z-10">
+                                      <div className="px-2 py-1 bg-orange-500 text-white text-xs font-medium rounded-md shadow-md flex items-center gap-1">
+                                        <AlertTriangle className="w-3 h-3" />
+                                        Duplicate ({duplicateInfo.duplicateCount})
+                                      </div>
+                                    </div>
+                                  )}
+                                  {/* Missing Cropped Image Indicator Badge */}
+                                  <div className="absolute top-2 left-2 z-10" style={{ top: duplicateInfo.isDuplicate ? '2.5rem' : '0.5rem' }}>
+                                    <div className="px-2 py-1 bg-yellow-500 text-white text-xs font-medium rounded-md shadow-md flex items-center gap-1">
+                                      <AlertTriangle className="w-3 h-3" />
+                                      No cropped image
+                                    </div>
+                                  </div>
+                                  <div className="text-center">
+                                    <p className="text-sm font-medium text-gray-700 dark:text-gray-800">
+                                      No cropped image available
+                                    </p>
+                                    <p className="text-xs text-gray-600 dark:text-gray-700 mt-1">
+                                      Cropping was not successful
+                                    </p>
+                                  </div>
+                                </div>
+                              ) : null}
+                              
+                              {/* Product Info Section Below Cropped Image */}
+                              <div className="flex gap-4 py-3 px-3 relative overflow-visible">
+                                {/* Action Buttons - Positioned in top right of card */}
+                                <div className="absolute top-2 right-2 flex items-start gap-2 z-10">
+                                  {/* Scan Button - Only show for todo items with UPC */}
+                                  {activeTab === "todo" && item.upc && (
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleScanBarcode(item);
+                                      }}
+                                      className="px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2 text-sm whitespace-nowrap shadow-md"
+                                    >
+                                      <Scan className="w-4 h-4 flex-shrink-0" />
+                                      <span className="hidden sm:inline">Scan</span>
+                                    </button>
+                                  )}
+                                </div>
+                                {/* Customer Badge - Positioned to the top left */}
+                                <div className="absolute top-2 left-2 z-20" style={{ pointerEvents: 'none' }}>
+                                  <div style={{ pointerEvents: 'auto' }}>
+                                    <CustomerBadge customer={item.customer} app={item.app} />
+                                  </div>
+                                </div>
+                                {/* Product Image - Positioned to the left */}
+                                <div className="relative flex-shrink-0">
+                                  {item.imageUrl ? (
+                                    <div className="relative w-20 h-20 bg-white rounded-lg overflow-visible shadow-sm border border-gray-100 dark:border-gray-600">
+                                      <Image
+                                        src={item.imageUrl}
+                                        alt={item.found && item.description ? item.description : item.productName}
+                                        fill
+                                        className="object-contain p-2"
+                                        unoptimized
+                                      />
+                                    </div>
+                                  ) : (
+                                    <div className="w-20 h-20 bg-gray-100 dark:bg-gray-700 rounded-lg flex items-center justify-center border border-gray-200 dark:border-gray-600 overflow-visible">
+                                      <ShoppingCart className="w-6 h-6 text-gray-400" />
+                                    </div>
+                                  )}
+                                </div>
+
+                                {/* Product Details */}
+                                <div className="flex-1 min-w-0 pt-1">
+                                  <div className="flex items-start justify-between gap-3">
+                                    <div className="flex-1 min-w-0">
+                                  {/* Quantity + Kroger Product Name */}
+                                  <p className="text-gray-900 dark:text-gray-900 leading-snug break-words">
+                                    {item.found && item.description ? (
+                                      <>
+                                        {item.quantity && (
+                                          <span className="font-bold text-lg">{item.quantity} </span>
+                                        )}
+                                        <span className="text-base">{item.description}</span>
+                                      </>
+                                    ) : (
+                                      <>
+                                        <span className="font-bold text-lg">{item.quantity || "1 ct"}</span>{" "}
+                                        <span className="text-base">{item.productName}</span>
+                                      </>
+                                    )}
+                                  </p>
+
+                                  {/* Shared With Info */}
+                                  {(() => {
+                                    const itemSharedUsers = getUsersItemIsSharedWith(originalIndex);
+                                    return itemSharedUsers.length > 0 ? (
+                                      <div className="mt-2 flex items-center gap-2 flex-wrap">
+                                        <span className="text-xs text-gray-600 dark:text-gray-700">Shared with:</span>
+                                        {itemSharedUsers.map((user) => (
+                                          <div
+                                            key={user.userId}
+                                            className="flex items-center gap-1"
+                                          >
+                                            <div className={`w-4 h-4 rounded-full ${getUserColor(user.userId)} flex items-center justify-center`}>
+                                              <span className="text-[10px] text-white font-medium">
+                                                {getUserInitials(user.name, user.email, user.userId)}
+                                              </span>
+                                            </div>
+                                            <span className="text-xs text-gray-600 dark:text-gray-700">
+                                              {user.name || user.email || user.userId}
+                                            </span>
+                                          </div>
+                                        ))}
+                                      </div>
+                                    ) : null;
+                                  })()}
+                                  
+                                  {/* Kroger Size • Price • Stock Level */}
+                                  {item.found && (
+                                    <p className="text-sm text-gray-600 dark:text-gray-700 mt-1 whitespace-nowrap flex items-center gap-1 flex-wrap">
+                                      <span>
+                                        {item.size}
+                                        {item.size && (item.price || item.promoPrice) && " • "}
+                                        {item.promoPrice ? (
+                                          <span className="text-gray-600 dark:text-gray-700">
+                                            {formatPrice(item.promoPrice)}
+                                          </span>
+                                        ) : item.price ? (
+                                          <span>{formatPrice(item.price)}</span>
+                                        ) : null}
+                                      </span>
+                                      {/* Stock Level Indicator - on same line */}
+                                      {item.stockLevel && (
+                                        <>
+                                          {(item.size || item.price || item.promoPrice) && (
+                                            <span className="text-gray-600 dark:text-gray-700">•</span>
+                                          )}
+                                          <span className={item.stockLevel === "HIGH" ? "text-green-600 dark:text-green-400" : item.stockLevel === "LOW" ? "text-yellow-600 dark:text-yellow-400" : item.stockLevel === "TEMPORARILY_OUT_OF_STOCK" ? "text-red-600 dark:text-red-400" : ""}>
+                                            {item.stockLevel === "HIGH" ? "✓ In Stock" : item.stockLevel === "LOW" ? "⚠ Low Stock" : item.stockLevel === "TEMPORARILY_OUT_OF_STOCK" ? "✗ Out of Stock" : ""}
+                                          </span>
+                                        </>
+                                      )}
+                                    </p>
+                                  )}
+
+                                  {/* Kroger Aisle Location */}
+                                  {item.found && item.krogerAisles?.[0] && (() => {
+                                    const aisle = item.krogerAisles[0];
+                                    const locationParts: string[] = [];
+                                    
+                                    if (aisle.aisleNumber && parseInt(aisle.aisleNumber) < 100) {
+                                      locationParts.push(`Aisle ${aisle.aisleNumber}`);
+                                    } else if (aisle.description) {
+                                      locationParts.push(aisle.description);
+                                    }
+                                    
+                                    if (aisle.shelfNumber) {
+                                      locationParts.push(`Shelf ${aisle.shelfNumber}`);
+                                    }
+                                    
+                                    // Add side info if available
+                                    if (aisle.side) {
+                                      locationParts.push(`Side ${aisle.side}`);
+                                    }
+                                    
+                                    // Add bay if available
+                                    if (aisle.bayNumber) {
+                                      locationParts.push(`Bay ${aisle.bayNumber}`);
+                                    }
+                                    
+                                    const locationText = locationParts.join(" - ");
+                                    
+                                    return locationText ? (
+                                      <p className="text-sm text-gray-600 dark:text-gray-700 mt-0.5 whitespace-nowrap">
+                                        {locationText}
+                                      </p>
+                                    ) : null;
+                                  })()}
+
+                                  {/* Not found indicator */}
+                                  {!item.found && (
+                                    <p className="text-sm text-red-500 mt-1">
+                                      Not found at Kroger
+                                    </p>
+                                  )}
+                                    </div>
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </>
           )}
         </div>
       </div>
 
       {/* Product Detail Modal */}
       {selectedItem && (() => {
-        const itemIndex = shoppingList?.items.findIndex(i => i === selectedItem) ?? -1;
+        const filteredIndex = shoppingList?.items.findIndex(i => i === selectedItem) ?? -1;
+        const itemIndex = getOriginalIndex(filteredIndex);
         return (
           <ProductDetailModal
             item={selectedItem}
@@ -3850,6 +5992,11 @@ export default function ShoppingListDetailPage() {
               if (itemIndex >= 0) {
                 await handleMoveToDone(selectedItem);
                 setSelectedItem(null);
+              }
+            }}
+            onScan={() => {
+              if (selectedItem) {
+                handleScanBarcode(selectedItem);
               }
             }}
             onDelete={async () => {
@@ -3919,6 +6066,7 @@ export default function ShoppingListDetailPage() {
           isOpen={!!editItem}
           onClose={() => setEditItem(null)}
           onItemUpdated={fetchShoppingList}
+          shoppingList={shoppingList}
         />
       )}
 
@@ -3932,6 +6080,67 @@ export default function ShoppingListDetailPage() {
         />
       )}
 
+      {/* Screenshot Viewer Modal */}
+      {viewingScreenshot && (
+        <Modal 
+          isOpen={!!viewingScreenshot} 
+          onClose={() => {
+            setViewingScreenshot(null);
+            setShowOriginalScreenshot(false);
+          }} 
+          title={viewingScreenshot.item.croppedImage && !showOriginalScreenshot ? "Cropped Product Image" : "Original Screenshot"}
+          headerActions={
+            <>
+              {/* Toggle Original Screenshot - Only show if cropped image exists */}
+              {viewingScreenshot.item.croppedImage && (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setShowOriginalScreenshot(!showOriginalScreenshot);
+                  }}
+                  className="px-3 py-1.5 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors flex items-center gap-2 text-sm"
+                  title={showOriginalScreenshot ? "Show cropped image" : "Show original screenshot"}
+                >
+                  {showOriginalScreenshot ? (
+                    <>
+                      <EyeOff className="w-4 h-4" />
+                      <span className="hidden sm:inline">Show Cropped</span>
+                    </>
+                  ) : (
+                    <>
+                      <Eye className="w-4 h-4" />
+                      <span className="hidden sm:inline">Show Original</span>
+                    </>
+                  )}
+                </button>
+              )}
+              <button
+                onClick={() => {
+                  if (viewingScreenshot) {
+                    setEditItem({ item: viewingScreenshot.item, index: viewingScreenshot.itemIndex });
+                    setViewingScreenshot(null);
+                    setShowOriginalScreenshot(false);
+                  }
+                }}
+                className="px-3 py-1.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2 text-sm"
+              >
+                <Edit className="w-4 h-4" />
+                Edit
+              </button>
+            </>
+          }
+        >
+          <div className="p-4">
+            <img 
+              src={viewingScreenshot.item.croppedImage && !showOriginalScreenshot ? viewingScreenshot.item.croppedImage : viewingScreenshot.base64} 
+              alt={viewingScreenshot.item.croppedImage && !showOriginalScreenshot ? "Cropped product image" : "Original screenshot"} 
+              className="max-w-full h-auto rounded-lg"
+              style={{ maxHeight: '80vh' }}
+            />
+          </div>
+        </Modal>
+      )}
+
       {/* Scan Result Modal */}
       {scanResult && (
         <ScanResultModal
@@ -3942,6 +6151,7 @@ export default function ShoppingListDetailPage() {
           scannedBarcode={scanResult.scannedBarcode}
           onForceDone={() => handleForceMarkDone(scanResult.item)}
           onConfirmQuantity={() => handleConfirmQuantity(scanResult.item)}
+          shoppingList={shoppingList}
         />
       )}
 

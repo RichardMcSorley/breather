@@ -8,6 +8,7 @@ import KrogerStoreSelector from "@/components/KrogerStoreSelector";
 import Modal from "@/components/ui/Modal";
 import { List, ShoppingCart, ChevronRight, Trash2, Upload, Loader2 } from "lucide-react";
 import { KrogerLocation } from "@/lib/types/kroger";
+import { useScreenshotProcessing } from "@/hooks/useScreenshotProcessing";
 
 const STORAGE_KEY = "kroger_selected_location";
 
@@ -24,13 +25,28 @@ export default function ShoppingListsPage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [lists, setLists] = useState<ShoppingList[]>([]);
   const [loading, setLoading] = useState(true);
-  const [uploading, setUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState<string>("");
   const [error, setError] = useState<string | null>(null);
   const [selectedLocation, setSelectedLocation] = useState<KrogerLocation | null>(null);
   const [screenshotModalOpen, setScreenshotModalOpen] = useState(false);
   const [modalSelectedApp, setModalSelectedApp] = useState<string>("");
   const [selectedCustomers, setSelectedCustomers] = useState<string[]>([]);
+
+  // Use shared screenshot processing hook
+  const {
+    uploading,
+    setUploading,
+    processingComplete,
+    setProcessingComplete,
+    processScreenshots,
+    cropItems,
+  } = useScreenshotProcessing({
+    locationId: selectedLocation?.locationId || "",
+    selectedApp: modalSelectedApp,
+    selectedCustomers,
+    onProgress: setUploadProgress,
+    onError: setError,
+  });
 
   // Load selected location from localStorage on mount
   useEffect(() => {
@@ -110,7 +126,6 @@ export default function ShoppingListsPage() {
     // Validate app selection is mandatory
     if (!modalSelectedApp || modalSelectedApp.trim() === "") {
       setError("Please select an app (Instacart or DoorDash) before uploading screenshots.");
-      // Reset file input
       if (fileInputRef.current) {
         fileInputRef.current.value = "";
       }
@@ -120,7 +135,6 @@ export default function ShoppingListsPage() {
     // Validate customer selection is mandatory
     if (selectedCustomers.length === 0) {
       setError("Please select at least one customer (A, B, C, or D) before uploading screenshots.");
-      // Reset file input
       if (fileInputRef.current) {
         fileInputRef.current.value = "";
       }
@@ -137,50 +151,36 @@ export default function ShoppingListsPage() {
 
     setUploading(true);
     setError(null);
+    setProcessingComplete(false);
+    setUploadProgress(`Processing 1 of ${files.length} screenshots...`);
 
     try {
-      // Process screenshots one at a time to avoid payload size limits
-      const allItems: any[] = [];
-      
-      for (let i = 0; i < files.length; i++) {
-        setUploadProgress(`Processing screenshot ${i + 1} of ${files.length}...`);
-        
-        // Convert file to base64
-        const base64 = await readFileAsBase64(files[i]);
-        
-        // Process single screenshot
-        const response = await fetch("/api/shopping-lists/process-screenshot", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            screenshot: base64,
-            locationId: selectedLocation.locationId,
-            app: modalSelectedApp,
-            customers: selectedCustomers, // Pass selected customers to guide Gemini
-          }),
-        });
+      // Process screenshots using shared hook
+      const screenshotData = await processScreenshots(files);
 
-        if (!response.ok) {
-          const errorData = await response.json().catch(() => ({ error: "Failed to process screenshot" }));
-          throw new Error(errorData.error || `Failed to process screenshot ${i + 1}`);
-        }
-
-        const data = await response.json();
-        if (data.items && data.items.length > 0) {
-          allItems.push(...data.items);
-        }
+      if (screenshotData.length === 0) {
+        setError("No products found in any of the screenshots");
+        setUploading(false);
+        return;
       }
 
-      if (allItems.length === 0) {
-        setError("No products found in any of the screenshots");
-        return;
+      // Collect all items and screenshots
+      const allItems: any[] = [];
+      const screenshotsToSave: Array<{ id: string; base64: string; app?: string; customers?: string[] }> = [];
+      
+      for (const screenshotInfo of screenshotData) {
+        allItems.push(...screenshotInfo.items);
+        screenshotsToSave.push({
+          id: screenshotInfo.screenshotId,
+          base64: screenshotInfo.screenshot,
+          app: modalSelectedApp,
+          customers: selectedCustomers,
+        });
       }
 
       setUploadProgress("Creating shopping list...");
 
-      // Create shopping list with all accumulated items
+      // Create shopping list with all accumulated items and screenshots
       const createResponse = await fetch("/api/shopping-lists/create", {
         method: "POST",
         headers: {
@@ -190,6 +190,7 @@ export default function ShoppingListsPage() {
           name: `Shopping List - ${new Date().toLocaleDateString()}`,
           locationId: selectedLocation.locationId,
           items: allItems,
+          screenshots: screenshotsToSave,
         }),
       });
 
@@ -199,40 +200,51 @@ export default function ShoppingListsPage() {
       }
 
       const createData = await createResponse.json();
-      
+      const shoppingListId = createData.shoppingListId || createData._id;
+
+      if (!shoppingListId) {
+        throw new Error("Failed to get shopping list ID after creation");
+      }
+
+      console.log("🚀 Starting moondream cropping process...", {
+        screenshotDataCount: screenshotData.length,
+        totalScreenshotItems: screenshotData.reduce((sum, s) => sum + s.items.length, 0),
+        shoppingListId,
+      });
+
+      // Crop items using shared hook
+      await cropItems(shoppingListId, screenshotData);
+
+      // Refresh the lists to show the new one
+      setUploadProgress("Refreshing lists...");
+      const fetchLists = async () => {
+        try {
+          const response = await fetch("/api/shopping-lists");
+          if (response.ok) {
+            const data = await response.json();
+            setLists(data);
+          }
+        } catch (err) {
+          console.error("Failed to refresh lists:", err);
+        }
+      };
+      await fetchLists();
+
       // Close modal and reset
+      setProcessingComplete(true);
+      setUploadProgress("✅ All items processed and cropped!");
       setScreenshotModalOpen(false);
       setModalSelectedApp("");
       setSelectedCustomers([]);
       if (fileInputRef.current) {
         fileInputRef.current.value = "";
       }
-      
-      if (createData.shoppingListId || createData._id) {
-        router.push(`/shopping-lists/${createData.shoppingListId || createData._id}`);
-      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to process screenshots");
+      setUploading(false);
     } finally {
       setUploading(false);
-      setUploadProgress("");
     }
-  };
-
-  const readFileAsBase64 = (file: File): Promise<string> => {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = (event) => {
-        const result = event.target?.result as string;
-        if (result) {
-          resolve(result);
-        } else {
-          reject(new Error("Failed to read file"));
-        }
-      };
-      reader.onerror = () => reject(new Error("Failed to read file"));
-      reader.readAsDataURL(file);
-    });
   };
 
   const handleUploadClick = () => {

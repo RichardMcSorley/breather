@@ -4,6 +4,7 @@
  */
 
 import { GoogleGenAI, MediaResolution } from "@google/genai";
+import { KrogerProduct } from "./types/kroger";
 
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 
@@ -441,5 +442,200 @@ export async function extractProductsFromScreenshot(
     products: productsWithApp as ExtractedProduct[],
     app,
   };
+}
+
+// Schema for product matching response
+const PRODUCT_MATCHING_SCHEMA = {
+  type: "object",
+  properties: {
+    productId: {
+      type: "string",
+      description: "The productId of the matching product from the search results, or null if no match found"
+    },
+    confidence: {
+      type: "string",
+      enum: ["high", "medium", "low"],
+      description: "Confidence level of the match"
+    }
+  },
+  required: ["productId"]
+};
+
+/**
+ * Matches a product from search results using Gemini AI
+ * Takes the original screenshot (or cropped image if available) and extracted product info, 
+ * along with Kroger search results, and returns the best matching productId
+ */
+export async function matchProductFromSearchResults(
+  screenshot: string,
+  extractedProduct: ExtractedProduct,
+  searchResults: KrogerProduct[],
+  croppedImage?: string | null
+): Promise<{ productId: string | null; confidence?: string }> {
+  if (!GEMINI_API_KEY) {
+    throw new Error("GEMINI_API_KEY environment variable is not set");
+  }
+
+  if (!searchResults || searchResults.length === 0) {
+    return { productId: null };
+  }
+
+  try {
+    // Initialize Gemini client
+    const ai = new GoogleGenAI({ apiKey: GEMINI_API_KEY });
+
+    // Use cropped image if available, otherwise use full screenshot
+    const imageToUse = croppedImage || screenshot;
+
+    // Convert base64 to buffer and determine MIME type
+    let imageBuffer: Buffer;
+    let mimeType: string = "image/png";
+    
+    if (imageToUse.startsWith("data:image")) {
+      const base64Data = imageToUse.split(",")[1];
+      imageBuffer = Buffer.from(base64Data, "base64");
+      
+      // Extract MIME type from data URL
+      const mimeMatch = imageToUse.match(/data:image\/([^;]+)/);
+      if (mimeMatch) {
+        const format = mimeMatch[1].toLowerCase();
+        mimeType = `image/${format === "jpg" ? "jpeg" : format}`;
+      }
+    } else {
+      imageBuffer = Buffer.from(imageToUse, "base64");
+    }
+
+    // Convert buffer to base64 string for inline data
+    const base64ImageData = imageBuffer.toString("base64");
+
+    // Format search results for the prompt
+    const formattedResults = searchResults.map((product, index) => {
+      const item = product.items?.[0];
+      const regularPrice = item?.price?.regular;
+      const promoPrice = item?.price?.promo;
+      const size = item?.size || "N/A";
+      
+      // Format aisle locations
+      const aisleInfo = product.aisleLocations?.map(aisle => {
+        const parts: string[] = [];
+        if (aisle.number) parts.push(`Aisle ${aisle.number}`);
+        if (aisle.shelfNumber) parts.push(`Shelf ${aisle.shelfNumber}`);
+        if (aisle.side) parts.push(`Side ${aisle.side}`);
+        if (aisle.description) parts.push(aisle.description);
+        return parts.length > 0 ? parts.join(", ") : null;
+      }).filter(Boolean).join("; ") || "N/A";
+
+      const priceInfo = promoPrice 
+        ? `$${regularPrice?.toFixed(2)} (on sale: $${promoPrice.toFixed(2)})`
+        : regularPrice 
+          ? `$${regularPrice.toFixed(2)}`
+          : "N/A";
+
+      return `${index + 1}. Product ID: ${product.productId}
+   - Name: ${product.description}
+   - Brand: ${product.brand || "N/A"}
+   - Size: ${size}
+   - Price: ${priceInfo}
+   - Aisle: ${aisleInfo}`;
+    }).join("\n\n");
+
+    // Build the prompt
+    const imageType = croppedImage ? "cropped product image" : "screenshot";
+    const prompt = `You are matching a product from a shopping list ${imageType} to search results from a grocery store database.
+
+ORIGINAL PRODUCT FROM ${croppedImage ? "CROPPED IMAGE" : "SCREENSHOT"}:
+- Product Name: ${extractedProduct.productName}
+- Search Term: ${extractedProduct.searchTerm}
+${extractedProduct.size ? `- Size: ${extractedProduct.size}` : ""}
+${extractedProduct.price ? `- Price: ${extractedProduct.price}` : ""}
+${extractedProduct.aisleLocation ? `- Aisle Location: ${extractedProduct.aisleLocation}` : ""}
+
+SEARCH RESULTS (${searchResults.length} products found):
+${formattedResults}
+
+TASK:
+Look at the ${imageType} and match the product shown to one of the search results above. Consider:
+- Product name similarity (brand, flavor, type)
+- Size/volume matching
+- Price matching (if visible in ${imageType})
+- Aisle location matching (if visible in ${imageType})
+${croppedImage ? "- Visual appearance of the product (packaging, colors, design)" : ""}
+
+Return the productId of the best matching product. If none of the search results match well, return null.
+
+Return your response as JSON with:
+- productId: The matching productId from the search results, or null if no good match
+- confidence: "high" if very confident, "medium" if somewhat confident, "low" if uncertain`;
+
+    // Prepare contents with image and prompt
+    const contents = [
+      {
+        inlineData: {
+          mimeType: mimeType,
+          data: base64ImageData,
+        },
+      },
+      { text: prompt },
+    ];
+
+    // Generate content with structured output
+    const response = await ai.models.generateContent({
+      model: "gemini-2.5-flash-lite",
+      contents: contents,
+      config: {
+        responseMimeType: "application/json",
+        responseJsonSchema: PRODUCT_MATCHING_SCHEMA,
+        mediaResolution: MediaResolution.MEDIA_RESOLUTION_LOW,
+        thinkingConfig: {
+          thinkingBudget: 0,
+        },
+        temperature: 0,
+      },
+    });
+
+    // Parse the JSON response
+    let matchResult: { productId: string | null; confidence?: string } = { productId: null };
+
+    try {
+      const responseText = response.text || "";
+      
+      // Parse JSON (may be wrapped in markdown code blocks)
+      let jsonText = responseText.trim();
+      if (jsonText.startsWith("```json")) {
+        jsonText = jsonText.replace(/^```json\s*/, "").replace(/\s*```$/, "");
+      } else if (jsonText.startsWith("```")) {
+        jsonText = jsonText.replace(/^```\s*/, "").replace(/\s*```$/, "");
+      }
+      
+      const parsed = JSON.parse(jsonText);
+      console.log("🔍 Parsed JSON:", parsed);
+      
+      // Validate that productId exists in search results if not null
+      if (parsed.productId && parsed.productId !== "null") {
+        const productExists = searchResults.some(p => p.productId === parsed.productId);
+        if (productExists) {
+          matchResult = {
+            productId: parsed.productId,
+            confidence: parsed.confidence,
+          };
+        } else {
+          // Invalid productId, return null
+          matchResult = { productId: null };
+        }
+      } else {
+        matchResult = { productId: null, confidence: parsed.confidence };
+      }
+    } catch (parseError) {
+      // If parsing fails, return null (will fall back to first result)
+      console.error("Failed to parse Gemini matching response:", parseError);
+      return { productId: null };
+    }
+
+    return matchResult;
+  } catch (error) {
+    // If API call fails, return null (will fall back to first result)
+    console.error("Error calling Gemini for product matching:", error);
+    return { productId: null };
+  }
 }
 

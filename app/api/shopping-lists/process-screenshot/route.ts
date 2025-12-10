@@ -1,10 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/config";
-import { extractProductsFromScreenshot } from "@/lib/order-ocr-processor-gemini";
+import { extractProductsFromScreenshot, matchProductFromSearchResults } from "@/lib/order-ocr-processor-gemini";
 import { searchProducts } from "@/lib/kroger-api";
 import { IShoppingListItem } from "@/lib/models/ShoppingList";
 import { handleApiError } from "@/lib/api-error-handler";
+import { randomUUID } from "crypto";
 
 export async function POST(request: NextRequest) {
   try {
@@ -53,11 +54,37 @@ export async function POST(request: NextRequest) {
           const result = await searchProducts({
             term: searchTerm,
             locationId,
-            limit: 1,
+            limit: 10,
           });
 
           if (result.data && result.data.length > 0) {
-            const krogerProduct = result.data[0];
+            // Use Gemini to match the correct product from search results
+            let krogerProduct = result.data[0]; // Default to first result as fallback
+            let matchedProductId: string | null = null;
+
+            try {
+              const matchResult = await matchProductFromSearchResults(
+                screenshot,
+                product,
+                result.data
+              );
+
+              if (matchResult.productId) {
+                matchedProductId = matchResult.productId;
+                // Find the matched product in the results
+                const matchedProduct = result.data.find(p => p.productId === matchResult.productId);
+                if (matchedProduct) {
+                  krogerProduct = matchedProduct;
+                }
+                // If matched product not found, fall back to first result
+              }
+              // If matchResult.productId is null, fall back to first result
+            } catch (matchError) {
+              // If matching fails, fall back to first result
+              console.error("Error matching product with Gemini:", matchError);
+              // krogerProduct already set to first result
+            }
+
             const item = krogerProduct.items?.[0];
             
             // Get best image URL
@@ -145,9 +172,14 @@ export async function POST(request: NextRequest) {
       })
     );
 
+    // Generate a unique screenshot ID
+    const screenshotId = randomUUID();
+
     return NextResponse.json({
       success: true,
       items,
+      screenshotId, // Return screenshot ID so frontend can link items to screenshot
+      screenshot, // Return the screenshot base64 so it can be saved
     });
   } catch (error) {
     return handleApiError(error);

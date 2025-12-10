@@ -40,20 +40,48 @@ export async function GET(
     // If shared user, filter items to only shared indices
     if (isSharedUser) {
       const sharedIndices = shoppingList.sharedItemIndices || [];
-      const filteredItems = shoppingList.items.filter((_, index) =>
-        sharedIndices.includes(index)
-      );
+      const filteredItems: any[] = [];
+      const originalIndicesMap: number[] = [];
+      
+      shoppingList.items.forEach((item, index) => {
+        if (sharedIndices.includes(index)) {
+          filteredItems.push(item);
+          originalIndicesMap.push(index);
+        }
+      });
 
+      const listObject = shoppingList.toObject();
+      // Convert Map to plain object for sharedItems if it exists
+      if (listObject.sharedItems instanceof Map) {
+        listObject.sharedItems = Object.fromEntries(listObject.sharedItems);
+      }
       return NextResponse.json({
-        ...shoppingList.toObject(),
+        ...listObject,
         items: filteredItems,
+        originalIndicesMap, // Map from filtered index to original index
         isShared: true,
       });
     }
 
     // Owner gets full list
+    const listObject = shoppingList.toObject({ 
+      virtuals: false,
+      getters: true,
+      flattenMaps: false 
+    });
+    // Convert Map to plain object for sharedItems if it exists
+    if (listObject.sharedItems instanceof Map) {
+      listObject.sharedItems = Object.fromEntries(listObject.sharedItems);
+    }
+    
+    // Log to verify croppedImage is in items
+    if (listObject.items && listObject.items.length > 0) {
+      const itemsWithCropped = listObject.items.filter((item: any) => item.croppedImage);
+      console.log(`[GET /api/shopping-lists/${id}] Items with croppedImage: ${itemsWithCropped.length} of ${listObject.items.length}`);
+    }
+    
     return NextResponse.json({
-      ...shoppingList.toObject(),
+      ...listObject,
       isShared: false,
     });
   } catch (error) {

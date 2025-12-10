@@ -13,7 +13,7 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { items, locationId } = body;
+    const { items, locationId, screenshots } = body;
 
     if (!items || !Array.isArray(items) || items.length === 0) {
       return NextResponse.json(
@@ -31,12 +31,25 @@ export async function POST(request: NextRequest) {
 
     await connectDB();
 
-    const shoppingList = await ShoppingList.create({
+    const shoppingListData: any = {
       userId: session.user.id,
-      name: `Shopping List - ${new Date().toLocaleDateString()}`,
+      name: body.name || `Shopping List - ${new Date().toLocaleDateString()}`,
       locationId,
       items: items as IShoppingListItem[],
-    });
+    };
+
+    // Add screenshots if provided
+    if (screenshots && Array.isArray(screenshots) && screenshots.length > 0) {
+      shoppingListData.screenshots = screenshots.map((s: any) => ({
+        id: s.id,
+        base64: s.base64,
+        uploadedAt: new Date(),
+        app: s.app,
+        customers: s.customers || [],
+      }));
+    }
+
+    const shoppingList = await ShoppingList.create(shoppingListData);
 
     return NextResponse.json({
       success: true,

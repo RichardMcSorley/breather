@@ -17,7 +17,7 @@ export async function POST(
 
     const { id } = await params;
     const body = await request.json();
-    const { items } = body;
+    const { items, screenshotId, screenshot, app, customers } = body;
 
     if (!items || !Array.isArray(items) || items.length === 0) {
       return NextResponse.json(
@@ -84,6 +84,31 @@ export async function POST(
 
       return !isDuplicate;
     });
+
+    // Save screenshot if provided
+    if (screenshotId && screenshot) {
+      if (!shoppingList.screenshots) {
+        shoppingList.screenshots = [];
+      }
+      // Check if screenshot already exists
+      const existingScreenshot = shoppingList.screenshots.find(s => s.id === screenshotId);
+      if (!existingScreenshot) {
+        shoppingList.screenshots.push({
+          id: screenshotId,
+          base64: screenshot,
+          uploadedAt: new Date(),
+          app: app,
+          customers: customers || [],
+        });
+      }
+    }
+
+    // Add screenshotId to items if provided
+    if (screenshotId && newItems.length > 0) {
+      newItems.forEach(item => {
+        item.screenshotId = screenshotId;
+      });
+    }
 
     // Add new items to the existing list (only non-duplicates)
     const startIndex = shoppingList.items.length;

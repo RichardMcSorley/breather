@@ -1,25 +1,34 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/config";
 import User from "@/lib/models/User";
 import connectDB from "@/lib/mongodb";
 import { handleApiError } from "@/lib/api-error-handler";
 
-export async function GET() {
+export async function POST(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
     if (!session?.user?.id) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
+    const body = await request.json();
+    const { userIds } = body;
+
+    if (!userIds || !Array.isArray(userIds) || userIds.length === 0) {
+      return NextResponse.json(
+        { error: "userIds array is required" },
+        { status: 400 }
+      );
+    }
+
     await connectDB();
 
-    // Get all users except the current user
+    // Get users by their IDs (including the current user if in the list)
     const users = await User.find({
-      userId: { $ne: session.user.id },
+      userId: { $in: userIds },
     })
       .select("userId email name image")
-      .sort({ name: 1, email: 1 })
       .lean();
 
     // Map to the expected format - ensure userId is always present

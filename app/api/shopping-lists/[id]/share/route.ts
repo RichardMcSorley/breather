@@ -61,19 +61,41 @@ export async function POST(
       );
     }
 
-    // Add users to sharedWith (avoid duplicates)
+    // Initialize sharedItems if it doesn't exist
+    if (!shoppingList.sharedItems) {
+      shoppingList.sharedItems = new Map<string, number[]>();
+    }
+
+    // Ensure sharedItems is a Map (Mongoose returns it as Map)
+    const sharedItemsMap = shoppingList.sharedItems instanceof Map 
+      ? shoppingList.sharedItems 
+      : new Map<string, number[]>(Object.entries(shoppingList.sharedItems || {}));
+
+    // Update sharedItems: add items to each user's array (deduplicate and sort)
+    userIds.forEach((userId: string) => {
+      const currentItems = sharedItemsMap.get(userId) || [];
+      const mergedItems = [...new Set([...currentItems, ...itemIndices])].sort(
+        (a, b) => a - b
+      );
+      sharedItemsMap.set(userId, mergedItems);
+    });
+
+    // Update the document with the Map
+    shoppingList.sharedItems = sharedItemsMap;
+
+    // Also maintain sharedWith for backward compatibility
     const currentSharedWith = shoppingList.sharedWith || [];
     const newUsers = userIds.filter(
       (uid: string) => !currentSharedWith.includes(uid)
     );
     shoppingList.sharedWith = [...currentSharedWith, ...newUsers];
 
-    // Update sharedItemIndices (merge and deduplicate, sorted)
-    const currentIndices = shoppingList.sharedItemIndices || [];
-    const allIndices = [...new Set([...currentIndices, ...itemIndices])].sort(
-      (a, b) => a - b
-    );
-    shoppingList.sharedItemIndices = allIndices;
+    // Also maintain sharedItemIndices for backward compatibility (union of all shared items)
+    const allSharedIndices = new Set<number>();
+    sharedItemsMap.forEach((indices: number[]) => {
+      indices.forEach(idx => allSharedIndices.add(idx));
+    });
+    shoppingList.sharedItemIndices = Array.from(allSharedIndices).sort((a, b) => a - b);
 
     await shoppingList.save();
 
@@ -137,10 +159,29 @@ export async function PUT(
       );
     }
 
-    // Update sharedItemIndices (deduplicate and sort)
+    // Update sharedItemIndices (deduplicate and sort) - for backward compatibility
     shoppingList.sharedItemIndices = [...new Set(itemIndices)].sort(
       (a, b) => a - b
     );
+
+    // If no items are shared, also clear the sharedWith array and sharedItems
+    if (itemIndices.length === 0) {
+      shoppingList.sharedWith = [];
+      shoppingList.sharedItems = new Map<string, number[]>();
+    } else {
+      // Update sharedItems to match sharedItemIndices for all users in sharedWith
+      // This maintains backward compatibility
+      const sharedItemsMap = shoppingList.sharedItems instanceof Map
+        ? shoppingList.sharedItems
+        : new Map<string, number[]>(Object.entries(shoppingList.sharedItems || {}));
+      
+      const sharedWithUsers = shoppingList.sharedWith || [];
+      sharedWithUsers.forEach((userId: string) => {
+        sharedItemsMap.set(userId, itemIndices);
+      });
+      
+      shoppingList.sharedItems = sharedItemsMap;
+    }
 
     await shoppingList.save();
 

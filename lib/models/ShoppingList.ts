@@ -26,6 +26,8 @@ export interface IShoppingListItem {
   app?: string; // App name: "Instacart" or "DoorDash"
   quantity?: string; // Quantity from screenshot (e.g., "1 ct")
   aisleLocation?: string; // Aisle location from screenshot
+  screenshotId?: string; // Reference to the screenshot this item came from
+  croppedImage?: string; // Base64 cropped image from moondream detection
   // Kroger product data
   productId?: string;
   upc?: string;
@@ -45,13 +47,23 @@ export interface IShoppingListItem {
   problem?: boolean; // Whether item has a problem and needs attention
 }
 
+export interface IShoppingListScreenshot {
+  id: string; // Unique identifier for the screenshot
+  base64: string; // Base64 encoded image data
+  uploadedAt: Date; // When the screenshot was uploaded
+  app?: string; // App name (Instacart/DoorDash)
+  customers?: string[]; // Customer badges in the screenshot
+}
+
 export interface IShoppingList extends Document {
   userId: string;
   name: string;
   locationId: string;
   items: IShoppingListItem[];
-  sharedWith?: string[]; // Array of user IDs who have access
-  sharedItemIndices?: number[]; // Array of item indices that are shared
+  screenshots?: IShoppingListScreenshot[]; // Array of screenshots associated with this list
+  sharedWith?: string[]; // Array of user IDs who have access (deprecated, use sharedItems)
+  sharedItemIndices?: number[]; // Array of item indices that are shared (deprecated, use sharedItems)
+  sharedItems?: Map<string, number[]> | { [userId: string]: number[] }; // Map of userId to array of item indices that are shared with that user
   createdAt: Date;
   updatedAt: Date;
 }
@@ -75,6 +87,23 @@ const KrogerImageSchema = new Schema({
   sizes: [KrogerImageSizeSchema],
 }, { _id: false });
 
+const ShoppingListScreenshotSchema = new Schema({
+  id: {
+    type: String,
+    required: true,
+  },
+  base64: {
+    type: String,
+    required: true,
+  },
+  uploadedAt: {
+    type: Date,
+    default: Date.now,
+  },
+  app: String,
+  customers: [String],
+}, { _id: false });
+
 const ShoppingListItemSchema = new Schema({
   searchTerm: {
     type: String,
@@ -88,6 +117,8 @@ const ShoppingListItemSchema = new Schema({
   app: String, // "Instacart" or "DoorDash"
   quantity: String,
   aisleLocation: String,
+  screenshotId: String, // Reference to screenshot
+  croppedImage: String, // Base64 cropped image from moondream
   // Kroger product data
   productId: String,
   upc: String,
@@ -139,6 +170,15 @@ const ShoppingListSchema: Schema = new Schema(
     },
     sharedItemIndices: {
       type: [Number],
+      default: [],
+    },
+    sharedItems: {
+      type: Map,
+      of: [Number],
+      default: {},
+    },
+    screenshots: {
+      type: [ShoppingListScreenshotSchema],
       default: [],
     },
   },
