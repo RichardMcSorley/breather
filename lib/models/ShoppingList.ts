@@ -47,6 +47,8 @@ export interface IShoppingListItem {
   problem?: boolean; // Whether item has a problem and needs attention
 }
 
+// Note: Screenshots are now stored in a separate ShoppingListScreenshot collection
+// This interface is kept for backward compatibility when fetching screenshots
 export interface IShoppingListScreenshot {
   id: string; // Unique identifier for the screenshot
   base64: string; // Base64 encoded image data
@@ -60,7 +62,7 @@ export interface IShoppingList extends Document {
   name: string;
   locationId: string;
   items: IShoppingListItem[];
-  screenshots?: IShoppingListScreenshot[]; // Array of screenshots associated with this list
+  // screenshots removed - now stored in separate ShoppingListScreenshot collection
   sharedWith?: string[]; // Array of user IDs who have access (deprecated, use sharedItems)
   sharedItemIndices?: number[]; // Array of item indices that are shared (deprecated, use sharedItems)
   sharedItems?: Map<string, number[]> | { [userId: string]: number[] }; // Map of userId to array of item indices that are shared with that user
@@ -87,22 +89,8 @@ const KrogerImageSchema = new Schema({
   sizes: [KrogerImageSizeSchema],
 }, { _id: false });
 
-const ShoppingListScreenshotSchema = new Schema({
-  id: {
-    type: String,
-    required: true,
-  },
-  base64: {
-    type: String,
-    required: true,
-  },
-  uploadedAt: {
-    type: Date,
-    default: Date.now,
-  },
-  app: String,
-  customers: [String],
-}, { _id: false });
+// Screenshots are now stored in a separate collection (ShoppingListScreenshot)
+// This schema is removed to prevent storing screenshots in the shopping list document
 
 const ShoppingListItemSchema = new Schema({
   searchTerm: {
@@ -118,7 +106,7 @@ const ShoppingListItemSchema = new Schema({
   quantity: String,
   aisleLocation: String,
   screenshotId: String, // Reference to screenshot
-  croppedImage: String, // Base64 cropped image from moondream
+  // croppedImage removed - now stored in separate ShoppingListItemCroppedImage collection
   // Kroger product data
   productId: String,
   upc: String,
@@ -177,10 +165,7 @@ const ShoppingListSchema: Schema = new Schema(
       of: [Number],
       default: {},
     },
-    screenshots: {
-      type: [ShoppingListScreenshotSchema],
-      default: [],
-    },
+    // screenshots removed - now stored in separate ShoppingListScreenshot collection
   },
   {
     timestamps: true,

@@ -2,9 +2,17 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/config";
 import ShoppingList, { IShoppingListItem } from "@/lib/models/ShoppingList";
+import ShoppingListScreenshot from "@/lib/models/ShoppingListScreenshot";
+import ShoppingListItemCroppedImage from "@/lib/models/ShoppingListItemCroppedImage";
 import connectDB from "@/lib/mongodb";
 import { handleApiError } from "@/lib/api-error-handler";
 import { krogerCache } from "@/lib/kroger-cache";
+
+// Normalize base64 image (keep data URL prefix if present, as frontend expects it)
+function normalizeScreenshot(base64: string): string {
+  // Keep the data URL prefix if present, as the frontend expects it for img src
+  return base64;
+}
 
 export async function POST(
   request: NextRequest,
@@ -86,17 +94,23 @@ export async function POST(
       return !isDuplicate;
     });
 
-    // Save screenshot if provided
+    // Save screenshot to separate collection if provided
     if (screenshotId && screenshot) {
-      if (!shoppingList.screenshots) {
-        shoppingList.screenshots = [];
-      }
-      // Check if screenshot already exists
-      const existingScreenshot = shoppingList.screenshots.find(s => s.id === screenshotId);
+      // Check if screenshot already exists in the separate collection
+      const existingScreenshot = await ShoppingListScreenshot.findOne({ 
+        shoppingListId: id,
+        screenshotId: screenshotId 
+      });
+      
       if (!existingScreenshot) {
-        shoppingList.screenshots.push({
-          id: screenshotId,
-          base64: screenshot,
+        // Normalize screenshot (keep data URL prefix as frontend expects it)
+        const normalizedScreenshot = normalizeScreenshot(screenshot);
+        
+        // Save to separate collection
+        await ShoppingListScreenshot.create({
+          shoppingListId: id,
+          screenshotId: screenshotId,
+          base64: normalizedScreenshot,
           uploadedAt: new Date(),
           app: app,
           customers: customers || [],
@@ -111,8 +125,37 @@ export async function POST(
       });
     }
 
-    // Add new items to the existing list (only non-duplicates)
+    // Extract and save cropped images to separate collection before adding items
+    const shoppingListId = shoppingList._id.toString();
     const startIndex = shoppingList.items.length;
+    const croppedImagePromises: Promise<any>[] = [];
+    
+    newItems.forEach((item: any, index: number) => {
+      if (item.croppedImage) {
+        const itemIndex = startIndex + index;
+        croppedImagePromises.push(
+          ShoppingListItemCroppedImage.findOneAndUpdate(
+            { shoppingListId, itemIndex },
+            {
+              shoppingListId,
+              itemIndex,
+              base64: item.croppedImage,
+              uploadedAt: new Date(),
+            },
+            { upsert: true, new: true }
+          )
+        );
+        // Remove croppedImage from item before saving (it's now in separate collection)
+        delete item.croppedImage;
+      }
+    });
+    
+    // Wait for all cropped images to be saved
+    if (croppedImagePromises.length > 0) {
+      await Promise.all(croppedImagePromises);
+    }
+
+    // Add new items to the existing list (only non-duplicates)
     shoppingList.items.push(...newItems);
     
     // If shared user adds items, automatically add new indices to sharedItemIndices
@@ -124,6 +167,7 @@ export async function POST(
       );
     }
     
+    // Save shopping list (screenshots are now in separate collection, so no size issues)
     await shoppingList.save();
 
     return NextResponse.json({
@@ -206,6 +250,24 @@ export async function PUT(
     // Get the old item to check if productId changed
     const oldItem = shoppingList.items[itemIndex];
     const newItem = item as IShoppingListItem;
+    
+    // Extract croppedImage if present and save to separate collection
+    const croppedImage = (newItem as any).croppedImage;
+    if (croppedImage) {
+      const shoppingListId = shoppingList._id.toString();
+      await ShoppingListItemCroppedImage.findOneAndUpdate(
+        { shoppingListId, itemIndex },
+        {
+          shoppingListId,
+          itemIndex,
+          base64: croppedImage,
+          uploadedAt: new Date(),
+        },
+        { upsert: true, new: true }
+      );
+      // Remove croppedImage from item before saving (it's now in separate collection)
+      delete (newItem as any).croppedImage;
+    }
     
     // If productId changed or is being set, invalidate the cache for both old and new product
     if (newItem.productId) {
@@ -292,6 +354,16 @@ export async function DELETE(
 
     // Remove the item at the specified index
     shoppingList.items.splice(itemIndex, 1);
+    
+    // Delete cropped image for this item
+    const shoppingListId = shoppingList._id.toString();
+    await ShoppingListItemCroppedImage.deleteOne({ shoppingListId, itemIndex });
+    
+    // Update cropped images: decrement itemIndex for all cropped images after the deleted index
+    await ShoppingListItemCroppedImage.updateMany(
+      { shoppingListId, itemIndex: { $gt: itemIndex } },
+      { $inc: { itemIndex: -1 } }
+    );
     
     // Update sharedItemIndices: remove the deleted index and decrement indices after it
     if (shoppingList.sharedItemIndices && shoppingList.sharedItemIndices.length > 0) {

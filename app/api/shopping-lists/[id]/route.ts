@@ -2,8 +2,129 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/config";
 import ShoppingList from "@/lib/models/ShoppingList";
+import ShoppingListScreenshot from "@/lib/models/ShoppingListScreenshot";
+import ShoppingListItemCroppedImage from "@/lib/models/ShoppingListItemCroppedImage";
 import connectDB from "@/lib/mongodb";
 import { handleApiError } from "@/lib/api-error-handler";
+
+// Helper function to migrate old screenshots from shopping list document to separate collection
+async function migrateScreenshots(shoppingListId: string, screenshots: any[]): Promise<void> {
+  try {
+    if (!screenshots || screenshots.length === 0) return;
+    
+    // Check which screenshots already exist
+    const existingScreenshotIds = new Set(
+      (await ShoppingListScreenshot.find({ shoppingListId }).select('screenshotId').lean())
+        .map((s: any) => s.screenshotId)
+    );
+    
+    // Only migrate screenshots that don't already exist
+    const screenshotsToMigrate = screenshots.filter(s => {
+      const screenshotId = s.id || s.screenshotId;
+      return screenshotId && !existingScreenshotIds.has(screenshotId);
+    });
+    
+    if (screenshotsToMigrate.length === 0) return;
+    
+    // Insert screenshots into new collection
+    const docsToInsert = screenshotsToMigrate.map((s: any) => ({
+      shoppingListId,
+      screenshotId: s.id || s.screenshotId,
+      base64: s.base64,
+      uploadedAt: s.uploadedAt || s.createdAt || new Date(),
+      app: s.app,
+      customers: s.customers || [],
+    }));
+    
+    await ShoppingListScreenshot.insertMany(docsToInsert);
+    console.log(`Migrated ${docsToInsert.length} screenshots for shopping list ${shoppingListId}`);
+  } catch (error) {
+    console.error('Error in migrateScreenshots:', error);
+    // Don't throw - migration is best effort
+  }
+}
+
+// Helper function to fetch cropped images and merge them into items
+async function fetchAndMergeCroppedImages(shoppingListId: string, items: any[], originalIndicesMap?: number[]): Promise<any[]> {
+  try {
+    // Fetch all cropped images for this shopping list
+    const croppedImages = await ShoppingListItemCroppedImage.find({ shoppingListId }).lean();
+    
+    // Create a map of itemIndex -> croppedImage
+    const croppedImageMap = new Map<number, string>();
+    croppedImages.forEach((img: any) => {
+      croppedImageMap.set(img.itemIndex, img.base64);
+    });
+    
+    // Merge cropped images into items
+    return items.map((item: any, index: number) => {
+      // Use original index if we have a map (for shared users), otherwise use current index
+      const itemIndex = originalIndicesMap ? originalIndicesMap[index] : index;
+      const croppedImage = croppedImageMap.get(itemIndex);
+      
+      // If cropped image exists in new collection, use it
+      if (croppedImage) {
+        return { ...item, croppedImage };
+      }
+      
+      // Otherwise, keep existing croppedImage if present (for backward compatibility)
+      return item;
+    });
+  } catch (error) {
+    console.error('Error fetching cropped images:', error);
+    // Return items as-is if there's an error
+    return items;
+  }
+}
+
+// Helper function to migrate old cropped images from items to separate collection
+async function migrateCroppedImages(shoppingListId: string, items: any[]): Promise<void> {
+  try {
+    if (!items || items.length === 0) return;
+    
+    // Find items with croppedImage in old format
+    const itemsToMigrate: Array<{ itemIndex: number; base64: string }> = [];
+    items.forEach((item: any, index: number) => {
+      if (item.croppedImage) {
+        itemsToMigrate.push({
+          itemIndex: index,
+          base64: item.croppedImage,
+        });
+      }
+    });
+    
+    if (itemsToMigrate.length === 0) return;
+    
+    // Check which cropped images already exist
+    const existingCroppedImages = await ShoppingListItemCroppedImage.find({ 
+      shoppingListId,
+      itemIndex: { $in: itemsToMigrate.map(i => i.itemIndex) }
+    }).lean();
+    
+    const existingIndices = new Set(existingCroppedImages.map((img: any) => img.itemIndex));
+    
+    // Only migrate cropped images that don't already exist
+    const croppedImagesToMigrate = itemsToMigrate.filter(
+      item => !existingIndices.has(item.itemIndex)
+    );
+    
+    if (croppedImagesToMigrate.length === 0) return;
+    
+    // Insert cropped images into new collection
+    const docsToInsert = croppedImagesToMigrate.map((item) => ({
+      shoppingListId,
+      itemIndex: item.itemIndex,
+      base64: item.base64,
+      uploadedAt: new Date(),
+    }));
+    
+    await ShoppingListItemCroppedImage.insertMany(docsToInsert);
+    console.log(`Migrated ${docsToInsert.length} cropped images for shopping list ${shoppingListId}`);
+  } catch (error) {
+    console.error('Error in migrateCroppedImages:', error);
+    // Don't throw - migration is best effort
+  }
+}
 
 export async function GET(
   request: NextRequest,
@@ -55,9 +176,50 @@ export async function GET(
       if (listObject.sharedItems instanceof Map) {
         listObject.sharedItems = Object.fromEntries(listObject.sharedItems);
       }
+      
+      // Fetch screenshots from separate collection
+      const screenshots = await ShoppingListScreenshot.find({ shoppingListId: id })
+        .sort({ uploadedAt: 1 })
+        .lean();
+      
+      // Transform to match the old format for backward compatibility
+      let formattedScreenshots = screenshots.map((s: any) => ({
+        id: s.screenshotId,
+        base64: s.base64,
+        uploadedAt: s.uploadedAt,
+        app: s.app,
+        customers: s.customers || [],
+      }));
+      
+      // If no screenshots in new collection, check if they exist in the old format (for migration)
+      if (formattedScreenshots.length === 0 && (shoppingList as any).screenshots && Array.isArray((shoppingList as any).screenshots) && (shoppingList as any).screenshots.length > 0) {
+        // Use old format screenshots (backward compatibility)
+        formattedScreenshots = (shoppingList as any).screenshots.map((s: any) => ({
+          id: s.id || s.screenshotId,
+          base64: s.base64,
+          uploadedAt: s.uploadedAt || s.createdAt,
+          app: s.app,
+          customers: s.customers || [],
+        }));
+        
+        // Optionally migrate old screenshots to new collection (async, don't wait)
+        migrateScreenshots(id, formattedScreenshots).catch(err => {
+          console.error('Error migrating screenshots:', err);
+        });
+      }
+      
+      // Fetch and merge cropped images into items
+      const itemsWithCroppedImages = await fetchAndMergeCroppedImages(id, filteredItems, originalIndicesMap);
+      
+      // Migrate old cropped images if they exist (async, don't wait)
+      migrateCroppedImages(id, filteredItems).catch(err => {
+        console.error('Error migrating cropped images:', err);
+      });
+      
       return NextResponse.json({
         ...listObject,
-        items: filteredItems,
+        items: itemsWithCroppedImages,
+        screenshots: formattedScreenshots, // Add screenshots from separate collection
         originalIndicesMap, // Map from filtered index to original index
         isShared: true,
       });
@@ -74,14 +236,55 @@ export async function GET(
       listObject.sharedItems = Object.fromEntries(listObject.sharedItems);
     }
     
+    // Fetch screenshots from separate collection
+    const screenshots = await ShoppingListScreenshot.find({ shoppingListId: id })
+      .sort({ uploadedAt: 1 })
+      .lean();
+    
+    // Transform to match the old format for backward compatibility
+    let formattedScreenshots = screenshots.map((s: any) => ({
+      id: s.screenshotId,
+      base64: s.base64,
+      uploadedAt: s.uploadedAt,
+      app: s.app,
+      customers: s.customers || [],
+    }));
+    
+    // If no screenshots in new collection, check if they exist in the old format (for migration)
+    if (formattedScreenshots.length === 0 && (shoppingList as any).screenshots && Array.isArray((shoppingList as any).screenshots) && (shoppingList as any).screenshots.length > 0) {
+      // Use old format screenshots (backward compatibility)
+      formattedScreenshots = (shoppingList as any).screenshots.map((s: any) => ({
+        id: s.id || s.screenshotId,
+        base64: s.base64,
+        uploadedAt: s.uploadedAt || s.createdAt,
+        app: s.app,
+        customers: s.customers || [],
+      }));
+      
+      // Optionally migrate old screenshots to new collection (async, don't wait)
+      migrateScreenshots(id, formattedScreenshots).catch(err => {
+        console.error('Error migrating screenshots:', err);
+      });
+    }
+    
+    // Fetch and merge cropped images into items
+    const itemsWithCroppedImages = await fetchAndMergeCroppedImages(id, listObject.items);
+    
+    // Migrate old cropped images if they exist (async, don't wait)
+    migrateCroppedImages(id, listObject.items).catch(err => {
+      console.error('Error migrating cropped images:', err);
+    });
+    
     // Log to verify croppedImage is in items
-    if (listObject.items && listObject.items.length > 0) {
-      const itemsWithCropped = listObject.items.filter((item: any) => item.croppedImage);
-      console.log(`[GET /api/shopping-lists/${id}] Items with croppedImage: ${itemsWithCropped.length} of ${listObject.items.length}`);
+    if (itemsWithCroppedImages && itemsWithCroppedImages.length > 0) {
+      const itemsWithCropped = itemsWithCroppedImages.filter((item: any) => item.croppedImage);
+      console.log(`[GET /api/shopping-lists/${id}] Items with croppedImage: ${itemsWithCropped.length} of ${itemsWithCroppedImages.length}`);
     }
     
     return NextResponse.json({
       ...listObject,
+      items: itemsWithCroppedImages,
+      screenshots: formattedScreenshots, // Add screenshots from separate collection
       isShared: false,
     });
   } catch (error) {
@@ -115,6 +318,10 @@ export async function DELETE(
         { status: 404 }
       );
     }
+
+    // Also delete all associated screenshots and cropped images
+    await ShoppingListScreenshot.deleteMany({ shoppingListId: id });
+    await ShoppingListItemCroppedImage.deleteMany({ shoppingListId: id });
 
     return NextResponse.json({ success: true });
   } catch (error) {

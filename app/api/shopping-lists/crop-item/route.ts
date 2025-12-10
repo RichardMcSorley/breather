@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/config";
 import ShoppingList from "@/lib/models/ShoppingList";
+import ShoppingListItemCroppedImage from "@/lib/models/ShoppingListItemCroppedImage";
 import connectDB from "@/lib/mongodb";
 import { handleApiError } from "@/lib/api-error-handler";
 
@@ -184,32 +185,25 @@ export async function POST(request: NextRequest) {
       y_max
     );
 
-    // Update the item with the cropped image
-    shoppingList.items[itemIndex].croppedImage = croppedImage;
-    
-    // Mark the items array as modified to ensure Mongoose saves the change
-    shoppingList.markModified('items');
-    
-    await shoppingList.save();
+    // Save cropped image to separate collection
+    const listId = shoppingList._id.toString();
+    await ShoppingListItemCroppedImage.findOneAndUpdate(
+      { shoppingListId: listId, itemIndex },
+      {
+        shoppingListId: listId,
+        itemIndex,
+        base64: croppedImage,
+        uploadedAt: new Date(),
+      },
+      { upsert: true, new: true }
+    );
 
-    // Verify the item was saved with croppedImage
-    const savedItem = shoppingList.items[itemIndex];
-    console.log("Item after save:", {
-      productName: savedItem.productName,
-      hasCroppedImage: !!savedItem.croppedImage,
-      croppedImageLength: savedItem.croppedImage?.length || 0,
+    console.log("Cropped image saved to separate collection:", {
+      shoppingListId: listId,
+      itemIndex,
+      productName: shoppingList.items[itemIndex].productName,
+      croppedImageLength: croppedImage.length,
     });
-
-    // Reload from DB to verify persistence
-    const reloadedList = await ShoppingList.findById(shoppingListId);
-    if (reloadedList) {
-      const reloadedItem = reloadedList.items[itemIndex];
-      console.log("Item after reload:", {
-        productName: reloadedItem.productName,
-        hasCroppedImage: !!reloadedItem.croppedImage,
-        croppedImageLength: reloadedItem.croppedImage?.length || 0,
-      });
-    }
 
     return NextResponse.json({
       success: true,
