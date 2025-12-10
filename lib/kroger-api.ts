@@ -111,15 +111,28 @@ async function getKrogerAccessToken(additionalScopes?: string): Promise<string> 
 }
 
 /**
+ * Truncate search term to maximum 8 words (Kroger API limitation)
+ */
+function truncateSearchTerm(term: string | undefined): string | undefined {
+  if (!term) return undefined;
+  const words = term.trim().split(/\s+/);
+  if (words.length <= 8) return term;
+  return words.slice(0, 8).join(" ");
+}
+
+/**
  * Search for products
  * Caches results for 4 hours in MongoDB
  */
 export async function searchProducts(
   params: KrogerSearchParams
 ): Promise<KrogerProductSearchResponse> {
-  // Create cache key from search parameters
+  // Truncate search term to 8 words maximum (Kroger API limitation)
+  const truncatedTerm = truncateSearchTerm(params.term);
+  
+  // Create cache key from search parameters (using truncated term)
   const cacheKey = JSON.stringify({
-    term: params.term,
+    term: truncatedTerm,
     brand: params.brand,
     productId: params.productId,
     locationId: params.locationId,
@@ -137,7 +150,7 @@ export async function searchProducts(
   let accessToken = await getKrogerAccessToken();
 
   const searchParams = new URLSearchParams();
-  if (params.term) searchParams.append("filter.term", params.term);
+  if (truncatedTerm) searchParams.append("filter.term", truncatedTerm);
   if (params.brand) searchParams.append("filter.brand", params.brand);
   if (params.productId) searchParams.append("filter.productId", params.productId);
   if (params.locationId) searchParams.append("filter.locationId", params.locationId);

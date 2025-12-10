@@ -140,7 +140,7 @@ const SHOPPING_LIST_SCHEMA = {
           },
           searchTerm: {
             type: "string",
-            description: "A simplified search term for finding the product (brand + main product type, e.g., 'Ensure Max Protein', 'Dr Pepper Blackberry Zero', 'Coca Cola Cherry Zero')"
+            description: "A simplified search term for finding the product (brand + main product type, e.g., 'Ensure Max Protein', 'Dr Pepper Blackberry Zero', 'Coca Cola Cherry Zero'). IMPORTANT: The Kroger API only supports a maximum of 8 words per search term, so keep the searchTerm to 8 words or fewer."
           },
           customer: {
             type: "string",
@@ -224,7 +224,7 @@ Extract the customer name, pickup address, and restaurant name if shown.`;
 - app: Determine which app this is based on the theme/background: "Instacart" if the screenshot has a light background/theme (white or light colors), "DoorDash" if it has a dark background/theme (black or dark colors)
 - products: Array of product objects, each with:
   - productName: The full product name as displayed (e.g., "Ensure® Max Protein Cafe Mocha Nutrition Shakes")
-  - searchTerm: A simplified search term for finding the product - just the brand and main product type, remove extra descriptions like "Limited Edition", pack sizes, etc. (e.g., "Ensure Max Protein Mocha", "Dr Pepper Blackberry Zero Sugar", "Coca Cola Cherry Zero Sugar")
+  - searchTerm: A simplified search term for finding the product - just the brand and main product type, remove extra descriptions like "Limited Edition", pack sizes, etc. (e.g., "Ensure Max Protein Mocha", "Dr Pepper Blackberry Zero Sugar", "Coca Cola Cherry Zero Sugar"). CRITICAL: The Kroger API only supports a maximum of 8 words per search term, so you MUST limit the searchTerm to 8 words or fewer. If the product name is longer, prioritize the most important identifying words (brand name and main product type).
   - customer: The customer letter badge (A, B, C, D) shown in a colored circle next to the product image. Look for small colored circles with letters. If no badge visible, set to null.
   - size: The size/volume info (e.g., "11 fl oz", "12 x 12 fl oz")
   - price: The price shown (e.g., "$13.49")

@@ -43,56 +43,76 @@ export function useScreenshotProcessing({
   const processScreenshots = async (
     files: FileList
   ): Promise<ScreenshotData[]> => {
+    onProgress?.(`Processing ${files.length} screenshots in parallel...`);
+
+    // Process all screenshots in parallel
+    const screenshotPromises = Array.from(files).map(async (file, index) => {
+      try {
+        // Convert file to base64
+        const base64 = await readFileAsBase64(file);
+
+        // Process single screenshot
+        const response = await fetch("/api/shopping-lists/process-screenshot", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            screenshot: base64,
+            locationId: locationId,
+            app: selectedApp,
+            customers: selectedCustomers,
+          }),
+        });
+
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({
+            error: "Failed to process screenshot",
+          }));
+          throw new Error(errorData.error || `Failed to process screenshot ${index + 1}`);
+        }
+
+        const data = await response.json();
+        if (data.items && data.items.length > 0) {
+          // Add screenshotId to items
+          const itemsWithScreenshot = data.items.map((item: any) => ({
+            ...item,
+            screenshotId: data.screenshotId,
+          }));
+
+          console.log(`✅ Processed ${itemsWithScreenshot.length} items from screenshot ${index + 1}`, {
+            screenshotId: data.screenshotId,
+            itemNames: itemsWithScreenshot.map((item: any) => item.productName),
+          });
+
+          return {
+            screenshotId: data.screenshotId,
+            screenshot: data.screenshot,
+            items: itemsWithScreenshot,
+          };
+        }
+        return null;
+      } catch (error) {
+        console.error(`❌ Error processing screenshot ${index + 1}:`, error);
+        onError?.(error instanceof Error ? error.message : `Failed to process screenshot ${index + 1}`);
+        return null;
+      }
+    });
+
+    // Wait for all screenshots to complete (using allSettled to handle individual failures)
+    const results = await Promise.allSettled(screenshotPromises);
     const screenshotData: ScreenshotData[] = [];
 
-    for (let i = 0; i < files.length; i++) {
-      onProgress?.(`Processing ${i + 1} of ${files.length} screenshots...`);
-
-      // Convert file to base64
-      const base64 = await readFileAsBase64(files[i]);
-
-      // Process single screenshot
-      const response = await fetch("/api/shopping-lists/process-screenshot", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          screenshot: base64,
-          locationId: locationId,
-          app: selectedApp,
-          customers: selectedCustomers,
-        }),
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({
-          error: "Failed to process screenshot",
-        }));
-        throw new Error(errorData.error || `Failed to process screenshot ${i + 1}`);
+    results.forEach((result, index) => {
+      if (result.status === "fulfilled" && result.value) {
+        screenshotData.push(result.value);
+      } else if (result.status === "rejected") {
+        console.error(`Screenshot ${index + 1} failed:`, result.reason);
+        onError?.(result.reason instanceof Error ? result.reason.message : `Failed to process screenshot ${index + 1}`);
       }
+    });
 
-      const data = await response.json();
-      if (data.items && data.items.length > 0) {
-        // Add screenshotId to items
-        const itemsWithScreenshot = data.items.map((item: any) => ({
-          ...item,
-          screenshotId: data.screenshotId,
-        }));
-
-        screenshotData.push({
-          screenshotId: data.screenshotId,
-          screenshot: data.screenshot,
-          items: itemsWithScreenshot,
-        });
-
-        console.log(`✅ Processed ${itemsWithScreenshot.length} items from screenshot ${i + 1}`, {
-          screenshotId: data.screenshotId,
-          itemNames: itemsWithScreenshot.map((item: any) => item.productName),
-        });
-      }
-    }
-
+    onProgress?.(`✅ Processed ${screenshotData.length} of ${files.length} screenshots successfully`);
     return screenshotData;
   };
 
@@ -120,17 +140,16 @@ export function useScreenshotProcessing({
       shoppingListId,
     });
 
-    // Count total items to process
-    let totalItems = 0;
-    for (const screenshotInfo of screenshotData) {
-      totalItems += screenshotInfo.items.length;
-    }
+    // Flatten all items from all screenshots into a single array with their metadata
+    const itemsToCrop: Array<{
+      item: any;
+      itemIndex: number;
+      screenshotBase64: string;
+      productName: string;
+    }> = [];
 
-    // Process each screenshot's items with moondream
-    let totalItemsProcessed = 0;
-
     for (const screenshotInfo of screenshotData) {
-      console.log(`Processing screenshot ${screenshotInfo.screenshotId} with ${screenshotInfo.items.length} items`);
+      console.log(`Preparing items from screenshot ${screenshotInfo.screenshotId} with ${screenshotInfo.items.length} items`);
 
       // Find items from this screenshot in the shopping list
       const itemsToProcess = shoppingList.items.filter((listItem: any) => {
@@ -144,7 +163,7 @@ export function useScreenshotProcessing({
 
       console.log(`Found ${itemsToProcess.length} items to process for screenshot ${screenshotInfo.screenshotId}`);
 
-      // Process each item sequentially to avoid rate limits
+      // Add items to the flat array
       for (const item of itemsToProcess) {
         const itemIndex = shoppingList.items.findIndex(
           (i: any) =>
@@ -155,53 +174,83 @@ export function useScreenshotProcessing({
         );
 
         if (itemIndex >= 0) {
-          totalItemsProcessed++;
-          onProgress?.(
-            `Cropping product ${totalItemsProcessed} of ${totalItems}: ${item.productName}...`
-          );
-
-          try {
-            const cropResponse = await fetch("/api/shopping-lists/crop-item", {
-              method: "POST",
-              headers: {
-                "Content-Type": "application/json",
-              },
-              body: JSON.stringify({
-                shoppingListId,
-                itemIndex,
-                screenshotBase64: screenshotInfo.screenshot,
-                productName: item.searchTerm || item.productName, // Use searchTerm (original Gemini response) instead of matched productName
-              }),
-            });
-
-            if (!cropResponse.ok) {
-              const errorText = await cropResponse.text();
-              console.error(`Failed to crop item ${item.productName}:`, {
-                status: cropResponse.status,
-                statusText: cropResponse.statusText,
-                error: errorText,
-              });
-            } else {
-              const cropData = await cropResponse.json();
-              console.log(`✅ Crop response for ${item.productName}:`, cropData);
-            }
-          } catch (err) {
-            console.error(`❌ Error cropping item ${item.productName}:`, err);
-          }
+          itemsToCrop.push({
+            item,
+            itemIndex,
+            screenshotBase64: screenshotInfo.screenshot,
+            productName: item.searchTerm || item.productName,
+          });
         } else {
           console.warn(`⚠️ Could not find item index for: ${item.productName}`);
         }
       }
     }
 
+    const totalItems = itemsToCrop.length;
+    onProgress?.(`Cropping ${totalItems} product images in parallel...`);
+
+    // Process all items in parallel with progress tracking
+    let completedCount = 0;
+    const updateProgress = () => {
+      completedCount++;
+      onProgress?.(`Cropping ${completedCount} of ${totalItems} products...`);
+    };
+
+    const cropPromises = itemsToCrop.map(async ({ item, itemIndex, screenshotBase64, productName }) => {
+      try {
+        const cropResponse = await fetch("/api/shopping-lists/crop-item", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            shoppingListId,
+            itemIndex,
+            screenshotBase64,
+            productName,
+          }),
+        });
+
+        updateProgress();
+
+        if (!cropResponse.ok) {
+          const errorText = await cropResponse.text();
+          console.error(`Failed to crop item ${productName}:`, {
+            status: cropResponse.status,
+            statusText: cropResponse.statusText,
+            error: errorText,
+          });
+          return { success: false, productName };
+        } else {
+          const cropData = await cropResponse.json();
+          console.log(`✅ Crop response for ${productName}:`, cropData);
+          return { success: true, productName };
+        }
+      } catch (err) {
+        updateProgress();
+        console.error(`❌ Error cropping item ${productName}:`, err);
+        return { success: false, productName, error: err };
+      }
+    });
+
+    // Wait for all crops to complete
+    const results = await Promise.allSettled(cropPromises);
+    const successful = results.filter(
+      (r) => r.status === "fulfilled" && r.value?.success === true
+    ).length;
+    const failed = results.length - successful;
+
     console.log("✅ Cropping process complete!", {
-      totalItemsProcessed,
       totalItems,
+      successful,
+      failed,
       successRate:
         totalItems > 0
-          ? `${Math.round((totalItemsProcessed / totalItems) * 100)}%`
+          ? `${Math.round((successful / totalItems) * 100)}%`
           : "0%",
     });
+
+    onProgress?.(`✅ Cropped ${successful} of ${totalItems} products successfully`);
   };
 
   return {
