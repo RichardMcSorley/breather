@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useMemo, useRef } from "react";
 import { useSession } from "next-auth/react";
+import { useQueryClient } from "@tanstack/react-query";
 import { Pencil, Trash2 } from "lucide-react";
 import Layout from "@/components/Layout";
 import Card from "@/components/ui/Card";
@@ -45,6 +46,7 @@ interface PaymentPlanEntry {
 
 export default function BillsPage() {
   const { data: session } = useSession();
+  const queryClient = useQueryClient();
   const [showAddModal, setShowAddModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [showPaymentPlanModal, setShowPaymentPlanModal] = useState(false);
@@ -280,6 +282,8 @@ export default function BillsPage() {
         deleteAllBillPayments.mutate(undefined, {
           onSuccess: () => {
             savePaymentPlanConfig(paymentPlanConfig);
+            // Invalidate payment plan queries to refresh the plan list
+            queryClient.invalidateQueries({ queryKey: ["paymentPlan"] });
             setViewMode("plan");
             setShowPaymentPlanModal(false);
           },
@@ -290,6 +294,8 @@ export default function BillsPage() {
     
     // Save config before generating
     savePaymentPlanConfig(paymentPlanConfig);
+    // Invalidate payment plan queries to refresh the plan list
+    queryClient.invalidateQueries({ queryKey: ["paymentPlan"] });
     setViewMode("plan");
     setShowPaymentPlanModal(false);
   };
