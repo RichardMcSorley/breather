@@ -368,8 +368,8 @@ function SearchProductModal({
         brand: selectedProduct.brand,
         description: selectedProduct.description,
         size: krogerItem?.size,
-        price: krogerItem?.price?.regular,
-        promoPrice: krogerItem?.price?.promo,
+        price: krogerItem?.price?.regular ?? krogerItem?.nationalPrice?.regular,
+        promoPrice: krogerItem?.price?.promo ?? krogerItem?.nationalPrice?.promo,
         stockLevel: krogerItem?.inventory?.stockLevel,
         imageUrl,
         images,
@@ -648,13 +648,19 @@ function EditItemModal({
 
   const getImageUrl = (product: KrogerProduct) => {
     if (product.images && product.images.length > 0) {
-      const defaultImg = product.images.find(img => img.default) || product.images[0];
-      const sizes = ["xlarge", "large", "medium", "small"];
-      for (const size of sizes) {
-        const found = defaultImg?.sizes?.find(s => s.size === size);
-        if (found?.url) return found.url;
+      // Match the same logic used when saving: prioritize front perspective, then default, then first image
+      const frontImg = product.images.find(img => img.perspective === "front");
+      const defaultImg = product.images.find(img => img.default);
+      const imgToUse = frontImg || defaultImg || product.images[0];
+      
+      if (imgToUse?.sizes && imgToUse.sizes.length > 0) {
+        const sizeOrder = ["xlarge", "large", "medium", "small", "thumbnail"];
+        for (const size of sizeOrder) {
+          const found = imgToUse.sizes.find(s => s.size === size);
+          if (found?.url) return found.url;
+        }
+        return imgToUse.sizes[0]?.url;
       }
-      return defaultImg?.sizes?.[0]?.url;
     }
     return null;
   };
@@ -708,6 +714,10 @@ function EditItemModal({
           bayNumber: aisle.bayNumber,
         })) || [];
 
+        // Get price - prefer location-specific price, fall back to national price
+        const price = krogerItem?.price?.regular ?? krogerItem?.nationalPrice?.regular;
+        const promoPrice = krogerItem?.price?.promo ?? krogerItem?.nationalPrice?.promo;
+
         updatedItem = {
           // Preserve original Gemini data
           searchTerm: item.searchTerm || productName, // Keep original searchTerm from Gemini
@@ -724,8 +734,8 @@ function EditItemModal({
           brand: selectedProduct.brand,
           description: selectedProduct.description,
           size: krogerItem?.size,
-          price: krogerItem?.price?.regular,
-          promoPrice: krogerItem?.price?.promo,
+          price: price,
+          promoPrice: promoPrice,
           stockLevel: krogerItem?.inventory?.stockLevel,
           imageUrl,
           images,
@@ -1498,8 +1508,8 @@ function ManualEntryModal({
         brand: selectedProduct.brand,
         description: selectedProduct.description,
         size: krogerItem?.size,
-        price: krogerItem?.price?.regular,
-        promoPrice: krogerItem?.price?.promo,
+        price: krogerItem?.price?.regular ?? krogerItem?.nationalPrice?.regular,
+        promoPrice: krogerItem?.price?.promo ?? krogerItem?.nationalPrice?.promo,
         stockLevel: krogerItem?.inventory?.stockLevel,
         imageUrl,
         images,
@@ -1790,6 +1800,8 @@ function ProductDetailModal({
   onMoveToTodo,
   onMoveToDone,
   onScan,
+  shoppingList,
+  onViewScreenshot,
 }: {
   item: ShoppingListItem;
   locationId: string;
@@ -1801,6 +1813,8 @@ function ProductDetailModal({
   onMoveToTodo?: () => void;
   onMoveToDone?: () => void;
   onScan?: () => void;
+  shoppingList?: ShoppingList | null;
+  onViewScreenshot?: (screenshot: { base64: string; item: ShoppingListItem; itemIndex: number }) => void;
 }) {
   const [productDetails, setProductDetails] = useState<KrogerProduct | null>(null);
   const [loading, setLoading] = useState(false);
@@ -1958,6 +1972,24 @@ function ProductDetailModal({
   }, [item.croppedImage, modalImageHeight]);
 
   const isModalImageTooSmall = modalImageHeight !== null && modalImageHeight < 300;
+  
+  // Find screenshot if item has screenshotId
+  const screenshot = item.screenshotId && shoppingList?.screenshots 
+    ? shoppingList.screenshots.find(s => s.id === item.screenshotId)
+    : null;
+
+  const handleScreenshotClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (screenshot && onViewScreenshot) {
+      // Find the item index in the shopping list
+      const itemIndex = shoppingList?.items.findIndex(i => 
+        i.productName === item.productName && 
+        i.customer === item.customer && 
+        i.app === item.app
+      ) ?? 0;
+      onViewScreenshot({ base64: screenshot.base64, item, itemIndex });
+    }
+  };
 
   return (
     <Modal isOpen={isOpen} onClose={onClose} title="">
@@ -1988,6 +2020,21 @@ function ProductDetailModal({
                     </div>
                   </div>
                 )}
+                {/* Original Screenshot Thumbnail - Top right */}
+                {screenshot && (
+                  <button
+                    onClick={handleScreenshotClick}
+                    className="absolute top-2 right-2 z-10 w-16 h-16 rounded-lg border-2 border-white dark:border-gray-800 shadow-lg hover:scale-105 transition-transform overflow-hidden bg-white dark:bg-gray-800"
+                    style={{ top: isModalImageTooSmall ? '3.5rem' : '0.5rem' }}
+                    title="View original screenshot"
+                  >
+                    <img
+                      src={screenshot.base64}
+                      alt="Original screenshot"
+                      className="w-full h-full object-cover"
+                    />
+                  </button>
+                )}
                 <img
                   src={item.croppedImage}
                   alt={item.found && item.description ? item.description : item.productName}
@@ -2003,6 +2050,20 @@ function ProductDetailModal({
                     No cropped image
                   </div>
                 </div>
+                {/* Original Screenshot Thumbnail - Top right */}
+                {screenshot && (
+                  <button
+                    onClick={handleScreenshotClick}
+                    className="absolute top-2 right-2 z-10 w-16 h-16 rounded-lg border-2 border-white dark:border-gray-800 shadow-lg hover:scale-105 transition-transform overflow-hidden bg-white dark:bg-gray-800"
+                    title="View original screenshot"
+                  >
+                    <img
+                      src={screenshot.base64}
+                      alt="Original screenshot"
+                      className="w-full h-full object-cover"
+                    />
+                  </button>
+                )}
                 <div className="text-center">
                   <p className="text-sm font-medium text-gray-700 dark:text-gray-800">
                     No cropped image available
@@ -2048,14 +2109,12 @@ function ProductDetailModal({
                   <p className="text-gray-900 dark:text-gray-900 leading-snug break-words mb-2">
                     {item.found && item.description ? (
                       <>
-                        {item.quantity && (
-                          <span className="font-bold text-lg">{item.quantity} </span>
-                        )}
+                        <span className="font-bold text-lg">?? ct </span>
                         <span className="text-base">{item.description}</span>
                       </>
                     ) : (
                       <>
-                        <span className="font-bold text-lg">{item.quantity || "1 ct"}</span>{" "}
+                        <span className="font-bold text-lg">?? ct</span>{" "}
                         <span className="text-base">{item.productName}</span>
                       </>
                     )}
@@ -5394,6 +5453,19 @@ export default function ShoppingListDetailPage() {
                   checkCroppedImageHeight(item.croppedImage, itemId);
                 }
                 const isImageTooSmall = isCroppedImageTooSmall(item, itemId);
+                
+                // Find screenshot if item has screenshotId
+                const screenshot = item.screenshotId && shoppingList?.screenshots 
+                  ? shoppingList.screenshots.find(s => s.id === item.screenshotId)
+                  : null;
+
+                const handleScreenshotClick = (e: React.MouseEvent) => {
+                  e.stopPropagation();
+                  if (screenshot) {
+                    setViewingScreenshot({ base64: screenshot.base64, item, itemIndex: originalIndex });
+                    setShowOriginalScreenshot(true);
+                  }
+                };
 
                 return (
                   <div
@@ -5428,6 +5500,20 @@ export default function ShoppingListDetailPage() {
                               </div>
                             </div>
                           )}
+                          {/* Original Screenshot Thumbnail - Top right */}
+                          {screenshot && (
+                            <button
+                              onClick={handleScreenshotClick}
+                              className="absolute top-2 right-2 z-10 w-16 h-16 rounded-lg border-2 border-white dark:border-gray-800 shadow-lg hover:scale-105 transition-transform overflow-hidden bg-white dark:bg-gray-800"
+                              title="View original screenshot"
+                            >
+                              <img
+                                src={screenshot.base64}
+                                alt="Original screenshot"
+                                className="w-full h-full object-cover"
+                              />
+                            </button>
+                          )}
                           <img
                             src={item.croppedImage}
                             alt={item.found && item.description ? item.description : item.productName}
@@ -5452,6 +5538,20 @@ export default function ShoppingListDetailPage() {
                               No cropped image
                             </div>
                           </div>
+                          {/* Original Screenshot Thumbnail - Top right */}
+                          {screenshot && (
+                            <button
+                              onClick={handleScreenshotClick}
+                              className="absolute top-2 right-2 z-10 w-16 h-16 rounded-lg border-2 border-white dark:border-gray-800 shadow-lg hover:scale-105 transition-transform overflow-hidden bg-white dark:bg-gray-800"
+                              title="View original screenshot"
+                            >
+                              <img
+                                src={screenshot.base64}
+                                alt="Original screenshot"
+                                className="w-full h-full object-cover"
+                              />
+                            </button>
+                          )}
                           <div className="text-center">
                             <p className="text-sm font-medium text-gray-700 dark:text-gray-800">
                               No cropped image available
@@ -5514,14 +5614,12 @@ export default function ShoppingListDetailPage() {
                           <p className="text-gray-900 dark:text-gray-900 leading-snug break-words">
                             {item.found && item.description ? (
                               <>
-                                {item.quantity && (
-                                  <span className="font-bold text-lg">{item.quantity} </span>
-                                )}
+                                <span className="font-bold text-lg">?? ct </span>
                                 <span className="text-base">{item.description}</span>
                               </>
                             ) : (
                               <>
-                                <span className="font-bold text-lg">{item.quantity || "1 ct"}</span>{" "}
+                                <span className="font-bold text-lg">?? ct</span>{" "}
                                 <span className="text-base">{item.productName}</span>
                               </>
                             )}
@@ -5717,6 +5815,19 @@ export default function ShoppingListDetailPage() {
                           checkCroppedImageHeight(item.croppedImage, itemId);
                         }
                         const isImageTooSmall = isCroppedImageTooSmall(item, itemId);
+                        
+                        // Find screenshot if item has screenshotId
+                        const screenshot = item.screenshotId && shoppingList?.screenshots 
+                          ? shoppingList.screenshots.find(s => s.id === item.screenshotId)
+                          : null;
+
+                        const handleScreenshotClick = (e: React.MouseEvent) => {
+                          e.stopPropagation();
+                          if (screenshot) {
+                            setViewingScreenshot({ base64: screenshot.base64, item, itemIndex: originalIndex });
+                            setShowOriginalScreenshot(true);
+                          }
+                        };
 
                         return (
                           <div
@@ -5751,6 +5862,20 @@ export default function ShoppingListDetailPage() {
                                       </div>
                                     </div>
                                   )}
+                                  {/* Original Screenshot Thumbnail - Top right */}
+                                  {screenshot && (
+                                    <button
+                                      onClick={handleScreenshotClick}
+                                      className="absolute top-2 right-2 z-10 w-16 h-16 rounded-lg border-2 border-white dark:border-gray-800 shadow-lg hover:scale-105 transition-transform overflow-hidden bg-white dark:bg-gray-800"
+                                      title="View original screenshot"
+                                    >
+                                      <img
+                                        src={screenshot.base64}
+                                        alt="Original screenshot"
+                                        className="w-full h-full object-cover"
+                                      />
+                                    </button>
+                                  )}
                                   <img
                                     src={item.croppedImage}
                                     alt={item.found && item.description ? item.description : item.productName}
@@ -5775,6 +5900,20 @@ export default function ShoppingListDetailPage() {
                                       No cropped image
                                     </div>
                                   </div>
+                                  {/* Original Screenshot Thumbnail - Top right */}
+                                  {screenshot && (
+                                    <button
+                                      onClick={handleScreenshotClick}
+                                      className="absolute top-2 right-2 z-10 w-16 h-16 rounded-lg border-2 border-white dark:border-gray-800 shadow-lg hover:scale-105 transition-transform overflow-hidden bg-white dark:bg-gray-800"
+                                      title="View original screenshot"
+                                    >
+                                      <img
+                                        src={screenshot.base64}
+                                        alt="Original screenshot"
+                                        className="w-full h-full object-cover"
+                                      />
+                                    </button>
+                                  )}
                                   <div className="text-center">
                                     <p className="text-sm font-medium text-gray-700 dark:text-gray-800">
                                       No cropped image available
@@ -5837,14 +5976,12 @@ export default function ShoppingListDetailPage() {
                                   <p className="text-gray-900 dark:text-gray-900 leading-snug break-words">
                                     {item.found && item.description ? (
                                       <>
-                                        {item.quantity && (
-                                          <span className="font-bold text-lg">{item.quantity} </span>
-                                        )}
+                                        <span className="font-bold text-lg">?? ct </span>
                                         <span className="text-base">{item.description}</span>
                                       </>
                                     ) : (
                                       <>
-                                        <span className="font-bold text-lg">{item.quantity || "1 ct"}</span>{" "}
+                                        <span className="font-bold text-lg">?? ct</span>{" "}
                                         <span className="text-base">{item.productName}</span>
                                       </>
                                     )}
@@ -6020,6 +6157,11 @@ export default function ShoppingListDetailPage() {
                   setError(err instanceof Error ? err.message : "Failed to delete item");
                 }
               }
+            }}
+            shoppingList={shoppingList}
+            onViewScreenshot={(screenshot) => {
+              setViewingScreenshot(screenshot);
+              setShowOriginalScreenshot(true);
             }}
           />
         );

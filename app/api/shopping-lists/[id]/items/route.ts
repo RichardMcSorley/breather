@@ -4,6 +4,7 @@ import { authOptions } from "@/app/api/auth/[...nextauth]/config";
 import ShoppingList, { IShoppingListItem } from "@/lib/models/ShoppingList";
 import connectDB from "@/lib/mongodb";
 import { handleApiError } from "@/lib/api-error-handler";
+import { krogerCache } from "@/lib/kroger-cache";
 
 export async function POST(
   request: NextRequest,
@@ -202,8 +203,23 @@ export async function PUT(
       }
     }
 
+    // Get the old item to check if productId changed
+    const oldItem = shoppingList.items[itemIndex];
+    const newItem = item as IShoppingListItem;
+    
+    // If productId changed or is being set, invalidate the cache for both old and new product
+    if (newItem.productId) {
+      // Invalidate cache for the new product (will force refresh on next fetch)
+      await krogerCache.invalidateProduct(newItem.productId, shoppingList.locationId);
+      
+      // Also invalidate cache for old product if it was different
+      if (oldItem?.productId && oldItem.productId !== newItem.productId) {
+        await krogerCache.invalidateProduct(oldItem.productId, shoppingList.locationId);
+      }
+    }
+
     // Update the item at the specified index
-    shoppingList.items[itemIndex] = item as IShoppingListItem;
+    shoppingList.items[itemIndex] = newItem;
     await shoppingList.save();
 
     return NextResponse.json({

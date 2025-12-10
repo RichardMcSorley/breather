@@ -146,10 +146,6 @@ const SHOPPING_LIST_SCHEMA = {
             type: "string",
             description: "The customer letter badge shown next to the product (A, B, C, etc.) or null if no badge"
           },
-          quantity: {
-            type: "string",
-            description: "The quantity or count shown (e.g., '1 ct', '2')"
-          },
           size: {
             type: "string",
             description: "The size or unit information (e.g., '11 fl oz', '12 x 12 fl oz')"
@@ -230,7 +226,6 @@ Extract the customer name, pickup address, and restaurant name if shown.`;
   - productName: The full product name as displayed (e.g., "Ensure® Max Protein Cafe Mocha Nutrition Shakes")
   - searchTerm: A simplified search term for finding the product - just the brand and main product type, remove extra descriptions like "Limited Edition", pack sizes, etc. (e.g., "Ensure Max Protein Mocha", "Dr Pepper Blackberry Zero Sugar", "Coca Cola Cherry Zero Sugar")
   - customer: The customer letter badge (A, B, C, D) shown in a colored circle next to the product image. Look for small colored circles with letters. If no badge visible, set to null.
-  - quantity: The quantity count shown before the product name (e.g., "1 ct", "2")
   - size: The size/volume info (e.g., "11 fl oz", "12 x 12 fl oz")
   - price: The price shown (e.g., "$13.49")
   - aisleLocation: The aisle and shelf location (e.g., "Aisle 11 - Shelf 5 (from the bottom)")
@@ -432,10 +427,11 @@ export async function extractProductsFromScreenshot(
   const products = extractedData.products || [];
   const app = extractedData.app;
   
-  // Add app to each product for convenience
+  // Add app to each product for convenience and set quantity to "?? ct"
   const productsWithApp = products.map((p: ExtractedProduct) => ({
     ...p,
     app,
+    quantity: "?? ct", // Always use "?? ct" instead of extracting quantity from Gemini
   }));
   
   return {

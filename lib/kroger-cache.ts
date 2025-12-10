@@ -143,6 +143,17 @@ class KrogerCacheService {
       return { size: 0, searchCount: 0, productCount: 0 };
     }
   }
+
+  // Invalidate a specific product cache (useful when product is updated)
+  async invalidateProduct(productId: string, locationId?: string): Promise<void> {
+    try {
+      await connectDB();
+      const cacheKey = this.getCacheKey("product", `${productId}:${locationId || "none"}`);
+      await KrogerCache.deleteOne({ cacheKey });
+    } catch (error) {
+      console.error("Error invalidating product cache:", error);
+    }
+  }
 }
 
 // Singleton instance
