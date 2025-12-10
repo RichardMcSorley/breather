@@ -249,6 +249,7 @@ function SearchProductModal({
   const [searchResults, setSearchResults] = useState<KrogerProduct[]>([]);
   const [selectedProduct, setSelectedProduct] = useState<KrogerProduct | null>(null);
   const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [searchError, setSearchError] = useState<string | null>(null);
 
   // Clear error when modal opens or search term changes
@@ -309,6 +310,35 @@ function SearchProductModal({
 
   const handleSelectProduct = (product: KrogerProduct) => {
     setSelectedProduct(product);
+  };
+
+  const handleDelete = async () => {
+    if (!confirm("Are you sure you want to delete this item? This action cannot be undone.")) {
+      return;
+    }
+
+    setDeleting(true);
+    try {
+      const response = await fetch(`/api/shopping-lists/${shoppingListId}/items`, {
+        method: "DELETE",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ itemIndex }),
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to delete item");
+      }
+
+      onItemUpdated();
+      onClose();
+    } catch (err) {
+      console.error("Delete error:", err);
+      setSearchError(err instanceof Error ? err.message : "Failed to delete item");
+    } finally {
+      setDeleting(false);
+    }
   };
 
   const handleSave = async () => {
@@ -534,26 +564,49 @@ function SearchProductModal({
           </div>
         )}
 
-        {/* Save Button */}
-        {selectedProduct && (
+        {/* Action Buttons */}
+        <div className="flex gap-3">
+          {/* Delete Button */}
           <button
-            onClick={handleSave}
-            disabled={saving}
-            className="w-full px-4 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+            onClick={handleDelete}
+            disabled={saving || deleting}
+            className="px-4 py-3 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+            title="Delete this item (useful for duplicates)"
           >
-            {saving ? (
+            {deleting ? (
               <>
                 <Loader2 className="w-5 h-5 animate-spin" />
-                Saving...
+                Deleting...
               </>
             ) : (
               <>
-                <Check className="w-5 h-5" />
-                Save Product
+                <Trash2 className="w-5 h-5" />
+                Delete
               </>
             )}
           </button>
-        )}
+
+          {/* Save Button */}
+          {selectedProduct && (
+            <button
+              onClick={handleSave}
+              disabled={saving || deleting}
+              className="flex-1 px-4 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+            >
+              {saving ? (
+                <>
+                  <Loader2 className="w-5 h-5 animate-spin" />
+                  Saving...
+                </>
+              ) : (
+                <>
+                  <Check className="w-5 h-5" />
+                  Save Product
+                </>
+              )}
+            </button>
+          )}
+        </div>
       </div>
     </Modal>
   );

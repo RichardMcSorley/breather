@@ -319,7 +319,7 @@ export async function processOrderScreenshotGemini(
     // MEDIA_RESOLUTION_LOW: 64 tokens vs 256+ default
     // Disabling thinking (thinkingBudget: 0) for faster response and lower cost
     const response = await ai.models.generateContent({
-      model: "gemini-2.5-flash-lite", // Fastest model - optimized for low latency
+      model: "gemini-2.5-flash", // Fastest model - optimized for low latency
       contents: contents,
       config: {
         responseMimeType: "application/json",
@@ -576,7 +576,7 @@ Return your response as JSON with:
 
     // Generate content with structured output
     const response = await ai.models.generateContent({
-      model: "gemini-2.5-flash-lite",
+      model: "gemini-2.5-flash",
       contents: contents,
       config: {
         responseMimeType: "application/json",
