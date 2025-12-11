@@ -140,7 +140,6 @@ const ShoppingListSchema: Schema = new Schema(
     userId: {
       type: String,
       required: true,
-      index: true,
     },
     name: {
       type: String,
