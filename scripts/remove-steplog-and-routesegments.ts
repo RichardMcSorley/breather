@@ -48,7 +48,11 @@ async function main() {
     // Optionally drop DistanceMatrixCache collection
     console.log('Dropping DistanceMatrixCache collection...');
     try {
-      await mongoose.connection.db.collection('distancematrixcaches').drop();
+      const db = mongoose.connection.db;
+      if (!db) {
+        throw new Error('Database connection not available');
+      }
+      await db.collection('distancematrixcaches').drop();
       console.log('DistanceMatrixCache collection dropped successfully\n');
     } catch (error: any) {
       if (error.codeName === 'NamespaceNotFound') {
