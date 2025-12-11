@@ -44,6 +44,15 @@ interface PaymentPlanEntry {
   dueDate?: string;
 }
 
+// Helper function to get today's date in user's local timezone (YYYY-MM-DD format)
+const getTodayLocalDate = (): string => {
+  const today = new Date();
+  const year = today.getFullYear();
+  const month = String(today.getMonth() + 1).padStart(2, "0");
+  const day = String(today.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+};
+
 export default function BillsPage() {
   const { data: session } = useSession();
   const queryClient = useQueryClient();
@@ -91,7 +100,7 @@ export default function BillsPage() {
       }
     }
     return {
-      startDate: new Date().toISOString().split("T")[0],
+      startDate: getTodayLocalDate(),
       dailyPayment: "100",
     };
   });
@@ -430,7 +439,13 @@ export default function BillsPage() {
               <>
                 <Button
                   variant="outline"
-                  onClick={() => setShowPaymentPlanModal(true)}
+                  onClick={() => {
+                    setPaymentPlanConfig({
+                      ...paymentPlanConfig,
+                      startDate: getTodayLocalDate(),
+                    });
+                    setShowPaymentPlanModal(true);
+                  }}
                   className="text-sm px-3 py-2"
                 >
                   Generate Plan

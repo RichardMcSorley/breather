@@ -52,10 +52,12 @@ export async function GET(request: NextRequest) {
         _id: payment._id.toString(),
         billId: typeof payment.billId === "object" && payment.billId !== null
           ? payment.billId
-          : payment.billId.toString(),
+          : payment.billId != null
+          ? payment.billId.toString()
+          : "",
         paymentDate: payment.paymentDate ? formatDateAsUTC(new Date(payment.paymentDate)) : "",
-        createdAt: payment.createdAt.toISOString(),
-        updatedAt: payment.updatedAt.toISOString(),
+        createdAt: payment.createdAt ? payment.createdAt.toISOString() : new Date().toISOString(),
+        updatedAt: payment.updatedAt ? payment.updatedAt.toISOString() : new Date().toISOString(),
       };
       return formatted;
     });
