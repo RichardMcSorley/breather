@@ -95,23 +95,14 @@ export async function POST(request: NextRequest) {
         const transaction = await Transaction.findById(transactionId);
         if (transaction && transaction.userId === userId && transaction.type === "income") {
           // Update transaction - add to array and set active to true
-          const updateData: any = {
-            $addToSet: { linkedDeliveryOrderIds: deliveryOrder._id },
-            $set: { active: true }
-          };
-          
-          // Add steplog if transaction doesn't have one yet
-          if (!transaction.stepLog || transaction.stepLog.length === 0) {
-            updateData.$push = {
-              stepLog: {
-                fromStep: null,
-                toStep: transaction.step || "CREATED",
-                time: new Date(),
-              }
-            };
-          }
-          
-          await Transaction.findByIdAndUpdate(transactionId, updateData, { new: true });
+          await Transaction.findByIdAndUpdate(
+            transactionId,
+            {
+              $addToSet: { linkedDeliveryOrderIds: deliveryOrder._id },
+              $set: { active: true }
+            },
+            { new: true }
+          );
           
           // Update DeliveryOrder
           await DeliveryOrder.findByIdAndUpdate(

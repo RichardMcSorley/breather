@@ -16,9 +16,7 @@
     "test:ui": "vitest --ui",
     "test:coverage": "vitest run --coverage",
     "test:watch": "vitest",
-    "test:ci": "vitest run --coverage --reporter=verbose",
-    "diagnose:distance-matrix": "tsx --env-file=.env.local scripts/diagnose-distance-matrix.ts",
-    "backfill:distance-matrix": "tsx --env-file=.env.local scripts/backfill-distance-matrix.ts"
+    "test:ci": "vitest run --coverage --reporter=verbose"
   },
   "dependencies": {
     "@google-cloud/vision": "^5.3.4",

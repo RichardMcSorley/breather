@@ -384,11 +384,6 @@ export default function ShareOrderModal({
               },
               body: JSON.stringify({
                 step: "NAV_TO_RESTERAUNT",
-                stepLogEntry: {
-                  fromStep: "CREATED",
-                  toStep: "LINK_RESTAURANT",
-                  restaurantIndex: -1, // -1 for main restaurant
-                },
               }),
             });
           } catch (err) {

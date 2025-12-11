@@ -108,48 +108,6 @@ export async function POST(request: NextRequest) {
 
     await activeOrder.save();
 
-    // If this is the first restaurant and we have an address, update step log for linked transactions
-    if (isFirstRestaurant && activeOrder.restaurantAddress && activeOrder.linkedTransactionIds && activeOrder.linkedTransactionIds.length > 0) {
-      try {
-        // Find all linked transactions
-        const linkedTransactions = await Transaction.find({
-          _id: { $in: activeOrder.linkedTransactionIds },
-          userId: userId,
-        });
-
-        // Update each transaction's step log if needed
-        for (const transaction of linkedTransactions) {
-          // Check if transaction already has NAV_TO_RESTERAUNT step in step log
-          const hasNavToRestaurantStep = transaction.stepLog?.some(
-            (log) => log.toStep === "NAV_TO_RESTERAUNT"
-          );
-
-          // Only add step log entry if it doesn't already exist
-          if (!hasNavToRestaurantStep) {
-            const updateData: any = {
-              $push: {
-                stepLog: {
-                  fromStep: transaction.step || "CREATED",
-                  toStep: "NAV_TO_RESTERAUNT",
-                  time: new Date(),
-                },
-              },
-            };
-
-            // Update step to NAV_TO_RESTERAUNT if it's currently CREATED
-            if (transaction.step === "CREATED" || !transaction.step) {
-              updateData.$set = { step: "NAV_TO_RESTERAUNT" };
-            }
-
-            await Transaction.findByIdAndUpdate(transaction._id, updateData);
-          }
-        }
-      } catch (stepLogError) {
-        // Log error but don't fail the request - step log update is not critical
-        console.error("Error updating step log for linked transactions:", stepLogError);
-      }
-    }
-
     return NextResponse.json({
       success: true,
       message: isFirstRestaurant 

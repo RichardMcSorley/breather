@@ -98,60 +98,6 @@ const TransactionSchema: Schema = new Schema(
       type: Boolean,
       default: false,
     },
-    stepLog: [{
-      fromStep: String,
-      toStep: {
-        type: String,
-        required: true,
-      },
-      time: {
-        type: Date,
-        required: true,
-        default: Date.now,
-      },
-      restaurantIndex: Number, // -1 for main restaurant, 0+ for additional restaurants
-      customerIndex: Number, // 0+ for customers
-    }],
-    routeSegments: [{
-      fromLat: {
-        type: Number,
-        required: true,
-      },
-      fromLon: {
-        type: Number,
-        required: true,
-      },
-      toLat: {
-        type: Number,
-        required: true,
-      },
-      toLon: {
-        type: Number,
-        required: true,
-      },
-      distanceMiles: Number,
-      durationText: String,
-      durationSeconds: Number,
-      type: {
-        type: String,
-        enum: ['user-to-restaurant', 'restaurant-to-restaurant', 'restaurant-to-customer', 'customer-to-customer'],
-        required: true,
-      },
-      fromIndex: {
-        type: Number,
-        required: true,
-      },
-      toIndex: {
-        type: Number,
-        required: true,
-      },
-      orderId: String,
-      calculatedAt: Date,
-      segmentHash: {
-        type: String,
-        required: true,
-      },
-    }],
   },
   {
     timestamps: true,

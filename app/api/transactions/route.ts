@@ -166,8 +166,6 @@ export async function GET(request: NextRequest) {
         dueDate: t.dueDate ? formatDateAsUTC(new Date(t.dueDate)) : undefined,
         step: t.step,
         active: t.active,
-        stepLog: t.stepLog || [],
-        routeSegments: t.routeSegments || [],
         createdAt: t.createdAt.toISOString(),
         updatedAt: t.updatedAt.toISOString(),
       };
@@ -271,10 +269,6 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // For income transactions, only create steplog if linked to orders
-    // Steplogs are only for transactions linked with orders
-    const shouldCreateStepLog = type !== "income";
-    
     const transaction = await Transaction.create({
       userId: session.user.id,
       amount: parsedAmount,
@@ -287,11 +281,6 @@ export async function POST(request: NextRequest) {
       dueDate: parsedDueDate,
       step: step || "CREATED",
       active: active !== undefined ? active : false,
-      stepLog: shouldCreateStepLog ? [{
-        fromStep: null,
-        toStep: step || "CREATED",
-        time: new Date(),
-      }] : [],
     });
 
     // Attempt auto-linking for income transactions
@@ -299,28 +288,7 @@ export async function POST(request: NextRequest) {
     if (type === "income") {
       try {
         await attemptAutoLinkTransactionToCustomer(transaction, session.user.id);
-        const linkedOrderId = await attemptAutoLinkTransactionToOrder(transaction, session.user.id);
-        
-        // If an order was linked, add the steplog
-        if (linkedOrderId) {
-          await Transaction.findByIdAndUpdate(
-            transaction._id,
-            {
-              $push: {
-                stepLog: {
-                  fromStep: null,
-                  toStep: step || "CREATED",
-                  time: new Date(),
-                },
-              },
-            }
-          );
-          // Reload transaction to get updated steplog
-          const reloadedTransaction = await Transaction.findById(transaction._id);
-          if (reloadedTransaction) {
-            finalTransaction = reloadedTransaction;
-          }
-        }
+        await attemptAutoLinkTransactionToOrder(transaction, session.user.id);
       } catch (autoLinkError) {
         // Silently fail auto-linking - don't break transaction creation
         console.error("Auto-linking error:", autoLinkError);
@@ -345,7 +313,6 @@ export async function POST(request: NextRequest) {
       dueDate: formattedDueDate,
       step: transactionObj.step || "CREATED",
       active: transactionObj.active !== undefined ? transactionObj.active : false,
-      stepLog: transactionObj.stepLog || [],
     }, { status: 201 });
   } catch (error) {
     return handleApiError(error);

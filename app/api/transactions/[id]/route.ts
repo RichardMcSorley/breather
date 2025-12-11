@@ -53,8 +53,6 @@ export async function GET(
       dueDate: transaction.dueDate ? formatDateAsUTC(new Date(transaction.dueDate)) : undefined,
       step: transaction.step || "CREATED",
       active: transaction.active !== undefined ? transaction.active : false,
-      stepLog: transaction.stepLog || [],
-      routeSegments: transaction.routeSegments || [],
       createdAt: transaction.createdAt.toISOString(),
       updatedAt: transaction.updatedAt.toISOString(),
     };
@@ -117,7 +115,7 @@ export async function PUT(
     }
 
     const body = await request.json();
-    const { amount, type, date, time, isBill, notes, tag, dueDate, step, active, stepLogEntry } = body;
+    const { amount, type, date, time, isBill, notes, tag, dueDate, step, active } = body;
 
     const existingTransaction = await Transaction.findOne({
       _id: id,
@@ -211,31 +209,7 @@ export async function PUT(
       updateData.active = active;
     }
 
-    // Log step transition if step is being changed
-    const shouldLogStep = step !== undefined && step !== existingTransaction.step;
     const updateQuery: any = { ...updateData };
-    if (shouldLogStep) {
-      updateQuery.$push = {
-        stepLog: {
-          fromStep: existingTransaction.step || null,
-          toStep: step,
-          time: new Date(),
-        },
-      };
-    }
-    
-    // Add custom stepLog entry if provided (e.g., for restaurant linking/navigation)
-    if (stepLogEntry) {
-      if (!updateQuery.$push) {
-        updateQuery.$push = {};
-      }
-      updateQuery.$push.stepLog = {
-        fromStep: stepLogEntry.fromStep || existingTransaction.step || null,
-        toStep: stepLogEntry.toStep,
-        time: new Date(),
-        ...(stepLogEntry.restaurantIndex !== undefined && { restaurantIndex: stepLogEntry.restaurantIndex }),
-      };
-    }
 
     const transaction = await Transaction.findOneAndUpdate(
       { _id: id, userId: session.user.id },
@@ -268,7 +242,6 @@ export async function PUT(
       dueDate: formattedDueDate,
       step: transactionObj.step || "CREATED",
       active: transactionObj.active !== undefined ? transactionObj.active : false,
-      stepLog: transactionObj.stepLog || [],
     });
   } catch (error) {
     return handleApiError(error);
