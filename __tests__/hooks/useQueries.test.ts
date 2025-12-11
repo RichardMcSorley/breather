@@ -12,7 +12,6 @@ import {
   useSummary,
   useMileageEntries,
   useMileageEntry,
-  useHeatMapData,
 } from "@/hooks/useQueries";
 import { server } from "../utils/mocks/server";
 import { http, HttpResponse } from "msw";
@@ -460,68 +459,6 @@ describe("useQueries", () => {
       });
 
       const { result } = renderHook(() => useMileageEntry("1"), {
-        wrapper: createWrapper(),
-      });
-
-      await waitFor(() => {
-        expect(result.current.isError || result.current.isPending).toBeTruthy();
-      }, { timeout: 3000 });
-    });
-  });
-
-  describe("useHeatMapData", () => {
-    it("should fetch heat map data successfully with default days", async () => {
-      const mockHeatMap = {
-        data: [
-          { date: "2024-01-15", value: 100 },
-          { date: "2024-01-16", value: 200 },
-        ],
-      };
-
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: async () => mockHeatMap,
-      });
-
-      const { result } = renderHook(() => useHeatMapData("2024-01-15", "day"), {
-        wrapper: createWrapper(),
-      });
-
-      await waitFor(() => expect(result.current.isSuccess).toBe(true));
-      expect(result.current.data).toBeDefined();
-      expect(mockFetch).toHaveBeenCalledWith(expect.stringContaining("localDate=2024-01-15"));
-      expect(mockFetch).toHaveBeenCalledWith(expect.stringContaining("viewMode=day"));
-    });
-
-    it("should fetch heat map data with custom days", async () => {
-      const mockHeatMap = {
-        data: [
-          { date: "2024-01-15", value: 100 },
-        ],
-      };
-
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: async () => mockHeatMap,
-      });
-
-      const { result } = renderHook(() => useHeatMapData("2024-01-15", "day", 60), {
-        wrapper: createWrapper(),
-      });
-
-      await waitFor(() => {
-        expect(result.current.isSuccess).toBe(true);
-        expect(mockFetch).toHaveBeenCalledWith(expect.stringContaining("days=60"));
-      });
-    });
-
-    it("should handle fetch errors", async () => {
-      mockFetch.mockResolvedValueOnce({
-        ok: false,
-        status: 500,
-      });
-
-      const { result } = renderHook(() => useHeatMapData(), {
         wrapper: createWrapper(),
       });
 

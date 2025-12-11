@@ -18,8 +18,6 @@ vi.mock("@/hooks/useQueries", () => ({
   useSummary: vi.fn(),
   usePaymentPlan: vi.fn(),
   useBillPayments: vi.fn(),
-  useHeatMapData: vi.fn(),
-  useAppHeatMapData: vi.fn(),
 }));
 
 vi.mock("@/components/Layout", () => ({
@@ -30,9 +28,6 @@ vi.mock("@/components/AddTransactionModal", () => ({
   default: ({ isOpen }: { isOpen: boolean }) => isOpen ? <div data-testid="add-modal">Add Modal</div> : null,
 }));
 
-vi.mock("@/components/HeatMap", () => ({
-  default: () => <div data-testid="heatmap">HeatMap</div>,
-}));
 
 describe("DashboardPage", () => {
   beforeEach(() => {
@@ -50,26 +45,12 @@ describe("DashboardPage", () => {
     (useQueries.useBillPayments as any).mockReturnValue({
       data: { payments: [] },
     });
-    (useQueries.useHeatMapData as any).mockReturnValue({
-      data: null,
-      isLoading: false,
-    });
-    (useQueries.useAppHeatMapData as any).mockReturnValue({
-      data: null,
-      isLoading: false,
-    });
   });
 
   it("should render dashboard page", () => {
     render(<DashboardPage />);
     
     expect(screen.getByTestId("layout")).toBeInTheDocument();
-  });
-
-  it("should render heat map", () => {
-    render(<DashboardPage />);
-    
-    expect(screen.getByTestId("heatmap")).toBeInTheDocument();
   });
 
   it("should show loading state when summary is loading", () => {

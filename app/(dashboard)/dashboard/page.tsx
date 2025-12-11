@@ -8,10 +8,7 @@ import Card from "@/components/ui/Card";
 import Button from "@/components/ui/Button";
 import Input from "@/components/ui/Input";
 import AddTransactionModal from "@/components/AddTransactionModal";
-import HeatMap from "@/components/HeatMap";
-import AppHeatMap from "@/components/AppHeatMap";
 import { useSummary, usePaymentPlan, useBillPayments } from "@/hooks/useQueries";
-import { Utensils } from "lucide-react";
 
 interface Summary {
   grossTotal: number;
@@ -78,75 +75,6 @@ export default function DashboardPage() {
     viewMode === "day" && !!paymentPlanConfig
   );
   const { data: paymentsData } = useBillPayments();
-
-  // Analytics for best restaurant recommendation
-  const [bestRestaurantForCurrentHour, setBestRestaurantForCurrentHour] = useState<{
-    restaurantName: string;
-    medianRatio: number;
-    volume: number;
-    hour: number;
-  } | null>(null);
-  const [analyticsLoading, setAnalyticsLoading] = useState(false);
-
-  const userId = session?.user?.id;
-
-  useEffect(() => {
-    if (userId) {
-      fetchBestRestaurantForCurrentHour();
-    }
-  }, [userId]);
-
-  const fetchBestRestaurantForCurrentHour = async () => {
-    if (!userId) return;
-
-    try {
-      setAnalyticsLoading(true);
-      const currentHour = new Date().getHours();
-      const currentDayOfWeek = new Date().getDay(); // 0 = Sunday, 6 = Saturday
-      
-      const params = new URLSearchParams();
-      params.append("userId", userId);
-      params.append("hour", currentHour.toString());
-      params.append("dayOfWeek", currentDayOfWeek.toString());
-      const userTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
-      params.append("timezone", userTimezone);
-
-      const response = await fetch(`/api/delivery-orders/best-restaurant-now?${params.toString()}`);
-      
-      if (!response.ok) {
-        // Try to get error message from response
-        let errorMessage = `Failed to fetch best restaurant (${response.status})`;
-        try {
-          const errorData = await response.json();
-          errorMessage = errorData.error || errorMessage;
-        } catch {
-          // If response isn't JSON, use status text
-          errorMessage = response.statusText || errorMessage;
-        }
-        console.error("Best restaurant API error:", errorMessage, "Status:", response.status);
-        setBestRestaurantForCurrentHour(null);
-        return;
-      }
-
-      const data = await response.json();
-      
-      if (data.bestRestaurant) {
-        setBestRestaurantForCurrentHour({
-          restaurantName: data.bestRestaurant.restaurantName,
-          medianRatio: data.bestRestaurant.medianRatio,
-          volume: data.bestRestaurant.volume,
-          hour: data.bestRestaurant.hour,
-        });
-      } else {
-        setBestRestaurantForCurrentHour(null);
-      }
-    } catch (err) {
-      console.error("Error fetching best restaurant:", err);
-      setBestRestaurantForCurrentHour(null);
-    } finally {
-      setAnalyticsLoading(false);
-    }
-  };
 
   // Calculate paid payments map
   const paidPayments = useMemo(() => {
@@ -359,67 +287,6 @@ export default function DashboardPage() {
           + Expense
         </button>
       </div>
-
-      {/* Best Restaurant Recommendation */}
-      <Card className="p-6 mb-4 bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800">
-        <div className="flex items-start gap-4">
-          <div className="flex-shrink-0">
-            <div className="w-12 h-12 rounded-full bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center">
-              <Utensils className="w-6 h-6 text-blue-600 dark:text-blue-400" />
-            </div>
-          </div>
-          <div className="flex-1 min-w-0">
-            <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-1">
-              Best Restaurant Right Now
-            </h3>
-            {analyticsLoading ? (
-              <>
-                <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">
-                  Based on your historical data for this hour ({new Date().toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })})
-                </p>
-                <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400">
-                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600 dark:border-blue-400"></div>
-                  <span>Loading recommendation...</span>
-                </div>
-              </>
-            ) : bestRestaurantForCurrentHour ? (
-              <>
-                <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">
-                  {bestRestaurantForCurrentHour.hour === new Date().getHours() ? (
-                    <>Based on your historical data for this hour ({new Date().toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })})
-                    </>
-                  ) : (
-                    <>Based on your historical data for {bestRestaurantForCurrentHour.hour === 0 ? "12:00 AM" : bestRestaurantForCurrentHour.hour === 12 ? "12:00 PM" : bestRestaurantForCurrentHour.hour < 12 ? `${bestRestaurantForCurrentHour.hour}:00 AM` : `${bestRestaurantForCurrentHour.hour - 12}:00 PM`} (nearest hour with data)
-                    </>
-                  )}
-                </p>
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between">
-                    <span className="text-base font-bold text-gray-900 dark:text-white">
-                      {bestRestaurantForCurrentHour.restaurantName}
-                    </span>
-                    <span className="text-lg font-semibold text-blue-600 dark:text-blue-400">
-                      {formatCurrency(bestRestaurantForCurrentHour.medianRatio)}/mi
-                    </span>
-                  </div>
-                  <div className="text-xs text-gray-500 dark:text-gray-400">
-                    {bestRestaurantForCurrentHour.volume} order{bestRestaurantForCurrentHour.volume !== 1 ? "s" : ""} at this hour historically
-                  </div>
-                </div>
-              </>
-            ) : (
-              <>
-                <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">
-                  Based on your historical data for this hour ({new Date().toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })})
-                </p>
-                <div className="text-sm text-gray-600 dark:text-gray-400">
-                  No historical data available. Check back after you've completed some orders!
-                </div>
-              </>
-            )}
-          </div>
-        </div>
-      </Card>
 
       {/* Date Navigation */}
       <Card className="p-4 mb-4">
@@ -786,12 +653,6 @@ export default function DashboardPage() {
             })()}
           </>
         )}
-      </div>
-
-      {/* Heat Maps */}
-      <div className="mb-6 space-y-6">
-        <HeatMap localDate={selectedDate} viewMode={viewMode} />
-        <AppHeatMap localDate={selectedDate} viewMode={viewMode} />
       </div>
 
       {showAddModal && (

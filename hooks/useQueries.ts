@@ -18,8 +18,6 @@ export const queryKeys = {
   settings: () => ["settings"] as const,
   summary: (localDate: string, viewMode: string) =>
     ["summary", localDate, viewMode] as const,
-  heatmap: (localDate: string, viewMode: string, days?: number) => ["heatmap", localDate, viewMode, days] as const,
-  appHeatmap: (localDate: string, viewMode: string) => ["appHeatmap", localDate, viewMode] as const,
   teslaConnection: () => ["teslaConnection"] as const,
   deliveryOrders: (userId?: string, limit?: number) => ["deliveryOrders", userId, limit] as const,
   emailConfig: () => ["emailConfig"] as const,
@@ -224,41 +222,6 @@ export function useSummary(localDate: string, viewMode: string) {
   });
 }
 
-export function useHeatMapData(localDate: string, viewMode: string, days: number = 30) {
-  return useQuery({
-    queryKey: queryKeys.heatmap(localDate, viewMode, days),
-    queryFn: async () => {
-      const params = new URLSearchParams({
-        localDate,
-        viewMode,
-        days: days.toString(),
-      });
-      const res = await fetch(`/api/analytics/heatmap?${params.toString()}`);
-      if (!res.ok) {
-        throw new Error("Failed to fetch heat map data");
-      }
-      return res.json();
-    },
-  });
-}
-
-export function useAppHeatMapData(localDate: string, viewMode: string) {
-  return useQuery({
-    queryKey: queryKeys.appHeatmap(localDate, viewMode),
-    queryFn: async () => {
-      const params = new URLSearchParams({
-        localDate,
-        viewMode,
-      });
-      const res = await fetch(`/api/analytics/app-heatmap?${params.toString()}`);
-      if (!res.ok) {
-        throw new Error("Failed to fetch app heat map data");
-      }
-      return res.json();
-    },
-  });
-}
-
 // Mutation Hooks
 
 export function useCreateTransaction() {
@@ -283,7 +246,6 @@ export function useCreateTransaction() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["transactions"] });
       queryClient.invalidateQueries({ queryKey: ["summary"] });
-      queryClient.invalidateQueries({ queryKey: ["heatmap"] });
       queryClient.invalidateQueries({ queryKey: ["dateTotals"] });
       toast.success("Transaction saved successfully");
     },
@@ -316,7 +278,6 @@ export function useUpdateTransaction() {
       queryClient.invalidateQueries({ queryKey: ["transactions"] });
       queryClient.invalidateQueries({ queryKey: ["transaction"] });
       queryClient.invalidateQueries({ queryKey: ["summary"] });
-      queryClient.invalidateQueries({ queryKey: ["heatmap"] });
       queryClient.invalidateQueries({ queryKey: ["dateTotals"] });
       toast.success("Transaction updated successfully");
     },
@@ -346,7 +307,6 @@ export function useDeleteTransaction() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["transactions"] });
       queryClient.invalidateQueries({ queryKey: ["summary"] });
-      queryClient.invalidateQueries({ queryKey: ["heatmap"] });
       queryClient.invalidateQueries({ queryKey: ["dateTotals"] });
       toast.success("Transaction deleted successfully");
     },
@@ -703,7 +663,6 @@ export function useQuickTransaction() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["transactions"] });
       queryClient.invalidateQueries({ queryKey: ["summary"] });
-      queryClient.invalidateQueries({ queryKey: ["heatmap"] });
     },
     onError: (error: Error) => {
       toast.error(error.message || "Error creating quick transaction");
@@ -822,7 +781,6 @@ export function useQuickAddOrderTransaction() {
       queryClient.invalidateQueries({ queryKey: ["transactions"] });
       queryClient.invalidateQueries({ queryKey: ["deliveryOrders"] });
       queryClient.invalidateQueries({ queryKey: ["summary"] });
-      queryClient.invalidateQueries({ queryKey: ["heatmap"] });
       toast.success(`Transaction added for ${data.order.restaurantName}`);
     },
     onError: (error: Error) => {

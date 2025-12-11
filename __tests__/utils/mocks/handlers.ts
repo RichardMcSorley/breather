@@ -130,15 +130,5 @@ export const handlers = [
       { status: 201 }
     );
   }),
-
-  // Analytics
-  http.get(`${API_BASE}/api/analytics/heatmap`, () => {
-    return HttpResponse.json({
-      data: [
-        { date: "2024-01-01", value: 100 },
-        { date: "2024-01-02", value: 150 },
-      ],
-    });
-  }),
 ];
 
