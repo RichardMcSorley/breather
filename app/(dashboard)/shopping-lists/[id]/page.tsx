@@ -114,6 +114,48 @@ const createDownsampledCanvas = (
   return canvas;
 };
 
+// Lock screen orientation to landscape for better barcode scanning
+const lockOrientationToLandscape = async (): Promise<void> => {
+  try {
+    // Check if Screen Orientation API is available
+    const orientation = (screen as any).orientation;
+    if (orientation && typeof orientation.lock === "function") {
+      await orientation.lock("landscape");
+    } else if ((screen as any).lockOrientation) {
+      // Fallback for older browsers
+      (screen as any).lockOrientation("landscape");
+    } else if ((screen as any).mozLockOrientation) {
+      // Firefox fallback
+      (screen as any).mozLockOrientation("landscape");
+    } else if ((screen as any).msLockOrientation) {
+      // IE/Edge fallback
+      (screen as any).msLockOrientation("landscape");
+    }
+  } catch (error) {
+    // Orientation lock may fail due to browser restrictions or user settings
+    // This is expected on some browsers (e.g., Safari) and can be safely ignored
+    console.debug("Orientation lock not available or failed:", error);
+  }
+};
+
+// Unlock screen orientation
+const unlockOrientation = async (): Promise<void> => {
+  try {
+    const orientation = (screen as any).orientation;
+    if (orientation && typeof orientation.unlock === "function") {
+      orientation.unlock();
+    } else if ((screen as any).unlockOrientation) {
+      (screen as any).unlockOrientation();
+    } else if ((screen as any).mozUnlockOrientation) {
+      (screen as any).mozUnlockOrientation();
+    } else if ((screen as any).msUnlockOrientation) {
+      (screen as any).msUnlockOrientation();
+    }
+  } catch (error) {
+    console.debug("Orientation unlock failed:", error);
+  }
+};
+
 interface KrogerAisleLocation {
   aisleNumber?: string;
   shelfNumber?: string;
@@ -2572,8 +2614,13 @@ function CustomerIdentificationModal({
         animationFrameRef.current = null;
       }
       frameCountRef.current = 0;
+      // Unlock orientation when scanner stops
+      unlockOrientation();
       return;
     }
+
+    // Lock orientation to landscape when scanner starts
+    lockOrientationToLandscape();
 
     const codeReader = new BrowserMultiFormatReader(createBarcodeHints());
     codeReaderRef.current = codeReader;
@@ -2633,6 +2680,7 @@ function CustomerIdentificationModal({
                     cancelAnimationFrame(animationFrameRef.current);
                     animationFrameRef.current = null;
                   }
+                  unlockOrientation();
                   setScanning(false);
                 }
               } catch (error: any) {
@@ -2671,6 +2719,8 @@ function CustomerIdentificationModal({
         stream.getTracks().forEach(track => track.stop());
         videoElement.srcObject = null;
       }
+      // Unlock orientation on cleanup
+      unlockOrientation();
     };
   }, [scanning, isOpen, shoppingListId]);
 
@@ -2956,8 +3006,13 @@ function BarcodeScanner({
       frameCountRef.current = 0;
       setScannedCode("");
       setManualUPC("");
+      // Unlock orientation when scanner closes
+      unlockOrientation();
       return;
     }
+
+    // Lock orientation to landscape when scanner opens
+    lockOrientationToLandscape();
 
     const codeReader = new BrowserMultiFormatReader(createBarcodeHints());
     codeReaderRef.current = codeReader;
@@ -3021,6 +3076,7 @@ function BarcodeScanner({
                         cancelAnimationFrame(animationFrameRef.current);
                         animationFrameRef.current = null;
                       }
+                      unlockOrientation();
                       onScan(scannedCode);
                     }
                   }, 1000);
@@ -3066,6 +3122,8 @@ function BarcodeScanner({
         stream.getTracks().forEach(track => track.stop());
         videoElement.srcObject = null;
       }
+      // Unlock orientation on cleanup
+      unlockOrientation();
     };
   }, [isOpen, onScan]);
 
