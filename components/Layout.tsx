@@ -5,7 +5,6 @@ import { usePathname, useRouter } from "next/navigation";
 import Link from "next/link";
 import { ReactNode, useState } from "react";
 import { BarChart3, Clock, FileText, Car, Menu, Settings, Eye, EyeOff, ShoppingCart } from "lucide-react";
-import OfflineIndicator from "./OfflineIndicator";
 import ToastContainer from "./ui/Toast";
 import HamburgerMenu from "./HamburgerMenu";
 import { usePrivacyMode } from "./PrivacyModeProvider";
@@ -32,7 +31,6 @@ export default function Layout({ children }: LayoutProps) {
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900 pb-20">
       <ToastContainer />
-      <OfflineIndicator />
       <header className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 sticky top-0 z-40 safe-area-inset-top">
         <div className="px-4 py-3 flex items-center justify-between">
           <div className="flex items-center gap-3">

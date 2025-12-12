@@ -1,6 +1,6 @@
 # Breather - Gig Worker Expense Tracker
 
-A Progressive Web App (PWA) for gig workers to track income and expenses with offline support.
+A Progressive Web App (PWA) for gig workers to track income and expenses.
 
 ## Features
 
@@ -8,18 +8,15 @@ A Progressive Web App (PWA) for gig workers to track income and expenses with of
 - **Transaction Tracking**: Track income and expenses with tags, notes, and dates
 - **Recurring Bills**: Manage recurring bills with monthly updates
 - **Financial Dashboard**: View breathing room (days off available), free cash, and financial breakdown
-- **Offline Support**: Full offline-first architecture with automatic sync when online
 - **Mobile-First Design**: Responsive design optimized for mobile devices
-- **PWA**: Installable on home screen with offline capabilities
+- **PWA**: Installable on home screen
 
 ## Tech Stack
 
 - **Framework**: Next.js 16 (App Router) with TypeScript
 - **Authentication**: NextAuth.js with Google OAuth
 - **Database**: MongoDB with Mongoose
-- **PWA**: next-pwa for service worker and offline support
 - **Styling**: Tailwind CSS
-- **Offline Storage**: IndexedDB via idb-keyval
 
 ## Getting Started
 
@@ -151,7 +148,6 @@ npm run dev
   /ui                    # Reusable UI components
 /lib                     # Utilities and models
   /models                # Mongoose schemas
-  /offline.ts            # Offline storage utilities
 /hooks                   # Custom React hooks
 /public                  # Static assets
   /icons                 # PWA icons
@@ -245,15 +241,6 @@ After setting up your Tesla application, you need to register it in each region:
 4. Authorize the app in Tesla's OAuth flow
 5. Once connected, click "Sync Now" to import your current odometer reading
 6. New mileage entries will be created automatically when the odometer increases by 0.1 miles or more
-
-## Offline Support
-
-The app works offline and automatically syncs when you come back online:
-
-- All mutations (create, update, delete) are queued when offline
-- Data is cached for viewing offline
-- Automatic sync when connection is restored
-- Manual sync button available in the offline indicator
 
 ## Testing
 

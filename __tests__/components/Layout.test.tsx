@@ -29,10 +29,6 @@ vi.mock("@/components/ThemeProvider", async (importOriginal) => {
   };
 });
 
-vi.mock("@/components/OfflineIndicator", () => ({
-  default: () => <div data-testid="offline-indicator">Offline Indicator</div>,
-}));
-
 vi.mock("@/components/ui/Toast", () => ({
   default: () => <div data-testid="toast-container">Toast Container</div>,
 }));
@@ -227,16 +223,6 @@ describe("Layout", () => {
 
     expect(screen.getByTestId("child-content")).toBeInTheDocument();
     expect(screen.getByText("Child Content")).toBeInTheDocument();
-  });
-
-  it("should render OfflineIndicator", () => {
-    render(
-      <Layout>
-        <div>Test Content</div>
-      </Layout>
-    );
-
-    expect(screen.getByTestId("offline-indicator")).toBeInTheDocument();
   });
 
   it("should render ToastContainer", () => {

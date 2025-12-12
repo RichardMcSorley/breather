@@ -322,41 +322,6 @@ describe("Concurrency: Race Conditions", () => {
     }
   });
 
-  it("should handle queue ordering for offline mutations", async () => {
-    // Simulate offline mutation queue behavior
-    // Create transactions in sequence (simulating queue processing)
-    const transactions = [];
-    for (let i = 0; i < 5; i++) {
-      const response = await POST(
-        new NextRequest("http://localhost:3000/api/transactions", {
-          method: "POST",
-          body: JSON.stringify({
-            amount: 100 + i,
-            type: "income",
-            date: `2024-01-${15 + i}`,
-            time: "10:00",
-          }),
-        })
-      );
-      expect(response.status).toBe(201);
-      const data = await response.json();
-      transactions.push(data._id);
-    }
-
-    // Verify order is maintained
-    const { GET } = await import("@/app/api/transactions/route");
-    const listResponse = await GET(
-      new NextRequest("http://localhost:3000/api/transactions")
-    );
-    const listData = await listResponse.json();
-
-    // Transactions should be sorted by date descending
-    const dates = listData.transactions.map((t: any) => new Date(t.date).getTime());
-    for (let i = 0; i < dates.length - 1; i++) {
-      expect(dates[i]).toBeGreaterThanOrEqual(dates[i + 1]);
-    }
-  });
-
   it("should handle mutation failure and retry", async () => {
     // Create a transaction
     const transaction = await Transaction.create({

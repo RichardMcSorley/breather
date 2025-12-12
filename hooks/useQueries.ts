@@ -1,5 +1,4 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useOfflineMutation } from "./useOfflineMutation";
 import { useToast } from "@/lib/toast";
 
 // Query Keys
@@ -228,9 +227,7 @@ export function useCreateTransaction() {
   const queryClient = useQueryClient();
   const toast = useToast();
 
-  return useOfflineMutation({
-    endpoint: "/api/transactions",
-    method: "POST",
+  return useMutation({
     mutationFn: async (data: any) => {
       const res = await fetch("/api/transactions", {
         method: "POST",
@@ -259,9 +256,7 @@ export function useUpdateTransaction() {
   const queryClient = useQueryClient();
   const toast = useToast();
 
-  return useOfflineMutation({
-    endpoint: (variables: { id: string; [key: string]: any }) => `/api/transactions/${variables.id}`,
-    method: "PUT",
+  return useMutation({
     mutationFn: async ({ id, ...data }: { id: string; [key: string]: any }) => {
       const res = await fetch(`/api/transactions/${id}`, {
         method: "PUT",
@@ -291,9 +286,7 @@ export function useDeleteTransaction() {
   const queryClient = useQueryClient();
   const toast = useToast();
 
-  return useOfflineMutation({
-    endpoint: (id: string) => `/api/transactions/${id}`,
-    method: "DELETE",
+  return useMutation({
     mutationFn: async (id: string) => {
       const res = await fetch(`/api/transactions/${id}`, {
         method: "DELETE",
@@ -320,9 +313,7 @@ export function useCreateBill() {
   const queryClient = useQueryClient();
   const toast = useToast();
 
-  return useOfflineMutation({
-    endpoint: "/api/bills",
-    method: "POST",
+  return useMutation({
     mutationFn: async (data: any) => {
       const res = await fetch("/api/bills", {
         method: "POST",
@@ -350,9 +341,7 @@ export function useUpdateBill() {
   const queryClient = useQueryClient();
   const toast = useToast();
 
-  return useOfflineMutation({
-    endpoint: (variables: { id: string; [key: string]: any }) => `/api/bills/${variables.id}`,
-    method: "PUT",
+  return useMutation({
     mutationFn: async ({ id, ...data }: { id: string; [key: string]: any }) => {
       const res = await fetch(`/api/bills/${id}`, {
         method: "PUT",
@@ -381,9 +370,7 @@ export function useDeleteBill() {
   const queryClient = useQueryClient();
   const toast = useToast();
 
-  return useOfflineMutation({
-    endpoint: (id: string) => `/api/bills/${id}`,
-    method: "DELETE",
+  return useMutation({
     mutationFn: async (id: string) => {
       const res = await fetch(`/api/bills/${id}`, {
         method: "DELETE",
@@ -409,9 +396,7 @@ export function useCreateBillPayment() {
   const queryClient = useQueryClient();
   const toast = useToast();
 
-  return useOfflineMutation({
-    endpoint: "/api/bills/payments",
-    method: "POST",
+  return useMutation({
     mutationFn: async (data: any) => {
       const res = await fetch("/api/bills/payments", {
         method: "POST",
@@ -440,9 +425,7 @@ export function useUpdateBillPayment() {
   const queryClient = useQueryClient();
   const toast = useToast();
 
-  return useOfflineMutation({
-    endpoint: (variables: { id: string; [key: string]: any }) => `/api/bills/payments/${variables.id}`,
-    method: "PUT",
+  return useMutation({
     mutationFn: async ({ id, ...data }: { id: string; [key: string]: any }) => {
       const res = await fetch(`/api/bills/payments/${id}`, {
         method: "PUT",
@@ -471,9 +454,7 @@ export function useDeleteBillPayment() {
   const queryClient = useQueryClient();
   const toast = useToast();
 
-  return useOfflineMutation({
-    endpoint: (id: string) => `/api/bills/payments/${id}`,
-    method: "DELETE",
+  return useMutation({
     mutationFn: async (id: string) => {
       const res = await fetch(`/api/bills/payments/${id}`, {
         method: "DELETE",
@@ -500,9 +481,7 @@ export function useDeleteAllBillPayments() {
   const queryClient = useQueryClient();
   const toast = useToast();
 
-  return useOfflineMutation({
-    endpoint: "/api/bills/payments",
-    method: "DELETE",
+  return useMutation({
     mutationFn: async () => {
       const res = await fetch("/api/bills/payments", {
         method: "DELETE",
@@ -528,9 +507,7 @@ export function useCreateMileageEntry() {
   const queryClient = useQueryClient();
   const toast = useToast();
 
-  return useOfflineMutation({
-    endpoint: "/api/mileage",
-    method: "POST",
+  return useMutation({
     mutationFn: async (data: any) => {
       const res = await fetch("/api/mileage", {
         method: "POST",
@@ -557,9 +534,7 @@ export function useUpdateMileageEntry() {
   const queryClient = useQueryClient();
   const toast = useToast();
 
-  return useOfflineMutation({
-    endpoint: (variables: { id: string; [key: string]: any }) => `/api/mileage/${variables.id}`,
-    method: "PUT",
+  return useMutation({
     mutationFn: async ({ id, ...data }: { id: string; [key: string]: any }) => {
       const res = await fetch(`/api/mileage/${id}`, {
         method: "PUT",
@@ -587,9 +562,7 @@ export function useDeleteMileageEntry() {
   const queryClient = useQueryClient();
   const toast = useToast();
 
-  return useOfflineMutation({
-    endpoint: (id: string) => `/api/mileage/${id}`,
-    method: "DELETE",
+  return useMutation({
     mutationFn: async (id: string) => {
       const res = await fetch(`/api/mileage/${id}`, {
         method: "DELETE",
@@ -615,9 +588,7 @@ export function useUpdateSettings() {
   const queryClient = useQueryClient();
   const toast = useToast();
 
-  return useOfflineMutation({
-    endpoint: "/api/settings",
-    method: "PUT",
+  return useMutation({
     mutationFn: async (data: any) => {
       const res = await fetch("/api/settings", {
         method: "PUT",
@@ -645,9 +616,7 @@ export function useQuickTransaction() {
   const queryClient = useQueryClient();
   const toast = useToast();
 
-  return useOfflineMutation({
-    endpoint: "/api/quick-transaction",
-    method: "POST",
+  return useMutation({
     mutationFn: async (data: any) => {
       const res = await fetch("/api/quick-transaction", {
         method: "POST",
