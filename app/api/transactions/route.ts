@@ -94,37 +94,37 @@ export async function GET(request: NextRequest) {
             termSearchConditions.push({ amount: searchAmount });
           }
 
-          // Search in linked delivery orders (restaurant names and app names)
-          const matchingOrderIds: mongoose.Types.ObjectId[] = [];
-          const matchingOrders = await DeliveryOrder.find({
-            userId: session.user.id,
-            $or: [
-              { restaurantName: { $regex: searchTerm, $options: "i" } },
-              { appName: { $regex: searchTerm, $options: "i" } },
-            ],
-          }).select("_id").lean();
-          matchingOrderIds.push(...matchingOrders.map((o: any) => o._id));
+          // Parallelize DeliveryOrder and OcrExport searches
+          const [matchingOrders, ordersWithAdditionalRestaurants, matchingCustomers] = await Promise.all([
+            DeliveryOrder.find({
+              userId: session.user.id,
+              $or: [
+                { restaurantName: { $regex: searchTerm, $options: "i" } },
+                { appName: { $regex: searchTerm, $options: "i" } },
+              ],
+            }).select("_id").lean(),
+            DeliveryOrder.find({
+              userId: session.user.id,
+              "additionalRestaurants.name": { $regex: searchTerm, $options: "i" },
+            }).select("_id").lean(),
+            OcrExport.find({
+              userId: session.user.id,
+              $or: [
+                { customerName: { $regex: searchTerm, $options: "i" } },
+                { appName: { $regex: searchTerm, $options: "i" } },
+              ],
+            }).select("_id").lean(),
+          ]);
 
-          // Also search in additionalRestaurants
-          const ordersWithAdditionalRestaurants = await DeliveryOrder.find({
-            userId: session.user.id,
-            "additionalRestaurants.name": { $regex: searchTerm, $options: "i" },
-          }).select("_id").lean();
+          const matchingOrderIds: mongoose.Types.ObjectId[] = [];
+          matchingOrderIds.push(...matchingOrders.map((o: any) => o._id));
           ordersWithAdditionalRestaurants.forEach((o: any) => {
             if (!matchingOrderIds.some(id => id.toString() === o._id.toString())) {
               matchingOrderIds.push(o._id);
             }
           });
 
-          // Search in linked OCR exports (customer names and app names)
           const matchingCustomerIds: mongoose.Types.ObjectId[] = [];
-          const matchingCustomers = await OcrExport.find({
-            userId: session.user.id,
-            $or: [
-              { customerName: { $regex: searchTerm, $options: "i" } },
-              { appName: { $regex: searchTerm, $options: "i" } },
-            ],
-          }).select("_id").lean();
           matchingCustomerIds.push(...matchingCustomers.map((c: any) => c._id));
 
           // Add conditions for matching linked orders and customers
@@ -149,13 +149,16 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    const transactions = await Transaction.find(query)
-      .populate("linkedOcrExportIds", "customerName customerAddress appName entryId lat lon")
-      .populate("linkedDeliveryOrderIds", "restaurantName restaurantAddress restaurantLat restaurantLon appName miles money entryId userLatitude userLongitude userAddress step active additionalRestaurants")
-      .sort({ date: -1, createdAt: -1 })
-      .skip((page - 1) * limit)
-      .limit(limit)
-      .lean();
+    const [transactions, total] = await Promise.all([
+      Transaction.find(query)
+        .populate("linkedOcrExportIds", "customerName customerAddress appName entryId lat lon")
+        .populate("linkedDeliveryOrderIds", "restaurantName restaurantAddress restaurantLat restaurantLon appName miles money entryId userLatitude userLongitude userAddress step active additionalRestaurants")
+        .sort({ date: -1, createdAt: -1 })
+        .skip((page - 1) * limit)
+        .limit(limit)
+        .lean(),
+      Transaction.countDocuments(query),
+    ]);
 
     // Format dates as YYYY-MM-DD strings to avoid timezone issues
     const formattedTransactions: FormattedTransaction[] = transactions.map((t: any) => {
@@ -208,8 +211,6 @@ export async function GET(request: NextRequest) {
 
       return formatted;
     });
-
-    const total = await Transaction.countDocuments(query);
 
     return NextResponse.json({
       transactions: formattedTransactions,
