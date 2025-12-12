@@ -978,18 +978,18 @@ function EditItemModal({
   const hasOriginalScreenshot = !!screenshot;
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title="Edit Item">
-      <div className="space-y-4">
+    <Modal isOpen={isOpen} onClose={onClose} title="Edit Item" variant="dark" fullScreen>
+      <div className="bg-black dark:bg-black p-6 space-y-5 min-h-full">
         {/* Screenshot Reference */}
         {(screenshot || item.croppedImage) && (
           <div className="space-y-3">
             {/* Cropped Product Image - Show by default if exists */}
             {item.croppedImage && (
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                  Cropped Product Image
+                <label className="block text-xs font-medium text-gray-400 dark:text-gray-400 mb-2 uppercase tracking-wide">
+                  CROPPED PRODUCT IMAGE
                 </label>
-                <div className="border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden bg-gray-50 dark:bg-gray-900">
+                <div className="border border-gray-700 dark:border-gray-700 rounded-lg overflow-hidden bg-[#1a1d2e] dark:bg-[#1a1d2e]">
                   <div className="relative inline-block w-full">
                     <img 
                       src={item.croppedImage} 
@@ -1005,7 +1005,7 @@ function EditItemModal({
                     </button>
                   </div>
                 </div>
-                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                <p className="text-xs text-gray-400 dark:text-gray-400 mt-1">
                   Product detected and cropped from screenshot
                 </p>
               </div>
@@ -1014,17 +1014,17 @@ function EditItemModal({
             {/* Original Screenshot Reference - Show if no cropped, or if toggled on */}
             {screenshot && (!hasCroppedImage || showOriginalScreenshot) && (
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                  {item.croppedImage ? "Original Screenshot Reference" : "Screenshot Reference"}
+                <label className="block text-xs font-medium text-gray-400 dark:text-gray-400 mb-2 uppercase tracking-wide">
+                  {item.croppedImage ? "ORIGINAL SCREENSHOT REFERENCE" : "SCREENSHOT REFERENCE"}
                 </label>
-                <div className="border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden bg-gray-50 dark:bg-gray-900">
+                <div className="border border-gray-700 dark:border-gray-700 rounded-lg overflow-hidden bg-[#1a1d2e] dark:bg-[#1a1d2e]">
                   <img 
                     src={screenshot.base64} 
                     alt="Original screenshot" 
                     className="max-w-full h-auto max-h-64 mx-auto block"
                   />
                 </div>
-                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                <p className="text-xs text-gray-400 dark:text-gray-400 mt-1">
                   {item.croppedImage 
                     ? "Full screenshot for context" 
                     : "Use this screenshot to verify the correct product name and quantity"}
@@ -1036,7 +1036,7 @@ function EditItemModal({
             {hasCroppedImage && hasOriginalScreenshot && (
               <button
                 onClick={() => setShowOriginalScreenshot(!showOriginalScreenshot)}
-                className="w-full px-3 py-2 text-sm text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-lg transition-colors flex items-center justify-center gap-2"
+                className="w-full px-3 py-2 text-sm text-gray-300 dark:text-gray-300 bg-[#1a1d2e] dark:bg-[#1a1d2e] hover:bg-[#2a2d3e] dark:hover:bg-[#2a2d3e] rounded-lg transition-colors flex items-center justify-center gap-2 border border-gray-700"
               >
                 {showOriginalScreenshot ? (
                   <>
@@ -1056,16 +1056,16 @@ function EditItemModal({
 
         {/* Current Product Name */}
         <div>
-          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-            Current Product
+          <label className="block text-xs font-medium text-gray-400 dark:text-gray-400 mb-1 uppercase tracking-wide">
+            CURRENT PRODUCT
           </label>
-          <p className="text-gray-900 dark:text-white font-medium">{item.productName}</p>
+          <p className="text-white dark:text-white font-medium">{item.productName}</p>
         </div>
 
         {/* Search for Different Product */}
         <div>
-          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-            Search for Different Product (optional)
+          <label className="block text-xs font-medium text-gray-400 dark:text-gray-400 mb-2 uppercase tracking-wide">
+            SEARCH FOR DIFFERENT PRODUCT (OPTIONAL)
           </label>
           <div className="flex gap-2">
             <input
@@ -1078,12 +1078,12 @@ function EditItemModal({
                 }
               }}
               placeholder="Enter product name to search..."
-              className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="flex-1 px-3 py-2 border border-gray-700 dark:border-gray-700 rounded-lg bg-[#1a1d2e] dark:bg-[#1a1d2e] text-white placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-green-500"
             />
             <button
               onClick={handleSearch}
               disabled={searching || !productName.trim()}
-              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+              className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
             >
               {searching ? (
                 <>
@@ -1101,16 +1101,16 @@ function EditItemModal({
         </div>
 
         {searchError && (
-          <div className="p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
-            <p className="text-sm text-red-600 dark:text-red-400">{searchError}</p>
+          <div className="p-3 bg-red-900/20 dark:bg-red-900/20 border border-red-800 dark:border-red-800 rounded-lg">
+            <p className="text-sm text-red-400 dark:text-red-400">{searchError}</p>
           </div>
         )}
 
         {/* Search Results */}
         {searchResults.length > 0 && (
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-              Select Product
+            <label className="block text-xs font-medium text-gray-400 dark:text-gray-400 mb-2 uppercase tracking-wide">
+              SELECT PRODUCT
             </label>
             <div className="max-h-64 overflow-y-auto space-y-2">
               {searchResults.map((product) => {
@@ -1122,13 +1122,13 @@ function EditItemModal({
                     onClick={() => setSelectedProduct(product)}
                     className={`p-3 border rounded-lg cursor-pointer transition-colors ${
                       isSelected
-                        ? "border-blue-500 bg-blue-50 dark:bg-blue-900/20"
-                        : "border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600"
+                        ? "border-green-500 bg-green-900/20 dark:bg-green-900/20"
+                        : "border-gray-700 dark:border-gray-700 bg-[#1a1d2e] dark:bg-[#1a1d2e] hover:border-gray-600 dark:hover:border-gray-600 hover:bg-[#2a2d3e]"
                     }`}
                   >
                     <div className="flex gap-3">
                       {imageUrl ? (
-                        <div className="relative w-16 h-16 bg-white rounded overflow-hidden flex-shrink-0">
+                        <div className="relative w-16 h-16 bg-[#0f1115] rounded overflow-hidden flex-shrink-0">
                           <Image
                             src={imageUrl}
                             alt={product.description || ""}
@@ -1138,32 +1138,32 @@ function EditItemModal({
                           />
                         </div>
                       ) : (
-                        <div className="w-16 h-16 bg-gray-100 dark:bg-gray-700 rounded flex items-center justify-center flex-shrink-0">
+                        <div className="w-16 h-16 bg-[#1a1d2e] dark:bg-[#1a1d2e] rounded flex items-center justify-center flex-shrink-0">
                           <ShoppingCart className="w-6 h-6 text-gray-400" />
                         </div>
                       )}
                       <div className="flex-1 min-w-0">
-                        <p className="font-medium text-gray-900 dark:text-white text-sm">
+                        <p className="font-medium text-white dark:text-white text-sm">
                           {product.description}
                         </p>
                         {product.brand && (
-                          <p className="text-xs text-gray-500 dark:text-gray-400">{product.brand}</p>
+                          <p className="text-xs text-gray-400 dark:text-gray-400">{product.brand}</p>
                         )}
                         <div className="flex items-center gap-2 mt-1 flex-wrap">
                           {product.items?.[0]?.size && (
-                            <p className="text-xs text-gray-600 dark:text-gray-400">
+                            <p className="text-xs text-gray-400 dark:text-gray-400">
                               {product.items[0].size}
                             </p>
                           )}
                           {product.items?.[0]?.price?.regular && (
-                            <p className="text-sm font-semibold text-gray-900 dark:text-white">
+                            <p className="text-sm font-semibold text-white dark:text-white">
                               ${product.items[0].price.regular.toFixed(2)}
                             </p>
                           )}
                         </div>
                       </div>
                       {isSelected && (
-                        <Check className="w-5 h-5 text-blue-600 dark:text-blue-400 flex-shrink-0" />
+                        <Check className="w-5 h-5 text-green-400 dark:text-green-400 flex-shrink-0" />
                       )}
                     </div>
                   </div>
@@ -1174,8 +1174,8 @@ function EditItemModal({
         )}
 
         {selectedProduct && (
-          <div className="p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
-            <p className="text-sm text-blue-600 dark:text-blue-400">
+          <div className="p-3 bg-green-900/20 dark:bg-green-900/20 border border-green-800 dark:border-green-800 rounded-lg">
+            <p className="text-sm text-green-400 dark:text-green-400">
               ✓ New product selected: <strong>{selectedProduct.description}</strong>
             </p>
           </div>
@@ -1183,70 +1183,70 @@ function EditItemModal({
 
         {/* Customer */}
         <div>
-          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-            Customer
+          <label className="block text-xs font-medium text-gray-400 dark:text-gray-400 mb-2 uppercase tracking-wide">
+            CUSTOMER
           </label>
           <select
             value={customer}
             onChange={(e) => setCustomer(e.target.value)}
-            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="w-full px-3 py-2 border border-gray-700 dark:border-gray-700 rounded-lg bg-[#1a1d2e] dark:bg-[#1a1d2e] text-white focus:outline-none focus:ring-2 focus:ring-green-500"
           >
-            <option value="A">A</option>
-            <option value="B">B</option>
-            <option value="C">C</option>
-            <option value="D">D</option>
-            <option value="E">E</option>
+            <option value="A" className="bg-[#1a1d2e]">A</option>
+            <option value="B" className="bg-[#1a1d2e]">B</option>
+            <option value="C" className="bg-[#1a1d2e]">C</option>
+            <option value="D" className="bg-[#1a1d2e]">D</option>
+            <option value="E" className="bg-[#1a1d2e]">E</option>
           </select>
         </div>
 
         {/* Quantity */}
         <div>
-          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-            Quantity
+          <label className="block text-xs font-medium text-gray-400 dark:text-gray-400 mb-2 uppercase tracking-wide">
+            QUANTITY
           </label>
           <input
             type="text"
             value={quantity}
             onChange={(e) => setQuantity(e.target.value)}
             placeholder="1"
-            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="w-full px-3 py-2 border border-gray-700 dark:border-gray-700 rounded-lg bg-[#1a1d2e] dark:bg-[#1a1d2e] text-white placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-green-500"
           />
         </div>
 
         {/* App */}
         <div>
-          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-            App
+          <label className="block text-xs font-medium text-gray-400 dark:text-gray-400 mb-2 uppercase tracking-wide">
+            APP
           </label>
           <select
             value={app}
             onChange={(e) => setApp(e.target.value)}
-            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="w-full px-3 py-2 border border-gray-700 dark:border-gray-700 rounded-lg bg-[#1a1d2e] dark:bg-[#1a1d2e] text-white focus:outline-none focus:ring-2 focus:ring-green-500"
           >
-            <option value="">None</option>
-            <option value="Instacart">Instacart</option>
-            <option value="DoorDash">DoorDash</option>
+            <option value="" className="bg-[#1a1d2e]">None</option>
+            <option value="Instacart" className="bg-[#1a1d2e]">Instacart</option>
+            <option value="DoorDash" className="bg-[#1a1d2e]">DoorDash</option>
           </select>
         </div>
 
         {error && (
-          <div className="p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
-            <p className="text-sm text-red-600 dark:text-red-400">{error}</p>
+          <div className="p-3 bg-red-900/20 dark:bg-red-900/20 border border-red-800 dark:border-red-800 rounded-lg">
+            <p className="text-sm text-red-400 dark:text-red-400">{error}</p>
           </div>
         )}
 
         {/* Save Button */}
-        <div className="flex gap-2 pt-2">
+        <div className="flex gap-2 pt-4">
           <button
             onClick={onClose}
-            className="flex-1 px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800"
+            className="flex-1 px-4 py-3 border border-gray-700 dark:border-gray-700 rounded-lg text-gray-300 dark:text-gray-300 hover:bg-[#2a2d3e] dark:hover:bg-[#2a2d3e] bg-[#1a1d2e] dark:bg-[#1a1d2e] transition-colors"
           >
             Cancel
           </button>
           <button
             onClick={handleSave}
             disabled={saving}
-            className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+            className="flex-1 px-4 py-3 bg-white text-black rounded-lg hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 font-medium uppercase tracking-wide transition-colors"
           >
             {saving ? (
               <>
@@ -2175,9 +2175,11 @@ function QuickSearchModal({
     return `$${price.toFixed(2)}`;
   };
 
+  const canCheckAvailability = selectedLocation && searchResults.length > 0;
+
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title="Search Kroger Products">
-      <div className="space-y-5">
+    <Modal isOpen={isOpen} onClose={onClose} title="Search" variant="dark" fullScreen>
+      <div className="bg-black dark:bg-black p-6 space-y-5 min-h-full">
         {/* Store Selection Section */}
         <div>
           <KrogerStoreSelector
@@ -2187,21 +2189,21 @@ function QuickSearchModal({
         </div>
 
         {/* Search Section */}
-        <div className="border-t border-gray-200 dark:border-gray-700 pt-4">
+        <div className="pt-2">
           <KrogerSearchBar onSearch={handleSearch} loading={searching} />
         </div>
 
         {searchError && (
-          <div className="p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
-            <p className="text-sm text-red-600 dark:text-red-400">{searchError}</p>
+          <div className="p-3 bg-red-900/20 dark:bg-red-900/20 border border-red-800 dark:border-red-800 rounded-lg">
+            <p className="text-sm text-red-400 dark:text-red-400">{searchError}</p>
           </div>
         )}
 
         {/* Loading State */}
         {searching && (
           <div className="flex items-center justify-center py-8">
-            <Loader2 className="w-6 h-6 animate-spin text-green-600 dark:text-green-400" />
-            <span className="ml-2 text-sm text-gray-600 dark:text-gray-400">Searching products...</span>
+            <Loader2 className="w-6 h-6 animate-spin text-green-400 dark:text-green-400" />
+            <span className="ml-2 text-sm text-gray-400 dark:text-gray-400">Searching products...</span>
           </div>
         )}
 
@@ -2209,11 +2211,11 @@ function QuickSearchModal({
         {!searching && searchResults.length > 0 && (
           <div>
             <div className="flex items-center justify-between mb-3">
-              <h3 className="text-base font-semibold text-gray-900 dark:text-white">
+              <h3 className="text-base font-semibold text-white dark:text-white">
                 Search Results
               </h3>
               <div className="flex items-center gap-2">
-                <span className="text-sm text-gray-500 dark:text-gray-400 bg-gray-100 dark:bg-gray-800 px-2 py-1 rounded">
+                <span className="text-sm text-gray-400 dark:text-gray-400 bg-[#1a1d2e] dark:bg-[#1a1d2e] px-2 py-1 rounded">
                   {searchResults.length} {searchResults.length === 1 ? 'product' : 'products'}
                 </span>
                 <button
@@ -2221,7 +2223,7 @@ function QuickSearchModal({
                     setSearchResults([]);
                     setSearchError(null);
                   }}
-                  className="text-xs text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 px-2 py-1 rounded hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                  className="text-xs text-gray-400 dark:text-gray-400 hover:text-gray-300 dark:hover:text-gray-300 px-2 py-1 rounded hover:bg-[#1a1d2e] dark:hover:bg-[#1a1d2e] transition-colors"
                   title="Clear results"
                 >
                   Clear
@@ -2237,7 +2239,8 @@ function QuickSearchModal({
                 return (
                   <div
                     key={product.productId}
-                    className="p-4 border-2 border-gray-200 dark:border-gray-700 rounded-xl bg-white dark:bg-gray-800 hover:border-green-500 dark:hover:border-green-600 transition-all shadow-sm hover:shadow-md"
+                    data-product-result
+                    className="p-4 border-2 border-gray-700 dark:border-gray-700 rounded-xl bg-[#1a1d2e] dark:bg-[#1a1d2e] hover:border-green-500 dark:hover:border-green-600 transition-all shadow-sm hover:shadow-md"
                   >
                     <div className="flex gap-4">
                       {imageUrl ? (
@@ -2266,33 +2269,33 @@ function QuickSearchModal({
                           onClick={() => setSelectedProductForDetails(product)}
                           className="text-left w-full group"
                         >
-                          <p className="font-semibold text-gray-900 dark:text-white text-base group-hover:text-green-600 dark:group-hover:text-green-400 transition-colors line-clamp-2">
+                          <p className="font-semibold text-white dark:text-white text-base group-hover:text-green-400 dark:group-hover:text-green-400 transition-colors line-clamp-2">
                             {product.description}
                           </p>
                         </button>
                         {product.brand && (
-                          <p className="text-xs text-gray-500 dark:text-gray-400 mt-1 uppercase tracking-wide">
+                          <p className="text-xs text-gray-400 dark:text-gray-400 mt-1 uppercase tracking-wide">
                             {product.brand}
                           </p>
                         )}
                         <div className="flex items-center gap-3 mt-2 flex-wrap">
                           {item?.size && (
-                            <span className="text-xs font-medium text-gray-600 dark:text-gray-400 bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded">
+                            <span className="text-xs font-medium text-gray-400 dark:text-gray-400 bg-[#0f1115] dark:bg-[#0f1115] px-2 py-1 rounded">
                               {item.size}
                             </span>
                           )}
                           <div className="flex items-baseline gap-2">
                             {item?.price?.promo && item.price.promo !== item.price.regular ? (
                               <>
-                                <span className="text-lg font-bold text-green-600 dark:text-green-400">
+                                <span className="text-lg font-bold text-green-400 dark:text-green-400">
                                   {formatPrice(item.price.promo)}
                                 </span>
-                                <span className="text-sm text-gray-500 dark:text-gray-400 line-through">
+                                <span className="text-sm text-gray-400 dark:text-gray-400 line-through">
                                   {formatPrice(item.price.regular)}
                                 </span>
                               </>
                             ) : item?.price?.regular ? (
-                              <span className="text-lg font-bold text-gray-900 dark:text-white">
+                              <span className="text-lg font-bold text-white dark:text-white">
                                 {formatPrice(item.price.regular)}
                               </span>
                             ) : null}
@@ -2338,7 +2341,7 @@ function QuickSearchModal({
                           return locationParts.length > 0 ? (
                             <div className="mt-2 flex items-center gap-1">
                               <span className="text-xs text-gray-400">📍</span>
-                              <p className="text-xs text-gray-500 dark:text-gray-400">
+                              <p className="text-xs text-gray-400 dark:text-gray-400">
                                 {locationParts.join(" - ")}
                               </p>
                             </div>
@@ -2386,14 +2389,39 @@ function QuickSearchModal({
         )}
 
         {!searching && searchResults.length === 0 && !searchError && (
-          <div className="text-center py-12 text-gray-500 dark:text-gray-400">
-            <div className="w-16 h-16 mx-auto mb-4 bg-gray-100 dark:bg-gray-800 rounded-full flex items-center justify-center">
+          <div className="text-center py-12 text-gray-400 dark:text-gray-400">
+            <div className="w-16 h-16 mx-auto mb-4 bg-[#1a1d2e] dark:bg-[#1a1d2e] rounded-full flex items-center justify-center">
               <Search className="w-8 h-8 opacity-50" />
             </div>
-            <p className="text-base font-medium mb-1">Ready to search</p>
-            <p className="text-sm">Enter a product name, brand, or product ID above to find products</p>
+            <p className="text-base font-medium mb-1 text-white">Ready to search</p>
+            <p className="text-sm text-gray-400">Enter a product name, brand, or product ID above to find products</p>
           </div>
         )}
+
+        {/* CHECK AVAILABILITY Button */}
+        <div className="pt-4 space-y-2">
+          <button
+            onClick={() => {
+              if (searchResults.length > 0) {
+                // Scroll to results or trigger search if needed
+                const firstResult = document.querySelector('[data-product-result]');
+                if (firstResult) {
+                  firstResult.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                }
+              } else if (selectedLocation) {
+                // Trigger a search if we have a location but no results
+                // This could be enhanced to show a message or trigger default search
+              }
+            }}
+            disabled={!canCheckAvailability}
+            className="w-full py-3 bg-white text-black rounded-lg hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-medium uppercase tracking-wide"
+          >
+            CHECK AVAILABILITY
+          </button>
+          <p className="text-xs text-gray-400 dark:text-gray-400 text-center uppercase tracking-wide">
+            ENTER DETAILS ABOVE TO VIEW STOCK
+          </p>
+        </div>
       </div>
 
       {/* Product Detail Modal */}
@@ -2473,9 +2501,9 @@ function ProductDetailModal({
     : stockLevel === "TEMPORARILY_OUT_OF_STOCK" ? "Out of Stock" 
     : null;
   
-  const stockLevelColor = stockLevel === "HIGH" ? "text-green-600 dark:text-green-400"
-    : stockLevel === "LOW" ? "text-yellow-600 dark:text-yellow-400"
-    : stockLevel === "TEMPORARILY_OUT_OF_STOCK" ? "text-red-600 dark:text-red-400"
+  const stockLevelColor = stockLevel === "HIGH" ? "text-green-400 dark:text-green-400"
+    : stockLevel === "LOW" ? "text-yellow-400 dark:text-yellow-400"
+    : stockLevel === "TEMPORARILY_OUT_OF_STOCK" ? "text-red-400 dark:text-red-400"
     : "";
 
   // Get best image - prioritize item.imageUrl (same as shown in list), then fall back to product images
@@ -2613,25 +2641,17 @@ function ProductDetailModal({
   };
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title="">
-      <div className="space-y-4 relative">
-        {/* Close button in top right */}
-        <button
-          onClick={onClose}
-          className="absolute top-0 right-0 text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 text-2xl font-bold w-8 h-8 flex items-center justify-center rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors z-10"
-          aria-label="Close"
-        >
-          <X className="w-5 h-5" />
-        </button>
+    <Modal isOpen={isOpen} onClose={onClose} title="Product Info" variant="dark" fullScreen>
+      <div className="bg-black dark:bg-black p-6 space-y-5 min-h-full">
         {loading ? (
           <div className="flex items-center justify-center py-12">
-            <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
+            <Loader2 className="w-8 h-8 animate-spin text-green-400 dark:text-green-400" />
           </div>
         ) : (
           <>
             {/* Cropped Image at Top - Larger version */}
             {item.croppedImage ? (
-              <div className="w-full bg-white dark:bg-gray-50 border border-gray-200 dark:border-gray-300 rounded-lg overflow-hidden mb-4 relative">
+              <div className="w-full bg-[#1a1d2e] dark:bg-[#1a1d2e] border border-gray-700 dark:border-gray-700 rounded-lg overflow-hidden mb-4 relative">
                 {/* Image Too Small Indicator Badge */}
                 {isModalImageTooSmall && (
                   <div className="absolute top-2 right-2 z-10">
@@ -2654,7 +2674,7 @@ function ProductDetailModal({
                 {screenshot && (
                   <button
                     onClick={handleScreenshotClick}
-                    className="absolute top-2 right-2 z-10 w-16 h-16 rounded-lg border-2 border-white dark:border-gray-800 shadow-lg hover:scale-105 transition-transform overflow-hidden bg-white dark:bg-gray-800"
+                    className="absolute top-2 right-2 z-10 w-16 h-16 rounded-lg border-2 border-gray-700 dark:border-gray-700 shadow-lg hover:scale-105 transition-transform overflow-hidden bg-[#0f1115] dark:bg-[#0f1115]"
                     style={{ top: isModalImageTooSmall ? '3.5rem' : '0.5rem' }}
                     title="View original screenshot"
                   >
@@ -2672,7 +2692,7 @@ function ProductDetailModal({
                 />
               </div>
             ) : item.screenshotId ? (
-              <div className="w-full bg-gray-100 dark:bg-gray-200 border border-gray-200 dark:border-gray-300 rounded-lg overflow-hidden mb-4 py-3 px-4 relative">
+              <div className="w-full bg-[#1a1d2e] dark:bg-[#1a1d2e] border border-gray-700 dark:border-gray-700 rounded-lg overflow-hidden mb-4 py-3 px-4 relative">
                 {/* Missing Cropped Image Indicator Badge */}
                 <div className="absolute top-2 left-2 z-10">
                   <div className="px-2 py-1 bg-yellow-500 text-white text-xs font-medium rounded-md shadow-md flex items-center gap-1">
@@ -2684,7 +2704,7 @@ function ProductDetailModal({
                 {screenshot && (
                   <button
                     onClick={handleScreenshotClick}
-                    className="absolute top-2 right-2 z-10 w-16 h-16 rounded-lg border-2 border-white dark:border-gray-800 shadow-lg hover:scale-105 transition-transform overflow-hidden bg-white dark:bg-gray-800"
+                    className="absolute top-2 right-2 z-10 w-16 h-16 rounded-lg border-2 border-gray-700 dark:border-gray-700 shadow-lg hover:scale-105 transition-transform overflow-hidden bg-[#0f1115] dark:bg-[#0f1115]"
                     title="View original screenshot"
                   >
                     <img
@@ -2695,10 +2715,10 @@ function ProductDetailModal({
                   </button>
                 )}
                 <div className="text-center">
-                  <p className="text-sm font-medium text-gray-700 dark:text-gray-800">
+                  <p className="text-sm font-medium text-white dark:text-white">
                     No cropped image available
                   </p>
-                  <p className="text-xs text-gray-600 dark:text-gray-700 mt-1">
+                  <p className="text-xs text-gray-400 dark:text-gray-400 mt-1">
                     Cropping was not successful
                   </p>
                 </div>
@@ -2706,7 +2726,7 @@ function ProductDetailModal({
             ) : null}
 
             {/* Info Card Layout - Similar to List View */}
-            <div className="bg-white dark:bg-gray-100 rounded-lg border border-gray-200 dark:border-gray-300 p-4 relative overflow-visible">
+            <div className="bg-[#1a1d2e] dark:bg-[#1a1d2e] rounded-lg border border-gray-700 dark:border-gray-700 p-4 relative overflow-visible">
               {/* Customer Badge - Positioned to the top left */}
               <div className="absolute top-2 left-2 z-20" style={{ pointerEvents: 'none' }}>
                 <div style={{ pointerEvents: 'auto' }}>
@@ -2717,7 +2737,7 @@ function ProductDetailModal({
                 {/* Product Image - Positioned to the left */}
                 <div className="relative flex-shrink-0">
                   {imageUrl ? (
-                    <div className="relative w-24 h-24 bg-white rounded-lg overflow-visible shadow-sm border border-gray-100 dark:border-gray-600">
+                    <div className="relative w-24 h-24 bg-[#0f1115] rounded-lg overflow-visible shadow-sm border border-gray-700 dark:border-gray-700">
                       <Image
                         src={imageUrl}
                         alt={item.found && item.description ? item.description : item.productName}
@@ -2727,7 +2747,7 @@ function ProductDetailModal({
                       />
                     </div>
                   ) : (
-                    <div className="w-24 h-24 bg-gray-100 dark:bg-gray-700 rounded-lg flex items-center justify-center border border-gray-200 dark:border-gray-600 overflow-visible">
+                    <div className="w-24 h-24 bg-[#0f1115] dark:bg-[#0f1115] rounded-lg flex items-center justify-center border border-gray-700 dark:border-gray-700 overflow-visible">
                       <ShoppingCart className="w-8 h-8 text-gray-400" />
                     </div>
                   )}
@@ -2736,7 +2756,7 @@ function ProductDetailModal({
                 {/* Product Details */}
                 <div className="flex-1 min-w-0">
                   {/* Quantity + Product Name */}
-                  <p className="text-gray-900 dark:text-gray-900 leading-snug break-words mb-2">
+                  <p className="text-white dark:text-white leading-snug break-words mb-2">
                     {item.found && item.description ? (
                       <>
                         <span className="font-bold text-lg">{item.quantity || "?? ct"} </span>
@@ -2752,25 +2772,25 @@ function ProductDetailModal({
 
                   {/* Size • Price • Stock Level */}
                   {item.found && (
-                    <p className="text-sm text-gray-600 dark:text-gray-700 mb-1 flex items-center gap-1 flex-wrap">
+                    <p className="text-sm text-gray-400 dark:text-gray-400 mb-1 flex items-center gap-1 flex-wrap">
                       <span>
                         {item.size}
                         {item.size && (item.price || item.promoPrice) && " • "}
                         {item.promoPrice ? (
-                          <span className="text-gray-600 dark:text-gray-700">
+                          <span className="text-green-400 dark:text-green-400">
                             {formatPrice(item.promoPrice)}
                           </span>
                         ) : item.price ? (
-                          <span>{formatPrice(item.price)}</span>
+                          <span className="text-white">{formatPrice(item.price)}</span>
                         ) : null}
                       </span>
                       {/* Stock Level Indicator */}
                       {item.stockLevel && (
                         <>
                           {(item.size || item.price || item.promoPrice) && (
-                            <span className="text-gray-600 dark:text-gray-700">•</span>
+                            <span className="text-gray-400 dark:text-gray-400">•</span>
                           )}
-                          <span className={item.stockLevel === "HIGH" ? "text-green-600 dark:text-green-400" : item.stockLevel === "LOW" ? "text-yellow-600 dark:text-yellow-400" : item.stockLevel === "TEMPORARILY_OUT_OF_STOCK" ? "text-red-600 dark:text-red-400" : ""}>
+                          <span className={item.stockLevel === "HIGH" ? "text-green-400 dark:text-green-400" : item.stockLevel === "LOW" ? "text-yellow-400 dark:text-yellow-400" : item.stockLevel === "TEMPORARILY_OUT_OF_STOCK" ? "text-red-400 dark:text-red-400" : ""}>
                             {item.stockLevel === "HIGH" ? "✓ In Stock" : item.stockLevel === "LOW" ? "⚠ Low Stock" : item.stockLevel === "TEMPORARILY_OUT_OF_STOCK" ? "✗ Out of Stock" : ""}
                           </span>
                         </>
@@ -2781,7 +2801,7 @@ function ProductDetailModal({
                   {/* Compact Aisle Locations */}
                   {item.found && item.krogerAisles && item.krogerAisles.length > 0 && (
                     <div className="mt-2 space-y-1">
-                      <p className="text-xs font-medium text-gray-600 dark:text-gray-700 mb-1">
+                      <p className="text-xs font-medium text-gray-400 dark:text-gray-400 mb-1">
                         📍 Store Locations
                       </p>
                       {item.krogerAisles.map((aisle, idx) => {
@@ -2808,7 +2828,7 @@ function ProductDetailModal({
                         const locationText = locationParts.join(" - ");
                         
                         return locationText ? (
-                          <p key={idx} className="text-xs text-gray-600 dark:text-gray-700">
+                          <p key={idx} className="text-xs text-gray-400 dark:text-gray-400">
                             {locationText}
                           </p>
                         ) : null;
@@ -2820,9 +2840,19 @@ function ProductDetailModal({
             </div>
 
             {/* Action Buttons Section */}
-            <div className="space-y-3 pt-2 border-t border-gray-200 dark:border-gray-700">
+            <div className="space-y-3 pt-2 border-t border-gray-700 dark:border-gray-700">
               {/* Primary Actions Row */}
               <div className="grid grid-cols-2 gap-2">
+                {/* View JSON Data Button */}
+                <button
+                  onClick={() => setShowJson(true)}
+                  disabled={!productDetails}
+                  className="flex items-center justify-center gap-2 px-4 py-3 bg-white text-black rounded-lg hover:bg-gray-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed font-medium"
+                >
+                  <Code className="w-5 h-5" />
+                  View JSON
+                </button>
+
                 {/* Scan Barcode Button */}
                 {onScan && item.upc && (
                   <button
@@ -2830,43 +2860,33 @@ function ProductDetailModal({
                       onScan();
                       onClose();
                     }}
-                    className="flex items-center justify-center gap-2 px-4 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                    className="flex items-center justify-center gap-2 px-4 py-3 bg-white text-black rounded-lg hover:bg-gray-100 transition-colors font-medium"
                   >
                     <Scan className="w-5 h-5" />
                     Scan Barcode
                   </button>
                 )}
-
-                {/* View JSON Data Button */}
-                <button
-                  onClick={() => setShowJson(true)}
-                  disabled={!productDetails}
-                  className="flex items-center justify-center gap-2 px-4 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  <Code className="w-5 h-5" />
-                  View JSON
-                </button>
               </div>
 
               {/* UPC Display - Always visible if available */}
               {upc && (
-                <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-3 border border-gray-200 dark:border-gray-700">
+                <div className="bg-[#1a1d2e] dark:bg-[#1a1d2e] rounded-lg p-3 border border-gray-700 dark:border-gray-700">
                   <div className="flex items-center gap-2 mb-2">
-                    <Barcode className="w-4 h-4 text-gray-600 dark:text-gray-400" />
-                    <span className="text-xs font-medium text-gray-600 dark:text-gray-400">UPC</span>
+                    <Barcode className="w-4 h-4 text-gray-400 dark:text-gray-400" />
+                    <span className="text-xs font-medium text-gray-400 dark:text-gray-400 uppercase tracking-wide">UPC</span>
                   </div>
-                  <p className="font-mono text-sm font-semibold text-gray-900 dark:text-gray-100">
+                  <p className="font-mono text-sm font-semibold text-white dark:text-white">
                     {normalizedUpc?.code || upc}
                   </p>
                   {normalizedUpc && normalizedUpc.code !== upc.replace(/\D/g, "") && (
-                    <p className="text-xs text-gray-500 dark:text-gray-500 mt-1">
+                    <p className="text-xs text-gray-400 dark:text-gray-400 mt-1">
                       Original: {upc} (check digit corrected)
                     </p>
                   )}
                   {normalizedUpc && (
                     <button
                       onClick={() => setShowBarcode(!showBarcode)}
-                      className="mt-2 text-xs text-blue-600 dark:text-blue-400 hover:underline"
+                      className="mt-2 text-xs text-green-400 dark:text-green-400 hover:underline"
                     >
                       {showBarcode ? "Hide" : "Show"} Barcode Image
                     </button>
@@ -2876,7 +2896,7 @@ function ProductDetailModal({
 
               {/* Barcode Image Display */}
               {showBarcode && upc && normalizedUpc && getBarcodeUrl(upc) && (
-                <div className="text-center bg-white dark:bg-gray-100 p-4 rounded-lg border border-gray-200 dark:border-gray-700">
+                <div className="text-center bg-[#1a1d2e] dark:bg-[#1a1d2e] p-4 rounded-lg border border-gray-700 dark:border-gray-700">
                   <img
                     src={getBarcodeUrl(upc)!}
                     alt={`Barcode for ${normalizedUpc.code}`}
@@ -2897,20 +2917,6 @@ function ProductDetailModal({
 
               {/* Secondary Actions Row */}
               <div className="grid grid-cols-2 gap-2">
-                {/* Edit Button */}
-                {onEdit && (
-                  <button
-                    onClick={() => {
-                      onEdit();
-                      onClose();
-                    }}
-                    className="flex items-center justify-center gap-2 px-4 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-                  >
-                    <Edit className="w-5 h-5" />
-                    Edit
-                  </button>
-                )}
-
                 {/* Status Change Buttons */}
                 {onMoveToTodo && (item.done || item.problem) && (
                   <button
@@ -2918,7 +2924,7 @@ function ProductDetailModal({
                       onMoveToTodo();
                       onClose();
                     }}
-                    className="flex items-center justify-center gap-2 px-4 py-3 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors"
+                    className="flex items-center justify-center gap-2 px-4 py-3 bg-[#1a1d2e] text-gray-300 rounded-lg hover:bg-[#2a2d3e] transition-colors border border-gray-700 font-medium"
                   >
                     <Check className="w-5 h-5" />
                     Todo
@@ -2930,7 +2936,7 @@ function ProductDetailModal({
                       onMoveToProblem();
                       onClose();
                     }}
-                    className="flex items-center justify-center gap-2 px-4 py-3 bg-orange-600 text-white rounded-lg hover:bg-orange-700 transition-colors"
+                    className="flex items-center justify-center gap-2 px-4 py-3 bg-[#1a1d2e] text-orange-400 rounded-lg hover:bg-[#2a2d3e] transition-colors border border-orange-700 font-medium"
                   >
                     <AlertTriangle className="w-5 h-5" />
                     Problem
@@ -2942,10 +2948,24 @@ function ProductDetailModal({
                       onMoveToDone();
                       onClose();
                     }}
-                    className="flex items-center justify-center gap-2 px-4 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
+                    className="flex items-center justify-center gap-2 px-4 py-3 bg-[#1a1d2e] text-green-400 rounded-lg hover:bg-[#2a2d3e] transition-colors border border-green-700 font-medium"
                   >
                     <Check className="w-5 h-5" />
                     Done
+                  </button>
+                )}
+
+                {/* Edit Button */}
+                {onEdit && (
+                  <button
+                    onClick={() => {
+                      onEdit();
+                      onClose();
+                    }}
+                    className="flex items-center justify-center gap-2 px-4 py-3 bg-white text-black rounded-lg hover:bg-gray-100 transition-colors font-medium"
+                  >
+                    <Edit className="w-5 h-5" />
+                    Edit
                   </button>
                 )}
               </div>
@@ -2959,7 +2979,7 @@ function ProductDetailModal({
                       onClose();
                     }
                   }}
-                  className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
+                  className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-[#1a1d2e] text-red-400 rounded-lg hover:bg-[#2a2d3e] transition-colors border border-red-700 font-medium"
                 >
                   <Trash2 className="w-5 h-5" />
                   Delete
@@ -6256,7 +6276,7 @@ export default function ShoppingListDetailPage() {
         {/* Items */}
         <div>
           {nonSharedGroupedItems.length === 0 && sharedGroupedItems.length === 0 ? (
-            <div className="text-center py-12 text-gray-500 dark:text-gray-400">
+            <div className="text-center py-12 text-gray-400 dark:text-gray-400">
               <p>No {activeTab === "todo" ? "todo" : activeTab === "problem" ? "problem" : "completed"} items</p>
             </div>
           ) : (
@@ -6266,8 +6286,8 @@ export default function ShoppingListDetailPage() {
             <div key={groupIndex}>
               {/* Aisle/Bay/Shelf Header - Instacart Style */}
               {group.aisle && (
-                <div className="pt-4 pb-2 border-b border-gray-200 dark:border-gray-700 mb-2">
-                  <h2 className="font-bold text-gray-900 dark:text-white text-base">
+                <div className="pt-4 pb-2 border-b border-gray-700 dark:border-gray-700 mb-2">
+                  <h2 className="font-bold text-white dark:text-white text-base">
                     {(() => {
                       const aisleNum = parseInt(group.aisle) || 0;
                       // If aisle number is 100+, show only the area description
@@ -6281,8 +6301,8 @@ export default function ShoppingListDetailPage() {
                 </div>
               )}
               {!group.aisle && groupIndex === 0 && (
-                <div className="pt-4 pb-2 border-b border-gray-200 dark:border-gray-700 mb-2">
-                  <h2 className="font-bold text-gray-900 dark:text-white text-base">
+                <div className="pt-4 pb-2 border-b border-gray-700 dark:border-gray-700 mb-2">
+                  <h2 className="font-bold text-white dark:text-white text-base">
                     Unknown Location
                   </h2>
                 </div>
@@ -6360,14 +6380,14 @@ export default function ShoppingListDetailPage() {
                   >
                     {/* Single Card with Cropped Image at Top and Product Info Below */}
                     <div 
-                      className={`bg-white dark:bg-gray-100 hover:bg-gray-50 dark:hover:bg-gray-200 rounded-lg transition-colors cursor-pointer relative border-2 overflow-hidden ${
-                        isImageTooSmall ? "border-red-400 dark:border-red-500" : missingCroppedImage ? "border-yellow-400 dark:border-yellow-500" : duplicateInfo.isDuplicate ? "border-orange-400 dark:border-orange-500" : "border-gray-200 dark:border-gray-300"
+                      className={`bg-[#1a1d2e] dark:bg-[#1a1d2e] hover:bg-[#2a2d3e] dark:hover:bg-[#2a2d3e] rounded-lg transition-colors cursor-pointer relative border-2 overflow-hidden ${
+                        isImageTooSmall ? "border-red-500 dark:border-red-500" : missingCroppedImage ? "border-yellow-500 dark:border-yellow-500" : duplicateInfo.isDuplicate ? "border-orange-500 dark:border-orange-500" : "border-gray-700 dark:border-gray-700"
                       }`}
                       onClick={handleItemClick}
                     >
                       {/* Cropped Image at Top - Inside the card */}
                       {item.croppedImage ? (
-                        <div className="w-full bg-white dark:bg-gray-50 border-b border-gray-200 dark:border-gray-300 rounded-t-lg overflow-hidden relative">
+                        <div className="w-full bg-[#0f1115] dark:bg-[#0f1115] border-b border-gray-700 dark:border-gray-700 rounded-t-lg overflow-hidden relative">
                           {/* Duplicate Indicator Badge - Top left of cropped image */}
                           {duplicateInfo.isDuplicate && (
                             <div className="absolute top-2 left-2 z-10">
@@ -6416,7 +6436,7 @@ export default function ShoppingListDetailPage() {
                           />
                         </div>
                       ) : item.screenshotId ? (
-                        <div className="w-full bg-gray-100 dark:bg-gray-200 border-b border-gray-200 dark:border-gray-300 rounded-t-lg overflow-hidden relative py-3 px-4">
+                        <div className="w-full bg-[#0f1115] dark:bg-[#0f1115] border-b border-gray-700 dark:border-gray-700 rounded-t-lg overflow-hidden relative py-3 px-4">
                           {/* Duplicate Indicator Badge - Top left of no cropped image section */}
                           {duplicateInfo.isDuplicate && (
                             <div className="absolute top-2 left-2 z-10">
@@ -6437,7 +6457,7 @@ export default function ShoppingListDetailPage() {
                           {screenshot && (
                             <button
                               onClick={handleScreenshotClick}
-                              className="absolute top-2 right-2 z-10 w-16 h-16 rounded-lg border-2 border-white dark:border-gray-800 shadow-lg hover:scale-105 transition-transform overflow-hidden bg-white dark:bg-gray-800"
+                              className="absolute top-2 right-2 z-10 w-16 h-16 rounded-lg border-2 border-gray-700 dark:border-gray-700 shadow-lg hover:scale-105 transition-transform overflow-hidden bg-[#0f1115] dark:bg-[#0f1115]"
                               title="View original screenshot"
                             >
                               <img
@@ -6448,10 +6468,10 @@ export default function ShoppingListDetailPage() {
                             </button>
                           )}
                           <div className="text-center">
-                            <p className="text-sm font-medium text-gray-700 dark:text-gray-800">
+                            <p className="text-sm font-medium text-white dark:text-white">
                               No cropped image available
                             </p>
-                            <p className="text-xs text-gray-600 dark:text-gray-700 mt-1">
+                            <p className="text-xs text-gray-400 dark:text-gray-400 mt-1">
                               Cropping was not successful
                             </p>
                           </div>
@@ -6469,7 +6489,7 @@ export default function ShoppingListDetailPage() {
                                 e.stopPropagation();
                                 handleScanBarcode(item);
                               }}
-                              className="px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2 text-sm whitespace-nowrap shadow-md"
+                              className="px-3 py-2 bg-white text-black rounded-lg hover:bg-gray-100 transition-colors flex items-center gap-2 text-sm whitespace-nowrap shadow-md font-medium"
                             >
                               <Scan className="w-4 h-4 flex-shrink-0" />
                               <span className="hidden sm:inline">Scan</span>
@@ -6485,7 +6505,7 @@ export default function ShoppingListDetailPage() {
                         {/* Product Image - Positioned to the left */}
                         <div className="relative flex-shrink-0">
                           {item.imageUrl ? (
-                            <div className="relative w-20 h-20 bg-white rounded-lg overflow-visible shadow-sm border border-gray-100 dark:border-gray-600">
+                            <div className="relative w-20 h-20 bg-[#0f1115] rounded-lg overflow-visible shadow-sm border border-gray-700 dark:border-gray-700">
                               <Image
                                 src={item.imageUrl}
                                 alt={item.found && item.description ? item.description : item.productName}
@@ -6495,7 +6515,7 @@ export default function ShoppingListDetailPage() {
                               />
                             </div>
                           ) : (
-                            <div className="w-20 h-20 bg-gray-100 dark:bg-gray-700 rounded-lg flex items-center justify-center border border-gray-200 dark:border-gray-600 overflow-visible">
+                            <div className="w-20 h-20 bg-[#0f1115] dark:bg-[#0f1115] rounded-lg flex items-center justify-center border border-gray-700 dark:border-gray-700 overflow-visible">
                               <ShoppingCart className="w-6 h-6 text-gray-400" />
                             </div>
                           )}
@@ -6506,7 +6526,7 @@ export default function ShoppingListDetailPage() {
                           <div className="flex items-start justify-between gap-3">
                             <div className="flex-1 min-w-0">
                           {/* Quantity + Kroger Product Name */}
-                          <p className="text-gray-900 dark:text-gray-900 leading-snug break-words">
+                          <p className="text-white dark:text-white leading-snug break-words">
                             {item.found && item.description ? (
                               <>
                                 <span className="font-bold text-lg">{item.quantity || "?? ct"} </span>
@@ -6525,7 +6545,7 @@ export default function ShoppingListDetailPage() {
                             const itemSharedUsers = getUsersItemIsSharedWith(originalIndex);
                             return itemSharedUsers.length > 0 ? (
                               <div className="mt-2 flex items-center gap-2 flex-wrap">
-                                <span className="text-xs text-gray-500 dark:text-gray-400">Shared with:</span>
+                                <span className="text-xs text-gray-400 dark:text-gray-400">Shared with:</span>
                                 {itemSharedUsers.map((user) => (
                                   <div
                                     key={user.userId}
@@ -6536,7 +6556,7 @@ export default function ShoppingListDetailPage() {
                                         {getUserInitials(user.name, user.email, user.userId)}
                                       </span>
                                     </div>
-                                    <span className="text-xs text-gray-600 dark:text-gray-700">
+                                    <span className="text-xs text-gray-400 dark:text-gray-400">
                                       {user.name || user.email || user.userId}
                                     </span>
                                   </div>
@@ -6547,25 +6567,25 @@ export default function ShoppingListDetailPage() {
                           
                           {/* Kroger Size • Price • Stock Level */}
                           {item.found && (
-                            <p className="text-sm text-gray-600 dark:text-gray-700 mt-1 whitespace-nowrap flex items-center gap-1 flex-wrap">
+                            <p className="text-sm text-gray-400 dark:text-gray-400 mt-1 whitespace-nowrap flex items-center gap-1 flex-wrap">
                               <span>
                                 {item.size}
                                 {item.size && (item.price || item.promoPrice) && " • "}
                                 {item.promoPrice ? (
-                                  <span className="text-gray-600 dark:text-gray-700">
+                                  <span className="text-green-400 dark:text-green-400">
                                     {formatPrice(item.promoPrice)}
                                   </span>
                                 ) : item.price ? (
-                                  <span>{formatPrice(item.price)}</span>
+                                  <span className="text-white">{formatPrice(item.price)}</span>
                                 ) : null}
                               </span>
                               {/* Stock Level Indicator - on same line */}
                               {item.stockLevel && (
                                 <>
                                   {(item.size || item.price || item.promoPrice) && (
-                                    <span className="text-gray-600 dark:text-gray-700">•</span>
+                                    <span className="text-gray-400 dark:text-gray-400">•</span>
                                   )}
-                                  <span className={item.stockLevel === "HIGH" ? "text-green-600 dark:text-green-400" : item.stockLevel === "LOW" ? "text-yellow-600 dark:text-yellow-400" : item.stockLevel === "TEMPORARILY_OUT_OF_STOCK" ? "text-red-600 dark:text-red-400" : ""}>
+                                  <span className={item.stockLevel === "HIGH" ? "text-green-400 dark:text-green-400" : item.stockLevel === "LOW" ? "text-yellow-400 dark:text-yellow-400" : item.stockLevel === "TEMPORARILY_OUT_OF_STOCK" ? "text-red-400 dark:text-red-400" : ""}>
                                     {item.stockLevel === "HIGH" ? "✓ In Stock" : item.stockLevel === "LOW" ? "⚠ Low Stock" : item.stockLevel === "TEMPORARILY_OUT_OF_STOCK" ? "✗ Out of Stock" : ""}
                                   </span>
                                 </>
@@ -6601,7 +6621,7 @@ export default function ShoppingListDetailPage() {
                             const locationText = locationParts.join(" - ");
                             
                             return locationText ? (
-                              <p className="text-sm text-gray-600 dark:text-gray-700 mt-0.5 whitespace-nowrap">
+                              <p className="text-sm text-gray-400 dark:text-gray-400 mt-0.5 whitespace-nowrap">
                                 {locationText}
                               </p>
                             ) : null;
@@ -6609,7 +6629,7 @@ export default function ShoppingListDetailPage() {
 
                           {/* Not found indicator */}
                           {!item.found && (
-                            <p className="text-sm text-red-500 mt-1">
+                            <p className="text-sm text-red-400 mt-1">
                               Not found at Kroger
                             </p>
                           )}
@@ -6626,10 +6646,10 @@ export default function ShoppingListDetailPage() {
 
               {/* Shared Items Section */}
               {sharedGroupedItems.length > 0 && (
-                <div className="mt-8 pt-6 border-t-2 border-green-500 dark:border-green-600">
+                <div className="mt-8 pt-6 border-t-2 border-green-500 dark:border-green-500">
                   <div className="mb-4 flex items-center gap-2">
-                    <Share2 className="w-5 h-5 text-green-600 dark:text-green-400" />
-                    <h2 className="text-lg font-bold text-green-600 dark:text-green-400">
+                    <Share2 className="w-5 h-5 text-green-400 dark:text-green-400" />
+                    <h2 className="text-lg font-bold text-green-400 dark:text-green-400">
                       Shared Items
                     </h2>
                   </div>
@@ -6637,8 +6657,8 @@ export default function ShoppingListDetailPage() {
                     <div key={`shared-${groupIndex}`}>
                       {/* Aisle/Bay/Shelf Header - Instacart Style */}
                       {group.aisle && (
-                        <div className="pt-4 pb-2 border-b border-gray-200 dark:border-gray-700 mb-2">
-                          <h2 className="font-bold text-gray-900 dark:text-white text-base">
+                        <div className="pt-4 pb-2 border-b border-gray-700 dark:border-gray-700 mb-2">
+                          <h2 className="font-bold text-white dark:text-white text-base">
                             {(() => {
                               const aisleNum = parseInt(group.aisle) || 0;
                               // If aisle number is 100+, show only the area description
@@ -6652,8 +6672,8 @@ export default function ShoppingListDetailPage() {
                         </div>
                       )}
                       {!group.aisle && groupIndex === 0 && (
-                        <div className="pt-4 pb-2 border-b border-gray-200 dark:border-gray-700 mb-2">
-                          <h2 className="font-bold text-gray-900 dark:text-white text-base">
+                        <div className="pt-4 pb-2 border-b border-gray-700 dark:border-gray-700 mb-2">
+                          <h2 className="font-bold text-white dark:text-white text-base">
                             Unknown Location
                           </h2>
                         </div>
@@ -6731,14 +6751,14 @@ export default function ShoppingListDetailPage() {
                           >
                             {/* Single Card with Cropped Image at Top and Product Info Below */}
                             <div 
-                              className={`bg-white dark:bg-gray-100 hover:bg-gray-50 dark:hover:bg-gray-200 rounded-lg transition-colors cursor-pointer relative border-2 overflow-hidden ${
-                                isImageTooSmall ? "border-red-400 dark:border-red-500" : missingCroppedImage ? "border-yellow-400 dark:border-yellow-500" : duplicateInfo.isDuplicate ? "border-orange-400 dark:border-orange-500" : "border-gray-200 dark:border-gray-300"
+                              className={`bg-[#1a1d2e] dark:bg-[#1a1d2e] hover:bg-[#2a2d3e] dark:hover:bg-[#2a2d3e] rounded-lg transition-colors cursor-pointer relative border-2 overflow-hidden ${
+                                isImageTooSmall ? "border-red-500 dark:border-red-500" : missingCroppedImage ? "border-yellow-500 dark:border-yellow-500" : duplicateInfo.isDuplicate ? "border-orange-500 dark:border-orange-500" : "border-gray-700 dark:border-gray-700"
                               }`}
                               onClick={handleItemClick}
                             >
                               {/* Cropped Image at Top - Inside the card */}
                               {item.croppedImage ? (
-                                <div className="w-full bg-white dark:bg-gray-50 border-b border-gray-200 dark:border-gray-300 rounded-t-lg overflow-hidden relative">
+                                <div className="w-full bg-[#0f1115] dark:bg-[#0f1115] border-b border-gray-700 dark:border-gray-700 rounded-t-lg overflow-hidden relative">
                                   {/* Duplicate Indicator Badge - Top left of cropped image */}
                                   {duplicateInfo.isDuplicate && (
                                     <div className="absolute top-2 left-2 z-10">
@@ -6770,7 +6790,7 @@ export default function ShoppingListDetailPage() {
                                   {screenshot && (
                                     <button
                                       onClick={handleScreenshotClick}
-                                      className="absolute top-2 right-2 z-10 w-16 h-16 rounded-lg border-2 border-white dark:border-gray-800 shadow-lg hover:scale-105 transition-transform overflow-hidden bg-white dark:bg-gray-800"
+                                      className="absolute top-2 right-2 z-10 w-16 h-16 rounded-lg border-2 border-gray-700 dark:border-gray-700 shadow-lg hover:scale-105 transition-transform overflow-hidden bg-[#0f1115] dark:bg-[#0f1115]"
                                       title="View original screenshot"
                                     >
                                       <img
@@ -6787,7 +6807,7 @@ export default function ShoppingListDetailPage() {
                                   />
                                 </div>
                               ) : item.screenshotId ? (
-                                <div className="w-full bg-gray-100 dark:bg-gray-200 border-b border-gray-200 dark:border-gray-300 rounded-t-lg overflow-hidden relative py-3 px-4">
+                                <div className="w-full bg-[#0f1115] dark:bg-[#0f1115] border-b border-gray-700 dark:border-gray-700 rounded-t-lg overflow-hidden relative py-3 px-4">
                                   {/* Duplicate Indicator Badge - Top left of no cropped image section */}
                                   {duplicateInfo.isDuplicate && (
                                     <div className="absolute top-2 left-2 z-10">
@@ -6808,7 +6828,7 @@ export default function ShoppingListDetailPage() {
                                   {screenshot && (
                                     <button
                                       onClick={handleScreenshotClick}
-                                      className="absolute top-2 right-2 z-10 w-16 h-16 rounded-lg border-2 border-white dark:border-gray-800 shadow-lg hover:scale-105 transition-transform overflow-hidden bg-white dark:bg-gray-800"
+                                      className="absolute top-2 right-2 z-10 w-16 h-16 rounded-lg border-2 border-gray-700 dark:border-gray-700 shadow-lg hover:scale-105 transition-transform overflow-hidden bg-[#0f1115] dark:bg-[#0f1115]"
                                       title="View original screenshot"
                                     >
                                       <img
@@ -6819,10 +6839,10 @@ export default function ShoppingListDetailPage() {
                                     </button>
                                   )}
                                   <div className="text-center">
-                                    <p className="text-sm font-medium text-gray-700 dark:text-gray-800">
+                                    <p className="text-sm font-medium text-white dark:text-white">
                                       No cropped image available
                                     </p>
-                                    <p className="text-xs text-gray-600 dark:text-gray-700 mt-1">
+                                    <p className="text-xs text-gray-400 dark:text-gray-400 mt-1">
                                       Cropping was not successful
                                     </p>
                                   </div>
@@ -6840,7 +6860,7 @@ export default function ShoppingListDetailPage() {
                                         e.stopPropagation();
                                         handleScanBarcode(item);
                                       }}
-                                      className="px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2 text-sm whitespace-nowrap shadow-md"
+                                      className="px-3 py-2 bg-white text-black rounded-lg hover:bg-gray-100 transition-colors flex items-center gap-2 text-sm whitespace-nowrap shadow-md font-medium"
                                     >
                                       <Scan className="w-4 h-4 flex-shrink-0" />
                                       <span className="hidden sm:inline">Scan</span>
@@ -6856,7 +6876,7 @@ export default function ShoppingListDetailPage() {
                                 {/* Product Image - Positioned to the left */}
                                 <div className="relative flex-shrink-0">
                                   {item.imageUrl ? (
-                                    <div className="relative w-20 h-20 bg-white rounded-lg overflow-visible shadow-sm border border-gray-100 dark:border-gray-600">
+                                    <div className="relative w-20 h-20 bg-[#0f1115] rounded-lg overflow-visible shadow-sm border border-gray-700 dark:border-gray-700">
                                       <Image
                                         src={item.imageUrl}
                                         alt={item.found && item.description ? item.description : item.productName}
@@ -6866,7 +6886,7 @@ export default function ShoppingListDetailPage() {
                                       />
                                     </div>
                                   ) : (
-                                    <div className="w-20 h-20 bg-gray-100 dark:bg-gray-700 rounded-lg flex items-center justify-center border border-gray-200 dark:border-gray-600 overflow-visible">
+                                    <div className="w-20 h-20 bg-[#0f1115] dark:bg-[#0f1115] rounded-lg flex items-center justify-center border border-gray-700 dark:border-gray-700 overflow-visible">
                                       <ShoppingCart className="w-6 h-6 text-gray-400" />
                                     </div>
                                   )}
@@ -6877,7 +6897,7 @@ export default function ShoppingListDetailPage() {
                                   <div className="flex items-start justify-between gap-3">
                                     <div className="flex-1 min-w-0">
                                   {/* Quantity + Kroger Product Name */}
-                                  <p className="text-gray-900 dark:text-gray-900 leading-snug break-words">
+                                  <p className="text-white dark:text-white leading-snug break-words">
                                     {item.found && item.description ? (
                                       <>
                                         <span className="font-bold text-lg">{item.quantity || "?? ct"} </span>
@@ -6896,7 +6916,7 @@ export default function ShoppingListDetailPage() {
                                     const itemSharedUsers = getUsersItemIsSharedWith(originalIndex);
                                     return itemSharedUsers.length > 0 ? (
                                       <div className="mt-2 flex items-center gap-2 flex-wrap">
-                                        <span className="text-xs text-gray-600 dark:text-gray-700">Shared with:</span>
+                                        <span className="text-xs text-gray-400 dark:text-gray-400">Shared with:</span>
                                         {itemSharedUsers.map((user) => (
                                           <div
                                             key={user.userId}
@@ -6907,7 +6927,7 @@ export default function ShoppingListDetailPage() {
                                                 {getUserInitials(user.name, user.email, user.userId)}
                                               </span>
                                             </div>
-                                            <span className="text-xs text-gray-600 dark:text-gray-700">
+                                            <span className="text-xs text-gray-400 dark:text-gray-400">
                                               {user.name || user.email || user.userId}
                                             </span>
                                           </div>
@@ -6918,25 +6938,25 @@ export default function ShoppingListDetailPage() {
                                   
                                   {/* Kroger Size • Price • Stock Level */}
                                   {item.found && (
-                                    <p className="text-sm text-gray-600 dark:text-gray-700 mt-1 whitespace-nowrap flex items-center gap-1 flex-wrap">
+                                    <p className="text-sm text-gray-400 dark:text-gray-400 mt-1 whitespace-nowrap flex items-center gap-1 flex-wrap">
                                       <span>
                                         {item.size}
                                         {item.size && (item.price || item.promoPrice) && " • "}
                                         {item.promoPrice ? (
-                                          <span className="text-gray-600 dark:text-gray-700">
+                                          <span className="text-green-400 dark:text-green-400">
                                             {formatPrice(item.promoPrice)}
                                           </span>
                                         ) : item.price ? (
-                                          <span>{formatPrice(item.price)}</span>
+                                          <span className="text-white">{formatPrice(item.price)}</span>
                                         ) : null}
                                       </span>
                                       {/* Stock Level Indicator - on same line */}
                                       {item.stockLevel && (
                                         <>
                                           {(item.size || item.price || item.promoPrice) && (
-                                            <span className="text-gray-600 dark:text-gray-700">•</span>
+                                            <span className="text-gray-400 dark:text-gray-400">•</span>
                                           )}
-                                          <span className={item.stockLevel === "HIGH" ? "text-green-600 dark:text-green-400" : item.stockLevel === "LOW" ? "text-yellow-600 dark:text-yellow-400" : item.stockLevel === "TEMPORARILY_OUT_OF_STOCK" ? "text-red-600 dark:text-red-400" : ""}>
+                                          <span className={item.stockLevel === "HIGH" ? "text-green-400 dark:text-green-400" : item.stockLevel === "LOW" ? "text-yellow-400 dark:text-yellow-400" : item.stockLevel === "TEMPORARILY_OUT_OF_STOCK" ? "text-red-400 dark:text-red-400" : ""}>
                                             {item.stockLevel === "HIGH" ? "✓ In Stock" : item.stockLevel === "LOW" ? "⚠ Low Stock" : item.stockLevel === "TEMPORARILY_OUT_OF_STOCK" ? "✗ Out of Stock" : ""}
                                           </span>
                                         </>
@@ -6972,7 +6992,7 @@ export default function ShoppingListDetailPage() {
                                     const locationText = locationParts.join(" - ");
                                     
                                     return locationText ? (
-                                      <p className="text-sm text-gray-600 dark:text-gray-700 mt-0.5 whitespace-nowrap">
+                                      <p className="text-sm text-gray-400 dark:text-gray-400 mt-0.5 whitespace-nowrap">
                                         {locationText}
                                       </p>
                                     ) : null;
@@ -6980,7 +7000,7 @@ export default function ShoppingListDetailPage() {
 
                                   {/* Not found indicator */}
                                   {!item.found && (
-                                    <p className="text-sm text-red-500 mt-1">
+                                    <p className="text-sm text-red-400 mt-1">
                                       Not found at Kroger
                                     </p>
                                   )}
@@ -7158,6 +7178,8 @@ export default function ShoppingListDetailPage() {
             setShowOriginalScreenshot(false);
           }} 
           title={viewingScreenshot.item.croppedImage && !showOriginalScreenshot ? "Cropped Product Image" : "Original Screenshot"}
+          variant="dark"
+          fullScreen
           headerActions={
             <>
               {/* Toggle Original Screenshot - Only show if cropped image exists */}
@@ -7167,7 +7189,7 @@ export default function ShoppingListDetailPage() {
                     e.stopPropagation();
                     setShowOriginalScreenshot(!showOriginalScreenshot);
                   }}
-                  className="px-3 py-1.5 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors flex items-center gap-2 text-sm"
+                  className="px-3 py-1.5 bg-[#1a1d2e] dark:bg-[#1a1d2e] text-gray-300 dark:text-gray-300 rounded-lg hover:bg-[#2a2d3e] dark:hover:bg-[#2a2d3e] transition-colors flex items-center gap-2 text-sm border border-gray-700"
                   title={showOriginalScreenshot ? "Show cropped image" : "Show original screenshot"}
                 >
                   {showOriginalScreenshot ? (
@@ -7191,7 +7213,7 @@ export default function ShoppingListDetailPage() {
                     setShowOriginalScreenshot(false);
                   }
                 }}
-                className="px-3 py-1.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2 text-sm"
+                className="px-3 py-1.5 bg-white text-black rounded-lg hover:bg-gray-100 transition-colors flex items-center gap-2 text-sm font-medium"
               >
                 <Edit className="w-4 h-4" />
                 Edit
@@ -7199,7 +7221,7 @@ export default function ShoppingListDetailPage() {
             </>
           }
         >
-          <div className="p-4 flex justify-center">
+          <div className="bg-black dark:bg-black p-6 flex justify-center min-h-full">
             <div className="relative max-w-full">
               <img 
                 src={viewingScreenshot.item.croppedImage && !showOriginalScreenshot ? viewingScreenshot.item.croppedImage : viewingScreenshot.base64} 

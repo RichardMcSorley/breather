@@ -11,9 +11,11 @@ interface ModalProps {
   footer?: ReactNode;
   headerActions?: ReactNode;
   preventClose?: boolean; // Prevent closing via backdrop click
+  variant?: "default" | "dark"; // Modal variant
+  fullScreen?: boolean; // Make modal full screen
 }
 
-export default function Modal({ isOpen, onClose, title, children, zIndex = 9999, footer, headerActions, preventClose }: ModalProps) {
+export default function Modal({ isOpen, onClose, title, children, zIndex = 9999, footer, headerActions, preventClose, variant = "default", fullScreen = false }: ModalProps) {
   useEffect(() => {
     if (isOpen) {
       document.body.style.overflow = "hidden";
@@ -38,7 +40,11 @@ export default function Modal({ isOpen, onClose, title, children, zIndex = 9999,
 
   return (
     <div
-      className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-50 dark:bg-opacity-70 p-4"
+      className={`fixed inset-0 ${
+        fullScreen 
+          ? "bg-black dark:bg-black" 
+          : "flex items-center justify-center bg-black bg-opacity-50 dark:bg-opacity-70 p-4"
+      }`}
       style={{ zIndex }}
       onClick={handleBackdropClick}
       role="dialog"
@@ -46,14 +52,30 @@ export default function Modal({ isOpen, onClose, title, children, zIndex = 9999,
       aria-labelledby={title ? "modal-title" : undefined}
     >
       <div
-        className="bg-white dark:bg-gray-800 rounded-t-3xl rounded-b-lg w-full max-w-md max-h-[90vh] overflow-y-auto relative"
+        className={`${
+          variant === "dark" 
+            ? "bg-black dark:bg-black" 
+            : "bg-white dark:bg-gray-800"
+        } ${
+          fullScreen 
+            ? "w-full h-full rounded-none" 
+            : "rounded-t-3xl rounded-b-lg w-full max-w-md max-h-[90vh]"
+        } overflow-y-auto relative`}
         style={{ zIndex: zIndex + 1 }}
         onClick={(e) => e.stopPropagation()}
         role="document"
       >
         {title && (
-          <div className="flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-700">
-            <h2 id="modal-title" className="text-lg font-bold text-gray-900 dark:text-white">{title}</h2>
+          <div className={`flex items-center justify-between p-4 ${
+            variant === "dark" 
+              ? "border-b border-gray-700 dark:border-gray-700" 
+              : "border-b border-gray-200 dark:border-gray-700"
+          }`}>
+            <h2 id="modal-title" className={`text-lg font-bold ${
+              variant === "dark" 
+                ? "text-white dark:text-white" 
+                : "text-gray-900 dark:text-white"
+            }`}>{title}</h2>
             <div className="flex items-center gap-2">
               {headerActions}
               <button
@@ -66,7 +88,11 @@ export default function Modal({ isOpen, onClose, title, children, zIndex = 9999,
                   onClose();
                 }}
                 disabled={preventClose}
-                className="text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 text-2xl font-bold min-w-[44px] min-h-[44px] flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed"
+                className={`${
+                  variant === "dark" 
+                    ? "text-white dark:text-white hover:text-gray-300 dark:hover:text-gray-300" 
+                    : "text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200"
+                } text-2xl font-bold min-w-[44px] min-h-[44px] flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed`}
               >
                 ×
               </button>
