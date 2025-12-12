@@ -161,6 +161,10 @@ const SHOPPING_LIST_SCHEMA = {
           quantity: {
             type: "string",
             description: "The quantity of the product. Extract the quantity in its original format as shown in the screenshot. Examples: '(1 x)', '(2 x)', '1 ct', '2ct', '1 lbs', '0.5 lbs', '14.5 oz', etc. If no quantity is visible, return null."
+          },
+          aiDetectedCroppedImage: {
+            type: "boolean",
+            description: "True if the product image in the screenshot appears to be cut off or cropped off at the edges. Look for product packaging, text, or labels that are partially visible or cut off at the image boundaries. False if the product image appears complete within the screenshot."
           }
         },
         required: ["productName", "searchTerm"]
@@ -234,11 +238,13 @@ Extract the customer name, pickup address, and restaurant name if shown.`;
   - price: The price shown (e.g., "$13.49")
   - aisleLocation: The aisle and shelf location (e.g., "Aisle 11 - Shelf 5 (from the bottom)")
   - quantity: Extract the quantity of the product in its original format as displayed. Look for patterns like: "(1 x)", "(2 x)", "1 ct", "2ct", "1 lbs", "0.5 lbs", "14.5 oz", etc. Preserve the exact format including parentheses, spacing, and units. If no quantity is visible, set to null.
+  - aiDetectedCroppedImage: Analyze if the product image appears to be cut off or cropped off at the edges. Look for product packaging, text, or labels that are partially visible or cut off at the image boundaries. Return true if the product image appears to be cropped off, false if the product image appears complete within the screenshot.
 
 IMPORTANT: 
 - First, determine the app by looking at the overall theme: light/white background = Instacart, dark/black background = DoorDash
 - Look carefully for customer badges - they are small colored circles (orange for A, blue for B, green for C, purple for D) with a letter inside, usually positioned near the product image. Extract all products visible.
-- For quantity: Look for quantity indicators near the product name, price, or in a separate quantity field. Common formats include parentheses like "(1 x)", unit abbreviations like "ct" (count), "lbs" (pounds), "oz" (ounces), or numeric values with units. Extract exactly as shown.${customerGuidance}`;
+- For quantity: Look for quantity indicators near the product name, price, or in a separate quantity field. Common formats include parentheses like "(1 x)", unit abbreviations like "ct" (count), "lbs" (pounds), "oz" (ounces), or numeric values with units. Extract exactly as shown.
+- For aiDetectedCroppedImage: Examine each product image carefully. Check if the product packaging, labels, or text are cut off at the top, bottom, left, or right edges of the image. Return true if any part of the product appears incomplete or truncated, false if the product image appears complete.${customerGuidance}`;
 
     default:
       throw new Error(`Unknown screenshot type: ${type}`);
@@ -421,6 +427,7 @@ export interface ExtractedProduct {
   price?: string;
   aisleLocation?: string;
   app?: string; // "Instacart" or "DoorDash"
+  aiDetectedCroppedImage?: boolean; // AI detected if product image is cropped off
 }
 
 export async function extractProductsFromScreenshot(
@@ -458,22 +465,27 @@ const PRODUCT_MATCHING_SCHEMA = {
       type: "string",
       enum: ["high", "medium", "low"],
       description: "Confidence level of the match"
+    },
+    aiDetectedCroppedImage: {
+      type: "boolean",
+      description: "True if the cropped product image appears to be cut off or cropped off at the edges (only check this if a cropped image is provided, otherwise return false). Look for product packaging, text, or labels that are partially visible or cut off at the image boundaries."
     }
   },
-  required: ["productId"]
+  required: ["productId", "aiDetectedCroppedImage"]
 };
 
 /**
  * Matches a product from search results using Gemini AI
  * Takes the original screenshot (or cropped image if available) and extracted product info, 
  * along with Kroger search results, and returns the best matching productId
+ * Also detects if the cropped image is cut off
  */
 export async function matchProductFromSearchResults(
   screenshot: string,
   extractedProduct: ExtractedProduct,
   searchResults: KrogerProduct[],
   croppedImage?: string | null
-): Promise<{ productId: string | null; confidence?: string }> {
+): Promise<{ productId: string | null; confidence?: string; aiDetectedCroppedImage?: boolean }> {
   if (!GEMINI_API_KEY) {
     throw new Error("GEMINI_API_KEY environment variable is not set");
   }
@@ -563,11 +575,12 @@ Look at the ${imageType} and match the product shown to one of the search result
 - Aisle location matching (if visible in ${imageType})
 ${croppedImage ? "- Visual appearance of the product (packaging, colors, design)" : ""}
 
-Return the productId of the best matching product. If none of the search results match well, return null.
+${croppedImage ? "ADDITIONALLY: Analyze if the cropped product image is cut off or cropped off at the edges. Look for:\n- Product packaging that appears to be cut off at the top, bottom, left, or right edges\n- Text or labels that are partially visible or cut off\n- Product features that appear incomplete or truncated\n- Any indication that the image boundaries cut through the product\nReturn true if the product appears to be cropped off, false if the product appears complete within the image boundaries." : ""}
 
 Return your response as JSON with:
 - productId: The matching productId from the search results, or null if no good match
-- confidence: "high" if very confident, "medium" if somewhat confident, "low" if uncertain`;
+- confidence: "high" if very confident, "medium" if somewhat confident, "low" if uncertain
+${croppedImage ? "- aiDetectedCroppedImage: true if the cropped image appears to be cut off at the edges, false if complete (only check this if analyzing a cropped image)" : "- aiDetectedCroppedImage: false (not a cropped image)"}`;
 
     // Prepare contents with image and prompt
     const contents = [
@@ -596,7 +609,7 @@ Return your response as JSON with:
     });
 
     // Parse the JSON response
-    let matchResult: { productId: string | null; confidence?: string } = { productId: null };
+    let matchResult: { productId: string | null; confidence?: string; aiDetectedCroppedImage?: boolean } = { productId: null, aiDetectedCroppedImage: false };
 
     try {
       const responseText = response.text || "";
@@ -619,18 +632,23 @@ Return your response as JSON with:
           matchResult = {
             productId: parsed.productId,
             confidence: parsed.confidence,
+            aiDetectedCroppedImage: croppedImage ? (parsed.aiDetectedCroppedImage === true) : false,
           };
         } else {
           // Invalid productId, return null
-          matchResult = { productId: null };
+          matchResult = { productId: null, aiDetectedCroppedImage: croppedImage ? (parsed.aiDetectedCroppedImage === true) : false };
         }
       } else {
-        matchResult = { productId: null, confidence: parsed.confidence };
+        matchResult = { 
+          productId: null, 
+          confidence: parsed.confidence,
+          aiDetectedCroppedImage: croppedImage ? (parsed.aiDetectedCroppedImage === true) : false,
+        };
       }
     } catch (parseError) {
       // If parsing fails, return null (will fall back to first result)
       console.error("Failed to parse Gemini matching response:", parseError);
-      return { productId: null };
+      return { productId: null, aiDetectedCroppedImage: false };
     }
 
     return matchResult;

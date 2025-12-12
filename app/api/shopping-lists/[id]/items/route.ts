@@ -131,23 +131,34 @@ export async function POST(
     const croppedImagePromises: Promise<any>[] = [];
     
     newItems.forEach((item: any, index: number) => {
+      const itemIndex = startIndex + index;
+      const aiDetectedCroppedImage = item.aiDetectedCroppedImage;
+      
+      // Only create ShoppingListItemCroppedImage document if there's actually a cropped image
+      // (base64 is required in the schema)
       if (item.croppedImage) {
-        const itemIndex = startIndex + index;
+        const updateData: any = {
+          shoppingListId,
+          itemIndex,
+          base64: item.croppedImage,
+          uploadedAt: new Date(),
+        };
+        // Include aiDetectedCroppedImage if available
+        if (aiDetectedCroppedImage !== undefined) {
+          updateData.aiDetectedCroppedImage = aiDetectedCroppedImage;
+        }
         croppedImagePromises.push(
           ShoppingListItemCroppedImage.findOneAndUpdate(
             { shoppingListId, itemIndex },
-            {
-              shoppingListId,
-              itemIndex,
-              base64: item.croppedImage,
-              uploadedAt: new Date(),
-            },
+            updateData,
             { upsert: true, new: true }
           )
         );
         // Remove croppedImage from item before saving (it's now in separate collection)
+        // Keep aiDetectedCroppedImage in the item itself
         delete item.croppedImage;
       }
+      // If there's no croppedImage but aiDetectedCroppedImage exists, keep it in the item
     });
     
     // Wait for all cropped images to be saved
@@ -253,21 +264,32 @@ export async function PUT(
     
     // Extract croppedImage if present and save to separate collection
     const croppedImage = (newItem as any).croppedImage;
+    const aiDetectedCroppedImage = (newItem as any).aiDetectedCroppedImage;
+    
+    // Only create/update ShoppingListItemCroppedImage document if there's actually a cropped image
+    // (base64 is required in the schema)
     if (croppedImage) {
       const shoppingListId = shoppingList._id.toString();
+      const updateData: any = {
+        shoppingListId,
+        itemIndex,
+        base64: croppedImage,
+        uploadedAt: new Date(),
+      };
+      // Include aiDetectedCroppedImage if available
+      if (aiDetectedCroppedImage !== undefined) {
+        updateData.aiDetectedCroppedImage = aiDetectedCroppedImage;
+      }
       await ShoppingListItemCroppedImage.findOneAndUpdate(
         { shoppingListId, itemIndex },
-        {
-          shoppingListId,
-          itemIndex,
-          base64: croppedImage,
-          uploadedAt: new Date(),
-        },
+        updateData,
         { upsert: true, new: true }
       );
       // Remove croppedImage from item before saving (it's now in separate collection)
+      // Keep aiDetectedCroppedImage in the item itself if there's no cropped image
       delete (newItem as any).croppedImage;
     }
+    // If there's no croppedImage but aiDetectedCroppedImage exists, keep it in the item
     
     // If productId changed or is being set, invalidate the cache for both old and new product
     if (newItem.productId) {

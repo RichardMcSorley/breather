@@ -51,7 +51,7 @@ async function fetchAndMergeCroppedImages(shoppingListId: string, items: any[], 
     const croppedImages = await ShoppingListItemCroppedImage.find({ shoppingListId }).lean();
     
     // Create a map of itemIndex -> croppedImage data (including bounding box)
-    const croppedImageMap = new Map<number, { base64: string; xMin?: number; yMin?: number; xMax?: number; yMax?: number }>();
+    const croppedImageMap = new Map<number, { base64: string; xMin?: number; yMin?: number; xMax?: number; yMax?: number; aiDetectedCroppedImage?: boolean }>();
     croppedImages.forEach((img: any) => {
       croppedImageMap.set(img.itemIndex, {
         base64: img.base64,
@@ -59,6 +59,7 @@ async function fetchAndMergeCroppedImages(shoppingListId: string, items: any[], 
         yMin: img.yMin,
         xMax: img.xMax,
         yMax: img.yMax,
+        aiDetectedCroppedImage: img.aiDetectedCroppedImage,
       });
     });
     
@@ -87,6 +88,10 @@ async function fetchAndMergeCroppedImages(shoppingListId: string, items: any[], 
               xMax: croppedImageData.xMax,
               yMax: croppedImageData.yMax,
             }
+          }),
+          // Include AI detected cropped image flag if available
+          ...(croppedImageData.aiDetectedCroppedImage !== undefined && {
+            aiDetectedCroppedImage: croppedImageData.aiDetectedCroppedImage,
           })
         };
       }

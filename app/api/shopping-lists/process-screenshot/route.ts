@@ -146,6 +146,7 @@ export async function POST(request: NextRequest) {
               productPageURI: krogerProduct.productPageURI,
               categories: krogerProduct.categories,
               found: true,
+              aiDetectedCroppedImage: product.aiDetectedCroppedImage,
             };
           }
 
@@ -157,6 +158,7 @@ export async function POST(request: NextRequest) {
             quantity: product.quantity,
             aisleLocation: product.aisleLocation,
             found: false,
+            aiDetectedCroppedImage: product.aiDetectedCroppedImage,
           };
         } catch {
           return {
@@ -167,6 +169,7 @@ export async function POST(request: NextRequest) {
             quantity: product.quantity,
             aisleLocation: product.aisleLocation,
             found: false,
+            aiDetectedCroppedImage: product.aiDetectedCroppedImage,
           };
         }
       })

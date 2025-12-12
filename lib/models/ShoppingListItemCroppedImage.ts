@@ -10,6 +10,8 @@ export interface IShoppingListItemCroppedImage extends Document {
   yMin?: number;
   xMax?: number;
   yMax?: number;
+  // AI detection flag for cropped off images
+  aiDetectedCroppedImage?: boolean;
 }
 
 const ShoppingListItemCroppedImageSchema: Schema = new Schema(
@@ -46,6 +48,11 @@ const ShoppingListItemCroppedImageSchema: Schema = new Schema(
     },
     yMax: {
       type: Number,
+      required: false,
+    },
+    // AI detection flag for cropped off images
+    aiDetectedCroppedImage: {
+      type: Boolean,
       required: false,
     },
   },

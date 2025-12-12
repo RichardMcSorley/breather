@@ -44,17 +44,29 @@ export async function POST(request: NextRequest) {
     const croppedImageDocs: any[] = [];
     
     (items as any[]).forEach((item: any, index: number) => {
-      if (item.croppedImage) {
-        croppedImageDocs.push({
+      const croppedImage = item.croppedImage;
+      const aiDetectedCroppedImage = item.aiDetectedCroppedImage;
+      
+      // Only create ShoppingListItemCroppedImage document if there's actually a cropped image
+      // (base64 is required in the schema)
+      if (croppedImage) {
+        const doc: any = {
           shoppingListId: null, // Will be set after list is created
           itemIndex: index,
-          base64: item.croppedImage,
+          base64: croppedImage,
           uploadedAt: new Date(),
-        });
+        };
+        // Include aiDetectedCroppedImage if available
+        if (aiDetectedCroppedImage !== undefined) {
+          doc.aiDetectedCroppedImage = aiDetectedCroppedImage;
+        }
+        croppedImageDocs.push(doc);
         // Remove croppedImage from item (it will be saved separately)
-        const { croppedImage, ...itemWithoutCropped } = item;
+        // Keep aiDetectedCroppedImage in the item itself
+        const { croppedImage: _, ...itemWithoutCropped } = item;
         itemsWithCroppedImages.push(itemWithoutCropped);
       } else {
+        // No cropped image, but keep aiDetectedCroppedImage in the item
         itemsWithCroppedImages.push(item);
       }
     });
