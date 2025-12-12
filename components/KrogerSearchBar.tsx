@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Search } from "lucide-react";
+import { Search, X } from "lucide-react";
 import Input from "./ui/Input";
 import Card from "./ui/Card";
 
@@ -73,26 +73,37 @@ export default function KrogerSearchBar({
         </div>
 
         <div className="flex gap-2">
-          <Input
-            type="text"
-            placeholder={
-              searchType === "term"
-                ? "Search by product name (e.g., milk, bread)"
-                : searchType === "brand"
-                ? "Search by brand name (e.g., Kroger)"
-                : "Enter 13-digit product ID"
-            }
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            onKeyPress={handleKeyPress}
-            maxLength={searchType === "productId" ? 13 : undefined}
-            className="flex-1"
-            disabled={loading}
-          />
+          <div className="flex-1 relative">
+            <Input
+              type="text"
+              placeholder={
+                searchType === "term"
+                  ? "Search by product name (e.g., milk, bread)"
+                  : searchType === "brand"
+                  ? "Search by brand name (e.g., Kroger)"
+                  : "Enter 13-digit product ID"
+              }
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              onKeyPress={handleKeyPress}
+              maxLength={searchType === "productId" ? 13 : undefined}
+              className="w-full pr-10"
+              disabled={loading}
+            />
+            {searchTerm && (
+              <button
+                onClick={() => setSearchTerm("")}
+                className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 rounded transition-colors"
+                title="Clear search"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            )}
+          </div>
           <button
             onClick={handleSearch}
             disabled={loading || !searchTerm.trim()}
-            className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed min-h-[44px] flex items-center gap-2"
+            className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed min-h-[44px] flex items-center gap-2 flex-shrink-0"
           >
             <Search className="w-4 h-4" />
             {loading ? "Searching..." : "Search"}

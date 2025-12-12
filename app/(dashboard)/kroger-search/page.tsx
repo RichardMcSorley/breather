@@ -1,5 +1,10 @@
 "use client";
 
+/**
+ * @deprecated This page has been deprecated. 
+ * Use the search functionality from the Shopping Lists page (FAB button) or individual shopping list pages instead.
+ * This page will be removed in a future version.
+ */
 import { useState, useEffect } from "react";
 import Layout from "@/components/Layout";
 import KrogerStoreSelector from "@/components/KrogerStoreSelector";

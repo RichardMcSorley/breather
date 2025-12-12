@@ -6,6 +6,10 @@ import { useSession } from "next-auth/react";
 import Layout from "@/components/Layout";
 import Image from "next/image";
 import Modal from "@/components/ui/Modal";
+import KrogerSearchBar from "@/components/KrogerSearchBar";
+import KrogerStoreSelector from "@/components/KrogerStoreSelector";
+import KrogerProductDetailModal from "@/components/KrogerProductDetailModal";
+import { KrogerLocation } from "@/lib/types/kroger";
 import { ShoppingCart, ExternalLink, Barcode, Loader2, Search, Check, Upload, Plus, Edit, Trash2, Scan, X, AlertTriangle, Code, Share2, ArrowRight, ChevronDown, ChevronUp, FileImage, Eye, EyeOff } from "lucide-react";
 import { useScreenshotProcessing } from "@/hooks/useScreenshotProcessing";
 import JsonViewerModal from "@/components/JsonViewer";
@@ -1973,6 +1977,434 @@ function ManualEntryModal({
           </div>
         )}
       </div>
+    </Modal>
+  );
+}
+
+// Quick Search Modal Component for general product searches
+function QuickSearchModal({
+  locationId,
+  shoppingListId,
+  isOpen,
+  onClose,
+  onItemAdded,
+}: {
+  locationId: string;
+  shoppingListId?: string; // Optional - if not provided, search-only mode (no add functionality)
+  isOpen: boolean;
+  onClose: () => void;
+  onItemAdded?: () => void;
+}) {
+  const [searchResults, setSearchResults] = useState<KrogerProduct[]>([]);
+  const [searching, setSearching] = useState(false);
+  const [searchError, setSearchError] = useState<string | null>(null);
+  const [addingProductId, setAddingProductId] = useState<string | null>(null);
+  const [selectedLocation, setSelectedLocation] = useState<KrogerLocation | null>(null);
+  const [selectedProductForDetails, setSelectedProductForDetails] = useState<KrogerProduct | null>(null);
+
+  useEffect(() => {
+    if (isOpen) {
+      setSearchResults([]);
+      setSearchError(null);
+      setAddingProductId(null);
+      setSelectedProductForDetails(null);
+      // Keep selectedLocation when modal reopens for convenience
+    }
+  }, [isOpen]);
+
+  const handleSearch = async (
+    searchTerm: string,
+    searchType: "term" | "brand" | "productId"
+  ) => {
+    // Use selected location if available, otherwise fall back to prop locationId
+    const searchLocationId = selectedLocation?.locationId || locationId;
+    
+    if (!searchLocationId) {
+      setSearchError("Please select a store location first");
+      return;
+    }
+
+    setSearching(true);
+    setSearchResults([]);
+    setSearchError(null);
+
+    try {
+      const params = new URLSearchParams();
+      
+      if (searchType === "term") {
+        params.append("term", searchTerm);
+      } else if (searchType === "brand") {
+        params.append("brand", searchTerm);
+      } else if (searchType === "productId") {
+        params.append("productId", searchTerm);
+      }
+
+      params.append("locationId", searchLocationId);
+      params.append("limit", "20");
+
+      const response = await fetch(`/api/kroger/products/search?${params.toString()}`);
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ error: "Failed to search products" }));
+        throw new Error(errorData.error || "Failed to search products");
+      }
+
+      const data = await response.json();
+      setSearchResults(data.data || []);
+      if (!data.data || data.data.length === 0) {
+        setSearchError("No products found. Try a different search term.");
+      }
+    } catch (err) {
+      setSearchError(err instanceof Error ? err.message : "Failed to search products");
+      setSearchResults([]);
+    } finally {
+      setSearching(false);
+    }
+  };
+
+  const handleAddProduct = async (product: KrogerProduct) => {
+    setAddingProductId(product.productId);
+    try {
+      const krogerItem = product.items?.[0];
+      
+      // Get best image URL
+      let imageUrl: string | undefined;
+      if (product.images && product.images.length > 0) {
+        const frontImg = product.images.find(img => img.perspective === "front");
+        const defaultImg = product.images.find(img => img.default);
+        const imgToUse = frontImg || defaultImg || product.images[0];
+        
+        if (imgToUse?.sizes && imgToUse.sizes.length > 0) {
+          const sizeOrder = ["xlarge", "large", "medium", "small", "thumbnail"];
+          for (const size of sizeOrder) {
+            const found = imgToUse.sizes.find(s => s.size === size);
+            if (found?.url) {
+              imageUrl = found.url;
+              break;
+            }
+          }
+          if (!imageUrl && imgToUse.sizes[0]?.url) {
+            imageUrl = imgToUse.sizes[0].url;
+          }
+        }
+      }
+
+      // Store all images
+      const images = product.images?.map(img => ({
+        perspective: img.perspective,
+        default: img.default,
+        sizes: img.sizes?.map(s => ({ size: s.size, url: s.url })) || [],
+      })) || [];
+
+      // Store all Kroger aisle locations
+      const krogerAisles = product.aisleLocations?.map(aisle => ({
+        aisleNumber: aisle.number,
+        shelfNumber: aisle.shelfNumber,
+        side: aisle.side,
+        description: aisle.description,
+        bayNumber: aisle.bayNumber,
+      })) || [];
+
+      const newItem: ShoppingListItem = {
+        searchTerm: product.description || "",
+        productName: product.description || "",
+        customer: "A",
+        quantity: "1",
+        productId: product.productId,
+        upc: product.upc || krogerItem?.itemId,
+        brand: product.brand,
+        description: product.description,
+        size: krogerItem?.size,
+        price: krogerItem?.price?.regular ?? krogerItem?.nationalPrice?.regular,
+        promoPrice: krogerItem?.price?.promo ?? krogerItem?.nationalPrice?.promo,
+        stockLevel: krogerItem?.inventory?.stockLevel,
+        imageUrl,
+        images,
+        krogerAisles,
+        productPageURI: product.productPageURI,
+        categories: product.categories,
+        found: true,
+      };
+
+      // Only add to list if shoppingListId is provided
+      if (!shoppingListId) {
+        throw new Error("No shopping list selected");
+      }
+
+      // Add the item via API
+      const response = await fetch(`/api/shopping-lists/${shoppingListId}/items`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ items: [newItem] }),
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to add item");
+      }
+
+      onItemAdded?.();
+    } catch (err) {
+      console.error("Add product error:", err);
+      setSearchError(err instanceof Error ? err.message : "Failed to add product");
+    } finally {
+      setAddingProductId(null);
+    }
+  };
+
+  const getImageUrl = (product: KrogerProduct) => {
+    if (product.images && product.images.length > 0) {
+      const frontImg = product.images.find(img => img.perspective === "front");
+      const defaultImg = product.images.find(img => img.default);
+      const imgToUse = frontImg || defaultImg || product.images[0];
+      
+      if (imgToUse?.sizes && imgToUse.sizes.length > 0) {
+        const sizeOrder = ["xlarge", "large", "medium", "small", "thumbnail"];
+        for (const size of sizeOrder) {
+          const found = imgToUse.sizes.find(s => s.size === size);
+          if (found?.url) return found.url;
+        }
+        return imgToUse.sizes[0]?.url;
+      }
+    }
+    return null;
+  };
+
+  const formatPrice = (price: number) => {
+    return `$${price.toFixed(2)}`;
+  };
+
+  return (
+    <Modal isOpen={isOpen} onClose={onClose} title="Search Kroger Products">
+      <div className="space-y-5">
+        {/* Store Selection Section */}
+        <div>
+          <KrogerStoreSelector
+            selectedLocation={selectedLocation}
+            onLocationSelected={setSelectedLocation}
+          />
+        </div>
+
+        {/* Search Section */}
+        <div className="border-t border-gray-200 dark:border-gray-700 pt-4">
+          <KrogerSearchBar onSearch={handleSearch} loading={searching} />
+        </div>
+
+        {searchError && (
+          <div className="p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
+            <p className="text-sm text-red-600 dark:text-red-400">{searchError}</p>
+          </div>
+        )}
+
+        {/* Loading State */}
+        {searching && (
+          <div className="flex items-center justify-center py-8">
+            <Loader2 className="w-6 h-6 animate-spin text-green-600 dark:text-green-400" />
+            <span className="ml-2 text-sm text-gray-600 dark:text-gray-400">Searching products...</span>
+          </div>
+        )}
+
+        {/* Search Results */}
+        {!searching && searchResults.length > 0 && (
+          <div>
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-base font-semibold text-gray-900 dark:text-white">
+                Search Results
+              </h3>
+              <div className="flex items-center gap-2">
+                <span className="text-sm text-gray-500 dark:text-gray-400 bg-gray-100 dark:bg-gray-800 px-2 py-1 rounded">
+                  {searchResults.length} {searchResults.length === 1 ? 'product' : 'products'}
+                </span>
+                <button
+                  onClick={() => {
+                    setSearchResults([]);
+                    setSearchError(null);
+                  }}
+                  className="text-xs text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 px-2 py-1 rounded hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                  title="Clear results"
+                >
+                  Clear
+                </button>
+              </div>
+            </div>
+            <div className="max-h-[400px] overflow-y-auto space-y-3">
+              {searchResults.map((product) => {
+                const imageUrl = getImageUrl(product);
+                const item = product.items?.[0];
+                const isAdding = addingProductId === product.productId;
+                
+                return (
+                  <div
+                    key={product.productId}
+                    className="p-4 border-2 border-gray-200 dark:border-gray-700 rounded-xl bg-white dark:bg-gray-800 hover:border-green-500 dark:hover:border-green-600 transition-all shadow-sm hover:shadow-md"
+                  >
+                    <div className="flex gap-4">
+                      {imageUrl ? (
+                        <button
+                          onClick={() => setSelectedProductForDetails(product)}
+                          className="relative w-24 h-24 bg-white dark:bg-gray-50 rounded-lg overflow-hidden flex-shrink-0 cursor-pointer hover:opacity-90 transition-opacity border border-gray-200 dark:border-gray-300"
+                        >
+                          <Image
+                            src={imageUrl}
+                            alt={product.description || ""}
+                            fill
+                            className="object-contain p-2"
+                            unoptimized
+                          />
+                        </button>
+                      ) : (
+                        <button
+                          onClick={() => setSelectedProductForDetails(product)}
+                          className="w-24 h-24 bg-gray-100 dark:bg-gray-700 rounded-lg flex items-center justify-center flex-shrink-0 cursor-pointer hover:opacity-90 transition-opacity border border-gray-200 dark:border-gray-600"
+                        >
+                          <ShoppingCart className="w-8 h-8 text-gray-400" />
+                        </button>
+                      )}
+                      <div className="flex-1 min-w-0">
+                        <button
+                          onClick={() => setSelectedProductForDetails(product)}
+                          className="text-left w-full group"
+                        >
+                          <p className="font-semibold text-gray-900 dark:text-white text-base group-hover:text-green-600 dark:group-hover:text-green-400 transition-colors line-clamp-2">
+                            {product.description}
+                          </p>
+                        </button>
+                        {product.brand && (
+                          <p className="text-xs text-gray-500 dark:text-gray-400 mt-1 uppercase tracking-wide">
+                            {product.brand}
+                          </p>
+                        )}
+                        <div className="flex items-center gap-3 mt-2 flex-wrap">
+                          {item?.size && (
+                            <span className="text-xs font-medium text-gray-600 dark:text-gray-400 bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded">
+                              {item.size}
+                            </span>
+                          )}
+                          <div className="flex items-baseline gap-2">
+                            {item?.price?.promo && item.price.promo !== item.price.regular ? (
+                              <>
+                                <span className="text-lg font-bold text-green-600 dark:text-green-400">
+                                  {formatPrice(item.price.promo)}
+                                </span>
+                                <span className="text-sm text-gray-500 dark:text-gray-400 line-through">
+                                  {formatPrice(item.price.regular)}
+                                </span>
+                              </>
+                            ) : item?.price?.regular ? (
+                              <span className="text-lg font-bold text-gray-900 dark:text-white">
+                                {formatPrice(item.price.regular)}
+                              </span>
+                            ) : null}
+                          </div>
+                          {item?.inventory?.stockLevel && (
+                            <span className={`text-xs font-medium px-2 py-1 rounded ${
+                              item.inventory.stockLevel === "HIGH" 
+                                ? "text-green-700 dark:text-green-400 bg-green-50 dark:bg-green-900/20" 
+                                : item.inventory.stockLevel === "LOW" 
+                                ? "text-yellow-700 dark:text-yellow-400 bg-yellow-50 dark:bg-yellow-900/20" 
+                                : "text-red-700 dark:text-red-400 bg-red-50 dark:bg-red-900/20"
+                            }`}>
+                              {item.inventory.stockLevel === "HIGH" 
+                                ? "✓ In Stock" 
+                                : item.inventory.stockLevel === "LOW" 
+                                ? "⚠ Low Stock" 
+                                : "✗ Out of Stock"}
+                            </span>
+                          )}
+                        </div>
+                        {product.aisleLocations?.[0] && (() => {
+                          const aisle = product.aisleLocations[0];
+                          const locationParts: string[] = [];
+                          
+                          if (aisle.number && parseInt(aisle.number) < 100) {
+                            locationParts.push(`Aisle ${aisle.number}`);
+                          } else if (aisle.description) {
+                            locationParts.push(aisle.description);
+                          }
+                          
+                          if (aisle.shelfNumber) {
+                            locationParts.push(`Shelf ${aisle.shelfNumber}`);
+                          }
+                          
+                          if (aisle.side) {
+                            locationParts.push(`Side ${aisle.side}`);
+                          }
+                          
+                          if (aisle.bayNumber) {
+                            locationParts.push(`Bay ${aisle.bayNumber}`);
+                          }
+                          
+                          return locationParts.length > 0 ? (
+                            <div className="mt-2 flex items-center gap-1">
+                              <span className="text-xs text-gray-400">📍</span>
+                              <p className="text-xs text-gray-500 dark:text-gray-400">
+                                {locationParts.join(" - ")}
+                              </p>
+                            </div>
+                          ) : null;
+                        })()}
+                      </div>
+                      <div className="flex flex-col gap-2 flex-shrink-0">
+                        <button
+                          onClick={() => setSelectedProductForDetails(product)}
+                          className="px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2 text-sm whitespace-nowrap"
+                          title="View details"
+                        >
+                          <Eye className="w-4 h-4" />
+                          <span className="hidden sm:inline">Details</span>
+                        </button>
+                        {shoppingListId && (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleAddProduct(product);
+                            }}
+                            disabled={isAdding}
+                            className="px-3 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 text-sm whitespace-nowrap"
+                          >
+                            {isAdding ? (
+                              <>
+                                <Loader2 className="w-4 h-4 animate-spin" />
+                                <span className="hidden sm:inline">Adding...</span>
+                              </>
+                            ) : (
+                              <>
+                                <Plus className="w-4 h-4" />
+                                <span className="hidden sm:inline">Add</span>
+                              </>
+                            )}
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {!searching && searchResults.length === 0 && !searchError && (
+          <div className="text-center py-12 text-gray-500 dark:text-gray-400">
+            <div className="w-16 h-16 mx-auto mb-4 bg-gray-100 dark:bg-gray-800 rounded-full flex items-center justify-center">
+              <Search className="w-8 h-8 opacity-50" />
+            </div>
+            <p className="text-base font-medium mb-1">Ready to search</p>
+            <p className="text-sm">Enter a product name, brand, or product ID above to find products</p>
+          </div>
+        )}
+      </div>
+
+      {/* Product Detail Modal */}
+      {selectedProductForDetails && (
+        <KrogerProductDetailModal
+          product={selectedProductForDetails}
+          locationId={selectedLocation?.locationId || locationId}
+          isOpen={!!selectedProductForDetails}
+          onClose={() => setSelectedProductForDetails(null)}
+        />
+      )}
     </Modal>
   );
 }
@@ -5032,6 +5464,7 @@ export default function ShoppingListDetailPage() {
   const [scanResult, setScanResult] = useState<{ success: boolean; item: ShoppingListItem; scannedBarcode?: string } | null>(null);
   const [customerIdentificationOpen, setCustomerIdentificationOpen] = useState(false);
   const [shareModalOpen, setShareModalOpen] = useState(false);
+  const [quickSearchModalOpen, setQuickSearchModalOpen] = useState(false);
   const [users, setUsers] = useState<{ userId: string; email?: string; name?: string; image?: string }[]>([]);
   const [viewingScreenshot, setViewingScreenshot] = useState<{ base64: string; item: ShoppingListItem; itemIndex: number } | null>(null); // screenshot and item to view
   const [showOriginalScreenshot, setShowOriginalScreenshot] = useState(false);
@@ -6567,6 +7000,28 @@ export default function ShoppingListDetailPage() {
           )}
         </div>
       </div>
+
+      {/* Floating Search Button - Only visible on todo tab */}
+      {activeTab === "todo" && shoppingList && (
+        <button
+          onClick={() => setQuickSearchModalOpen(true)}
+          className="fixed bottom-[80px] right-6 w-14 h-14 bg-green-600 text-white rounded-full shadow-lg hover:bg-green-700 transition-colors flex items-center justify-center z-[60]"
+          aria-label="Search Kroger products"
+        >
+          <Search className="w-6 h-6" />
+        </button>
+      )}
+
+      {/* Quick Search Modal */}
+      {shoppingList && (
+        <QuickSearchModal
+          locationId={shoppingList.locationId}
+          shoppingListId={shoppingList._id}
+          isOpen={quickSearchModalOpen}
+          onClose={() => setQuickSearchModalOpen(false)}
+          onItemAdded={fetchShoppingList}
+        />
+      )}
 
       {/* Product Detail Modal */}
       {selectedItem && (() => {
