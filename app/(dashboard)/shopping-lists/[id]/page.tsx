@@ -2813,12 +2813,12 @@ function CustomerIdentificationModal({
                 <video
                   ref={videoRef}
                   className="w-full rounded-lg border-2 border-gray-300 dark:border-gray-600"
-                  style={{ aspectRatio: "4/3" }}
+                  style={{ aspectRatio: "16/9" }}
                   muted
                   playsInline
                 />
                 <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                  <div className="border-2 border-green-500 rounded-lg w-3/4 h-1/2" />
+                  <div className="border-2 border-green-500 rounded-lg w-4/5 h-1/4" />
                 </div>
               </div>
               <button
@@ -3110,13 +3110,13 @@ function BarcodeScanner({
           <video
             ref={videoRef}
             className="w-full rounded-lg border-2 border-gray-300 dark:border-gray-600"
-            style={{ aspectRatio: "4/3" }}
+            style={{ aspectRatio: "16/9" }}
             muted
             playsInline
           />
-          {/* Scanning overlay */}
+          {/* Scanning overlay - wide horizontal area for barcode scanning */}
           <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-            <div className="border-2 border-blue-500 rounded-lg w-3/4 h-1/2" />
+            <div className="border-2 border-blue-500 rounded-lg w-4/5 h-1/4" />
           </div>
         </div>
 
