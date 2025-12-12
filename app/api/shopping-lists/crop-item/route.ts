@@ -177,15 +177,17 @@ export async function POST(request: NextRequest) {
     console.log("Bounding box coordinates:", { x_min, y_min, x_max, y_max });
 
     // Crop the image using the bounding box
+    // For Kroger shopping, keep full width of screenshot but use moondream's height
     const croppedImage = await cropImageServerSide(
       screenshotBase64,
-      x_min,
-      y_min,
-      x_max,
-      y_max
+      0,      // x_min: full width start
+      y_min,  // y_min: from moondream
+      1,      // x_max: full width end
+      y_max   // y_max: from moondream
     );
 
-    // Save cropped image to separate collection
+    // Save cropped image to separate collection with bounding box coordinates
+    // Save the actual crop coordinates (full width) to match what was cropped
     const listId = shoppingList._id.toString();
     await ShoppingListItemCroppedImage.findOneAndUpdate(
       { shoppingListId: listId, itemIndex },
@@ -194,6 +196,11 @@ export async function POST(request: NextRequest) {
         itemIndex,
         base64: croppedImage,
         uploadedAt: new Date(),
+        // Save the actual crop coordinates (full width, moondream height) to match what was cropped
+        xMin: 0,      // Full width start
+        yMin: y_min,  // From moondream
+        xMax: 1,      // Full width end
+        yMax: y_max,  // From moondream
       },
       { upsert: true, new: true }
     );

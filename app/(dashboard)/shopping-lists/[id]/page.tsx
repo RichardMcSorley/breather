@@ -82,6 +82,7 @@ interface ShoppingListItem {
   aisleLocation?: string;
   screenshotId?: string; // Reference to the screenshot this item came from
   croppedImage?: string; // Base64 cropped image from moondream detection
+  boundingBox?: { xMin: number; yMin: number; xMax: number; yMax: number }; // Bounding box coordinates from moondream (normalized 0-1)
   productId?: string;
   upc?: string;
   brand?: string;
@@ -235,6 +236,7 @@ function SearchProductModal({
   isOpen,
   onClose,
   onItemUpdated,
+  shoppingList,
 }: {
   item: ShoppingListItem;
   itemIndex: number;
@@ -243,6 +245,7 @@ function SearchProductModal({
   isOpen: boolean;
   onClose: () => void;
   onItemUpdated: () => void;
+  shoppingList?: ShoppingList | null;
 }) {
   const [searchTerm, setSearchTerm] = useState(item.searchTerm || item.productName);
   const [searching, setSearching] = useState(false);
@@ -444,9 +447,33 @@ function SearchProductModal({
     return null;
   };
 
+  // Find screenshot if item has screenshotId
+  const screenshot = item.screenshotId && shoppingList?.screenshots 
+    ? shoppingList.screenshots.find(s => s.id === item.screenshotId)
+    : null;
+
   return (
     <Modal isOpen={isOpen} onClose={onClose} title="Search for Product">
       <div className="space-y-4">
+        {/* Product Image - Match what's displayed on todo list */}
+        {item.croppedImage ? (
+          <div className="w-full bg-white dark:bg-gray-50 border border-gray-200 dark:border-gray-300 rounded-lg overflow-hidden">
+            <img
+              src={item.croppedImage}
+              alt={item.productName}
+              className="w-full h-auto max-h-64 object-contain mx-auto block"
+            />
+          </div>
+        ) : screenshot ? (
+          <div className="w-full bg-gray-100 dark:bg-gray-200 border border-gray-200 dark:border-gray-300 rounded-lg overflow-hidden py-3 px-4">
+            <img
+              src={screenshot.base64}
+              alt={item.productName}
+              className="w-full h-auto max-h-64 object-contain mx-auto block"
+            />
+          </div>
+        ) : null}
+
         {/* Product Name */}
         <div>
           <p className="text-sm text-gray-500 dark:text-gray-400 mb-1">Product Name</p>
@@ -3119,13 +3146,56 @@ function ScanResultModal({
                 </button>
               </div>
             </div>
-            <div className="p-4">
-              <img 
-                src={item.croppedImage && !showOriginalScreenshot ? item.croppedImage : viewingScreenshot} 
-                alt={item.croppedImage && !showOriginalScreenshot ? "Cropped product image" : "Original screenshot"} 
-                className="max-w-full h-auto rounded-lg"
-                style={{ maxHeight: 'calc(90vh - 100px)' }}
-              />
+            <div className="p-4 flex justify-center">
+              <div className="relative max-w-full">
+                <img 
+                  src={item.croppedImage && !showOriginalScreenshot ? item.croppedImage : viewingScreenshot} 
+                  alt={item.croppedImage && !showOriginalScreenshot ? "Cropped product image" : "Original screenshot"} 
+                  className="max-w-full h-auto rounded-lg block"
+                  style={{ maxHeight: 'calc(90vh - 100px)' }}
+                />
+                {/* Highlight overlay for moondream detection area - only show on original screenshot */}
+                {showOriginalScreenshot && item.boundingBox && viewingScreenshot && (() => {
+                  const bbox = item.boundingBox;
+                  return (
+                    <>
+                      {/* Dark overlay covering entire image with cutout for highlighted area */}
+                      <div
+                        className="absolute inset-0 bg-black/50 rounded-lg pointer-events-none"
+                        style={{
+                          clipPath: `polygon(
+                            0% 0%,
+                            0% 100%,
+                            ${bbox.xMin * 100}% 100%,
+                            ${bbox.xMin * 100}% ${bbox.yMin * 100}%,
+                            ${bbox.xMax * 100}% ${bbox.yMin * 100}%,
+                            ${bbox.xMax * 100}% ${bbox.yMax * 100}%,
+                            ${bbox.xMin * 100}% ${bbox.yMax * 100}%,
+                            ${bbox.xMin * 100}% 100%,
+                            100% 100%,
+                            100% 0%
+                          )`,
+                        }}
+                      />
+                      {/* Highlight box for detected area - border and glow only, no background */}
+                      <div
+                        className="absolute border-4 border-yellow-400 rounded-lg pointer-events-none z-10 shadow-[0_0_30px_rgba(250,204,21,1)]"
+                        style={{
+                          left: `${bbox.xMin * 100}%`,
+                          top: `${bbox.yMin * 100}%`,
+                          width: `${(bbox.xMax - bbox.xMin) * 100}%`,
+                          height: `${(bbox.yMax - bbox.yMin) * 100}%`,
+                        }}
+                      >
+                        {/* Label */}
+                        <div className="absolute -top-8 left-0 bg-yellow-400 text-yellow-900 px-3 py-1.5 rounded-md text-sm font-bold whitespace-nowrap shadow-xl border-2 border-yellow-500">
+                          Detected Product
+                        </div>
+                      </div>
+                    </>
+                  );
+                })()}
+              </div>
             </div>
           </div>
         </div>
@@ -4656,6 +4726,14 @@ export default function ShoppingListDetailPage() {
   const hasAutoRefreshedRef = useRef(false);
   const previousItemsRef = useRef<string>('');
 
+  // Debug: Log bounding box when viewing screenshot
+  useEffect(() => {
+    if (viewingScreenshot && showOriginalScreenshot) {
+      console.log('Viewing screenshot with item:', viewingScreenshot.item);
+      console.log('Bounding box:', viewingScreenshot.item.boundingBox);
+    }
+  }, [viewingScreenshot, showOriginalScreenshot]);
+
   const fetchShoppingList = async () => {
     try {
       const response = await fetch(`/api/shopping-lists/${id}`);
@@ -4679,6 +4757,7 @@ export default function ShoppingListDetailPage() {
             productName: itemsWithCropped[0].productName,
             hasCroppedImage: !!itemsWithCropped[0].croppedImage,
             croppedImageLength: itemsWithCropped[0].croppedImage?.length || 0,
+            boundingBox: itemsWithCropped[0].boundingBox,
           });
         }
       }
@@ -5401,18 +5480,27 @@ export default function ShoppingListDetailPage() {
           </div>
         </div>
 
-        {/* Customer Identification Button - Only show on Done tab */}
-        {activeTab === "done" && shoppingList.items.filter(item => item.done).length > 0 && (
-          <div className="mb-4">
-            <button
-              onClick={() => setCustomerIdentificationOpen(true)}
-              className="w-full px-4 py-3 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors flex items-center justify-center gap-2 text-sm font-medium"
-            >
-              <Search className="w-4 h-4" />
-              Identify Customer for Item
-            </button>
-          </div>
-        )}
+        {/* Customer Identification Button - Show on all tabs (todo, problem, done) */}
+        {(() => {
+          // Check if there are items in the current tab
+          const hasItemsInTab = activeTab === "todo" 
+            ? shoppingList.items.filter(item => !item.done && !item.problem).length > 0
+            : activeTab === "problem"
+            ? shoppingList.items.filter(item => item.problem).length > 0
+            : shoppingList.items.filter(item => item.done).length > 0;
+          
+          return hasItemsInTab && (
+            <div className="mb-4">
+              <button
+                onClick={() => setCustomerIdentificationOpen(true)}
+                className="w-full px-4 py-3 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors flex items-center justify-center gap-2 text-sm font-medium"
+              >
+                <Search className="w-4 h-4" />
+                Identify Customer for Item
+              </button>
+            </div>
+          );
+        })()}
 
         {error && (
           <div className="mb-4 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
@@ -6230,6 +6318,7 @@ export default function ShoppingListDetailPage() {
           isOpen={!!searchItem}
           onClose={() => setSearchItem(null)}
           onItemUpdated={fetchShoppingList}
+          shoppingList={shoppingList}
         />
       )}
 
@@ -6325,13 +6414,58 @@ export default function ShoppingListDetailPage() {
             </>
           }
         >
-          <div className="p-4">
-            <img 
-              src={viewingScreenshot.item.croppedImage && !showOriginalScreenshot ? viewingScreenshot.item.croppedImage : viewingScreenshot.base64} 
-              alt={viewingScreenshot.item.croppedImage && !showOriginalScreenshot ? "Cropped product image" : "Original screenshot"} 
-              className="max-w-full h-auto rounded-lg"
-              style={{ maxHeight: '80vh' }}
-            />
+          <div className="p-4 flex justify-center">
+            <div className="relative max-w-full">
+              <img 
+                src={viewingScreenshot.item.croppedImage && !showOriginalScreenshot ? viewingScreenshot.item.croppedImage : viewingScreenshot.base64} 
+                alt={viewingScreenshot.item.croppedImage && !showOriginalScreenshot ? "Cropped product image" : "Original screenshot"} 
+                className="max-w-full h-auto rounded-lg block"
+                style={{ maxHeight: '80vh' }}
+                id="screenshot-image"
+              />
+              {/* Highlight overlay for moondream detection area - only show on original screenshot */}
+              {showOriginalScreenshot && viewingScreenshot.item.boundingBox && (() => {
+                const bbox = viewingScreenshot.item.boundingBox;
+                console.log('Rendering highlight with bounding box:', bbox);
+                return (
+                  <>
+                    {/* Dark overlay covering entire image with cutout for highlighted area */}
+                    <div
+                      className="absolute inset-0 bg-black/50 rounded-lg pointer-events-none"
+                      style={{
+                        clipPath: `polygon(
+                          0% 0%,
+                          0% 100%,
+                          ${bbox.xMin * 100}% 100%,
+                          ${bbox.xMin * 100}% ${bbox.yMin * 100}%,
+                          ${bbox.xMax * 100}% ${bbox.yMin * 100}%,
+                          ${bbox.xMax * 100}% ${bbox.yMax * 100}%,
+                          ${bbox.xMin * 100}% ${bbox.yMax * 100}%,
+                          ${bbox.xMin * 100}% 100%,
+                          100% 100%,
+                          100% 0%
+                        )`,
+                      }}
+                    />
+                    {/* Highlight box for detected area - border and glow only, no background */}
+                    <div
+                      className="absolute border-4 border-yellow-400 rounded-lg pointer-events-none z-10 shadow-[0_0_30px_rgba(250,204,21,1)]"
+                      style={{
+                        left: `${bbox.xMin * 100}%`,
+                        top: `${bbox.yMin * 100}%`,
+                        width: `${(bbox.xMax - bbox.xMin) * 100}%`,
+                        height: `${(bbox.yMax - bbox.yMin) * 100}%`,
+                      }}
+                    >
+                      {/* Label */}
+                      <div className="absolute -top-8 left-0 bg-yellow-400 text-yellow-900 px-3 py-1.5 rounded-md text-sm font-bold whitespace-nowrap shadow-xl border-2 border-yellow-500">
+                        Detected Product
+                      </div>
+                    </div>
+                  </>
+                );
+              })()}
+            </div>
           </div>
         </Modal>
       )}

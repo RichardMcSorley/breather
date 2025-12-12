@@ -50,21 +50,45 @@ async function fetchAndMergeCroppedImages(shoppingListId: string, items: any[], 
     // Fetch all cropped images for this shopping list
     const croppedImages = await ShoppingListItemCroppedImage.find({ shoppingListId }).lean();
     
-    // Create a map of itemIndex -> croppedImage
-    const croppedImageMap = new Map<number, string>();
+    // Create a map of itemIndex -> croppedImage data (including bounding box)
+    const croppedImageMap = new Map<number, { base64: string; xMin?: number; yMin?: number; xMax?: number; yMax?: number }>();
     croppedImages.forEach((img: any) => {
-      croppedImageMap.set(img.itemIndex, img.base64);
+      croppedImageMap.set(img.itemIndex, {
+        base64: img.base64,
+        xMin: img.xMin,
+        yMin: img.yMin,
+        xMax: img.xMax,
+        yMax: img.yMax,
+      });
     });
     
     // Merge cropped images into items
     return items.map((item: any, index: number) => {
       // Use original index if we have a map (for shared users), otherwise use current index
       const itemIndex = originalIndicesMap ? originalIndicesMap[index] : index;
-      const croppedImage = croppedImageMap.get(itemIndex);
+      const croppedImageData = croppedImageMap.get(itemIndex);
       
-      // If cropped image exists in new collection, use it
-      if (croppedImage) {
-        return { ...item, croppedImage };
+      // If cropped image exists in new collection, use it with bounding box
+      if (croppedImageData) {
+        const hasBoundingBox = 
+          typeof croppedImageData.xMin === 'number' && 
+          typeof croppedImageData.yMin === 'number' && 
+          typeof croppedImageData.xMax === 'number' && 
+          typeof croppedImageData.yMax === 'number';
+        
+        return { 
+          ...item, 
+          croppedImage: croppedImageData.base64,
+          // Include bounding box coordinates if available
+          ...(hasBoundingBox && {
+            boundingBox: {
+              xMin: croppedImageData.xMin,
+              yMin: croppedImageData.yMin,
+              xMax: croppedImageData.xMax,
+              yMax: croppedImageData.yMax,
+            }
+          })
+        };
       }
       
       // Otherwise, keep existing croppedImage if present (for backward compatibility)

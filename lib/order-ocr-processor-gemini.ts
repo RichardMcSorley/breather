@@ -157,6 +157,10 @@ const SHOPPING_LIST_SCHEMA = {
           aisleLocation: {
             type: "string",
             description: "The aisle and shelf location if visible"
+          },
+          quantity: {
+            type: "string",
+            description: "The quantity of the product. Extract the quantity in its original format as shown in the screenshot. Examples: '(1 x)', '(2 x)', '1 ct', '2ct', '1 lbs', '0.5 lbs', '14.5 oz', etc. If no quantity is visible, return null."
           }
         },
         required: ["productName", "searchTerm"]
@@ -229,10 +233,12 @@ Extract the customer name, pickup address, and restaurant name if shown.`;
   - size: The size/volume info (e.g., "11 fl oz", "12 x 12 fl oz")
   - price: The price shown (e.g., "$13.49")
   - aisleLocation: The aisle and shelf location (e.g., "Aisle 11 - Shelf 5 (from the bottom)")
+  - quantity: Extract the quantity of the product in its original format as displayed. Look for patterns like: "(1 x)", "(2 x)", "1 ct", "2ct", "1 lbs", "0.5 lbs", "14.5 oz", etc. Preserve the exact format including parentheses, spacing, and units. If no quantity is visible, set to null.
 
 IMPORTANT: 
 - First, determine the app by looking at the overall theme: light/white background = Instacart, dark/black background = DoorDash
-- Look carefully for customer badges - they are small colored circles (orange for A, blue for B, green for C, purple for D) with a letter inside, usually positioned near the product image. Extract all products visible.${customerGuidance}`;
+- Look carefully for customer badges - they are small colored circles (orange for A, blue for B, green for C, purple for D) with a letter inside, usually positioned near the product image. Extract all products visible.
+- For quantity: Look for quantity indicators near the product name, price, or in a separate quantity field. Common formats include parentheses like "(1 x)", unit abbreviations like "ct" (count), "lbs" (pounds), "oz" (ounces), or numeric values with units. Extract exactly as shown.${customerGuidance}`;
 
     default:
       throw new Error(`Unknown screenshot type: ${type}`);
@@ -427,11 +433,11 @@ export async function extractProductsFromScreenshot(
   const products = extractedData.products || [];
   const app = extractedData.app;
   
-  // Add app to each product for convenience and set quantity to "?? ct"
+  // Add app to each product for convenience, use extracted quantity or default to "?? ct"
   const productsWithApp = products.map((p: ExtractedProduct) => ({
     ...p,
     app,
-    quantity: "?? ct", // Always use "?? ct" instead of extracting quantity from Gemini
+    quantity: p.quantity || "?? ct", // Use extracted quantity from Gemini, or default to "?? ct" if not found
   }));
   
   return {

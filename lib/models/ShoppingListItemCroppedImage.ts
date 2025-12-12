@@ -5,6 +5,11 @@ export interface IShoppingListItemCroppedImage extends Document {
   itemIndex: number; // Index of the item in the shopping list
   base64: string; // Base64 encoded cropped image data
   uploadedAt: Date; // When the cropped image was created
+  // Bounding box coordinates from moondream (normalized 0-1)
+  xMin?: number;
+  yMin?: number;
+  xMax?: number;
+  yMax?: number;
 }
 
 const ShoppingListItemCroppedImageSchema: Schema = new Schema(
@@ -25,6 +30,23 @@ const ShoppingListItemCroppedImageSchema: Schema = new Schema(
     uploadedAt: {
       type: Date,
       default: Date.now,
+    },
+    // Bounding box coordinates from moondream (normalized 0-1)
+    xMin: {
+      type: Number,
+      required: false,
+    },
+    yMin: {
+      type: Number,
+      required: false,
+    },
+    xMax: {
+      type: Number,
+      required: false,
+    },
+    yMax: {
+      type: Number,
+      required: false,
     },
   },
   {
