@@ -190,17 +190,19 @@ export async function GET(
     // If shared user, filter items to only shared indices
     if (isSharedUser) {
       const sharedIndices = shoppingList.sharedItemIndices || [];
-      const filteredItems: any[] = [];
       const originalIndicesMap: number[] = [];
       
-      shoppingList.items.forEach((item, index) => {
-        if (sharedIndices.includes(index)) {
-          filteredItems.push(item);
-          originalIndicesMap.push(index);
-        }
-      });
-
+      // Convert to plain object first to ensure all fields are properly serialized
       const listObject = shoppingList.toObject();
+      
+      // Filter items from the plain object (not Mongoose subdocuments)
+      const filteredItems = listObject.items.filter((item: any, index: number) => {
+        if (sharedIndices.includes(index)) {
+          originalIndicesMap.push(index);
+          return true;
+        }
+        return false;
+      });
       // Convert Map to plain object for sharedItems if it exists
       if (listObject.sharedItems instanceof Map) {
         listObject.sharedItems = Object.fromEntries(listObject.sharedItems);
