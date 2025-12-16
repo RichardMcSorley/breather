@@ -10,7 +10,7 @@ import KrogerSearchBar from "@/components/KrogerSearchBar";
 import KrogerStoreSelector from "@/components/KrogerStoreSelector";
 import KrogerProductDetailModal from "@/components/KrogerProductDetailModal";
 import { KrogerLocation } from "@/lib/types/kroger";
-import { ShoppingCart, ExternalLink, Barcode, Loader2, Search, Check, Upload, Plus, Edit, Trash2, Scan, X, AlertTriangle, Code, Share2, ArrowRight, ChevronDown, ChevronUp, FileImage, Eye, EyeOff } from "lucide-react";
+import { ShoppingCart, ExternalLink, Barcode, Loader2, Search, Check, Upload, Plus, Edit, Trash2, Scan, X, AlertTriangle, Code, Share2, ArrowRight, ChevronDown, ChevronUp, FileImage, Eye, EyeOff, Undo2 } from "lucide-react";
 import { useScreenshotProcessing } from "@/hooks/useScreenshotProcessing";
 import JsonViewerModal from "@/components/JsonViewer";
 import { KrogerProduct } from "@/lib/types/kroger";
@@ -5948,6 +5948,16 @@ export default function ShoppingListDetailPage() {
   };
 
   const handleMoveToProblem = async (item: ShoppingListItem) => {
+    // Optimistically update the UI to move the item immediately
+    if (shoppingList) {
+      const itemIndex = findItemIndex(item, shoppingList.items);
+      if (itemIndex >= 0) {
+        const updatedItems = [...shoppingList.items];
+        updatedItems[itemIndex] = { ...updatedItems[itemIndex], problem: true, done: false };
+        setShoppingList({ ...shoppingList, items: updatedItems });
+      }
+    }
+
     try {
       const response = await fetch(`/api/shopping-lists/${id}/items`, {
         method: "PUT",
@@ -5965,17 +5975,32 @@ export default function ShoppingListDetailPage() {
       });
 
       if (response.ok) {
-        await fetchShoppingList();
+        // Refresh in background to sync with server
+        fetchShoppingList();
       } else {
         setError("Failed to move item to problem");
+        // Refresh to revert optimistic update
+        fetchShoppingList();
       }
     } catch (err) {
       console.error("Failed to move item to problem:", err);
       setError("Failed to move item to problem");
+      // Refresh to revert optimistic update
+      fetchShoppingList();
     }
   };
 
   const handleMoveToTodo = async (item: ShoppingListItem) => {
+    // Optimistically update the UI to move the item immediately
+    if (shoppingList) {
+      const itemIndex = findItemIndex(item, shoppingList.items);
+      if (itemIndex >= 0) {
+        const updatedItems = [...shoppingList.items];
+        updatedItems[itemIndex] = { ...updatedItems[itemIndex], problem: false, done: false };
+        setShoppingList({ ...shoppingList, items: updatedItems });
+      }
+    }
+
     try {
       const response = await fetch(`/api/shopping-lists/${id}/items`, {
         method: "PUT",
@@ -5993,50 +6018,41 @@ export default function ShoppingListDetailPage() {
       });
 
       if (response.ok) {
-        await fetchShoppingList();
+        // Refresh in background to sync with server
+        fetchShoppingList();
       } else {
         setError("Failed to move item to todo");
+        // Refresh to revert optimistic update
+        fetchShoppingList();
       }
     } catch (err) {
       console.error("Failed to move item to todo:", err);
       setError("Failed to move item to todo");
+      // Refresh to revert optimistic update
+      fetchShoppingList();
     }
   };
 
-  const handleMoveToDone = async (item: ShoppingListItem) => {
-    try {
-      const response = await fetch(`/api/shopping-lists/${id}/items`, {
-        method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          itemIndex: getOriginalIndex(shoppingList?.items ? findItemIndex(item, shoppingList.items) : -1),
-          item: {
-            ...item,
-            done: true,
-            problem: false, // Ensure it's not marked as problem when moved to done
-          },
-        }),
-      });
-
-      if (response.ok) {
-        await fetchShoppingList();
-        // Show success modal with audio feedback
-        setScanResult({
-          success: true,
-          item,
-        });
-      } else {
-        setError("Failed to mark item as done");
-      }
-    } catch (err) {
-      console.error("Failed to mark item as done:", err);
-      setError("Failed to mark item as done");
-    }
+  const handleMoveToDone = (item: ShoppingListItem) => {
+    // Just show the success modal - don't mark as done yet
+    // The actual "done" marking happens when user clicks "Confirm QTY from Screenshot"
+    setScanResult({
+      success: true,
+      item,
+    });
   };
 
   const handleConfirmQuantity = async (item: ShoppingListItem) => {
+    // Optimistically update the UI to hide the item immediately
+    if (shoppingList) {
+      const itemIndex = findItemIndex(item, shoppingList.items);
+      if (itemIndex >= 0) {
+        const updatedItems = [...shoppingList.items];
+        updatedItems[itemIndex] = { ...updatedItems[itemIndex], done: true };
+        setShoppingList({ ...shoppingList, items: updatedItems });
+      }
+    }
+
     try {
       const response = await fetch(`/api/shopping-lists/${id}/items`, {
         method: "PUT",
@@ -6053,13 +6069,18 @@ export default function ShoppingListDetailPage() {
       });
 
       if (response.ok) {
-        await fetchShoppingList();
+        // Refresh in background to sync with server
+        fetchShoppingList();
       } else {
         setError("Failed to mark item as done");
+        // Refresh to revert optimistic update
+        fetchShoppingList();
       }
     } catch (err) {
       console.error("Failed to mark item as done:", err);
       setError("Failed to mark item as done");
+      // Refresh to revert optimistic update
+      fetchShoppingList();
     }
   };
 
@@ -6525,6 +6546,19 @@ export default function ShoppingListDetailPage() {
                               <span className="hidden sm:inline">Done</span>
                             </button>
                           )}
+                          {/* Todo Button - Only show for done items */}
+                          {activeTab === "done" && (
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleMoveToTodo(item);
+                              }}
+                              className="px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2 text-sm whitespace-nowrap shadow-md font-medium"
+                            >
+                              <Undo2 className="w-4 h-4 flex-shrink-0" />
+                              <span className="hidden sm:inline">Todo</span>
+                            </button>
+                          )}
                         </div>
                         {/* Customer Badge - Positioned to the top left */}
                         <div className="absolute top-2 left-2 z-20" style={{ pointerEvents: 'none' }}>
@@ -6894,6 +6928,19 @@ export default function ShoppingListDetailPage() {
                                     >
                                       <Check className="w-4 h-4 flex-shrink-0" />
                                       <span className="hidden sm:inline">Done</span>
+                                    </button>
+                                  )}
+                                  {/* Todo Button - Only show for done items */}
+                                  {activeTab === "done" && (
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleMoveToTodo(item);
+                                      }}
+                                      className="px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2 text-sm whitespace-nowrap shadow-md font-medium"
+                                    >
+                                      <Undo2 className="w-4 h-4 flex-shrink-0" />
+                                      <span className="hidden sm:inline">Todo</span>
                                     </button>
                                   )}
                                 </div>
