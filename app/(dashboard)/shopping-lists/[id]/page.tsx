@@ -3708,6 +3708,7 @@ function ScanResultModal({
 }) {
   const [viewingScreenshot, setViewingScreenshot] = useState<string | null>(null);
   const [showOriginalScreenshot, setShowOriginalScreenshot] = useState(false);
+  const [hideImage, setHideImage] = useState(false);
   const customer = item.customer || "A";
   const app = item.app || "";
   
@@ -3742,8 +3743,9 @@ function ScanResultModal({
       } else {
         playFailureSound();
       }
-      // Reset showOriginalScreenshot when modal opens
+      // Reset states when modal opens
       setShowOriginalScreenshot(false);
+      setHideImage(false);
     }
   }, [isOpen, success]);
 
@@ -3777,17 +3779,11 @@ function ScanResultModal({
           <div className="space-y-2">
             {success ? (
               <>
-                <div className="flex justify-center">
-                  <Check className="w-16 h-16 text-white" strokeWidth={3} />
-                </div>
                 <h2 className="text-3xl font-bold">Success!</h2>
                 <p className="text-lg opacity-90">Correct item scanned</p>
               </>
             ) : (
               <>
-                <div className="flex justify-center">
-                  <X className="w-16 h-16 text-white" strokeWidth={3} />
-                </div>
                 <h2 className="text-3xl font-bold">Incorrect Barcode</h2>
                 <p className="text-lg opacity-90">Scanned: {scannedBarcode}</p>
                 <p className="text-base opacity-80">Expected: {item.upc || "N/A"}</p>
@@ -3797,7 +3793,7 @@ function ScanResultModal({
 
           {/* Product Name */}
           <div className="pt-4 border-t border-white/30">
-            <p className="text-lg font-semibold opacity-90">{item.productName}</p>
+            <p className="text-lg font-semibold opacity-90 line-clamp-2 overflow-hidden">{item.productName}</p>
           </div>
 
           {/* Image Display (only for successful scans) */}
@@ -3812,8 +3808,8 @@ function ScanResultModal({
             return (
               <div className="pt-4 border-t border-white/30">
                 <div className="space-y-3">
-                  {/* Show Full Screenshot button - only show if cropped image exists */}
-                  {hasCroppedImage && screenshot && (
+                  {/* Show Full Screenshot button - only show if cropped image exists and not hidden */}
+                  {!hideImage && hasCroppedImage && screenshot && (
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
@@ -3827,14 +3823,32 @@ function ScanResultModal({
                     </button>
                   )}
                   
-                  {/* Image Display - Always show cropped image if available, otherwise full screenshot */}
+                  {/* Image Display with floating hide button */}
                   {imageToShow && (
-                    <div className="rounded-lg overflow-hidden bg-white/10 backdrop-blur-sm border-2 border-white/20">
-                      <img 
-                        src={imageToShow} 
-                        alt={hasCroppedImage ? "Cropped product image" : "Original screenshot"} 
-                        className="w-full h-auto max-h-64 object-contain mx-auto block"
-                      />
+                    <div className="relative rounded-lg overflow-hidden bg-white/10 backdrop-blur-sm border-2 border-white/20">
+                      {/* Floating Toggle Button */}
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setHideImage(!hideImage);
+                        }}
+                        className="absolute top-2 right-2 z-10 p-2 bg-black/50 backdrop-blur-sm rounded-lg hover:bg-black/70 transition-colors"
+                        title={hideImage ? "Show image" : "Hide image"}
+                      >
+                        {hideImage ? <Eye className="w-4 h-4" /> : <EyeOff className="w-4 h-4" />}
+                      </button>
+                      
+                      {!hideImage ? (
+                        <img 
+                          src={imageToShow} 
+                          alt={hasCroppedImage ? "Cropped product image" : "Original screenshot"} 
+                          className="w-full h-auto max-h-64 object-contain mx-auto block"
+                        />
+                      ) : (
+                        <div className="h-16 flex items-center justify-center text-white/60 text-sm">
+                          Image hidden
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>
@@ -5817,7 +5831,7 @@ export default function ShoppingListDetailPage() {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          itemIndex: getOriginalIndex(shoppingList?.items.findIndex(i => i === item) ?? -1),
+          itemIndex: getOriginalIndex(shoppingList?.items ? findItemIndex(item, shoppingList.items) : -1),
           item: {
             ...item,
             done: true,
@@ -5834,6 +5848,17 @@ export default function ShoppingListDetailPage() {
       console.error("Failed to mark item as done:", err);
       setError("Failed to mark item as done");
     }
+  };
+
+  // Helper to find item index by comparing properties (not reference)
+  const findItemIndex = (item: ShoppingListItem, items: ShoppingListItem[]): number => {
+    return items.findIndex(i => 
+      i.productName === item.productName &&
+      i.searchTerm === item.searchTerm &&
+      i.customer === item.customer &&
+      i.app === item.app &&
+      i.productId === item.productId
+    );
   };
 
   // Helper to detect duplicates based on productId, app, and customer
@@ -5930,7 +5955,7 @@ export default function ShoppingListDetailPage() {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          itemIndex: getOriginalIndex(shoppingList?.items.findIndex(i => i === item) ?? -1),
+          itemIndex: getOriginalIndex(shoppingList?.items ? findItemIndex(item, shoppingList.items) : -1),
           item: {
             ...item,
             problem: true,
@@ -5958,7 +5983,7 @@ export default function ShoppingListDetailPage() {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          itemIndex: getOriginalIndex(shoppingList?.items.findIndex(i => i === item) ?? -1),
+          itemIndex: getOriginalIndex(shoppingList?.items ? findItemIndex(item, shoppingList.items) : -1),
           item: {
             ...item,
             problem: false,
@@ -5986,7 +6011,7 @@ export default function ShoppingListDetailPage() {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          itemIndex: getOriginalIndex(shoppingList?.items.findIndex(i => i === item) ?? -1),
+          itemIndex: getOriginalIndex(shoppingList?.items ? findItemIndex(item, shoppingList.items) : -1),
           item: {
             ...item,
             done: true,
@@ -5997,6 +6022,11 @@ export default function ShoppingListDetailPage() {
 
       if (response.ok) {
         await fetchShoppingList();
+        // Show success modal with audio feedback
+        setScanResult({
+          success: true,
+          item,
+        });
       } else {
         setError("Failed to mark item as done");
       }
@@ -6014,7 +6044,7 @@ export default function ShoppingListDetailPage() {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          itemIndex: getOriginalIndex(shoppingList?.items.findIndex(i => i === item) ?? -1),
+          itemIndex: getOriginalIndex(shoppingList?.items ? findItemIndex(item, shoppingList.items) : -1),
           item: {
             ...item,
             done: true,
@@ -6482,17 +6512,17 @@ export default function ShoppingListDetailPage() {
                       <div className="flex gap-4 py-3 px-3 relative overflow-visible">
                         {/* Action Buttons - Positioned in top right of card */}
                         <div className="absolute top-2 right-2 flex items-start gap-2 z-10">
-                          {/* Scan Button - Only show for todo items with UPC */}
-                          {activeTab === "todo" && item.upc && (
+                          {/* Done Button - Only show for todo items */}
+                          {activeTab === "todo" && (
                             <button
                               onClick={(e) => {
                                 e.stopPropagation();
-                                handleScanBarcode(item);
+                                handleMoveToDone(item);
                               }}
-                              className="px-3 py-2 bg-white text-black rounded-lg hover:bg-gray-100 transition-colors flex items-center gap-2 text-sm whitespace-nowrap shadow-md font-medium"
+                              className="px-3 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors flex items-center gap-2 text-sm whitespace-nowrap shadow-md font-medium"
                             >
-                              <Scan className="w-4 h-4 flex-shrink-0" />
-                              <span className="hidden sm:inline">Scan</span>
+                              <Check className="w-4 h-4 flex-shrink-0" />
+                              <span className="hidden sm:inline">Done</span>
                             </button>
                           )}
                         </div>
@@ -6853,17 +6883,17 @@ export default function ShoppingListDetailPage() {
                               <div className="flex gap-4 py-3 px-3 relative overflow-visible">
                                 {/* Action Buttons - Positioned in top right of card */}
                                 <div className="absolute top-2 right-2 flex items-start gap-2 z-10">
-                                  {/* Scan Button - Only show for todo items with UPC */}
-                                  {activeTab === "todo" && item.upc && (
+                                  {/* Done Button - Only show for todo items */}
+                                  {activeTab === "todo" && (
                                     <button
                                       onClick={(e) => {
                                         e.stopPropagation();
-                                        handleScanBarcode(item);
+                                        handleMoveToDone(item);
                                       }}
-                                      className="px-3 py-2 bg-white text-black rounded-lg hover:bg-gray-100 transition-colors flex items-center gap-2 text-sm whitespace-nowrap shadow-md font-medium"
+                                      className="px-3 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors flex items-center gap-2 text-sm whitespace-nowrap shadow-md font-medium"
                                     >
-                                      <Scan className="w-4 h-4 flex-shrink-0" />
-                                      <span className="hidden sm:inline">Scan</span>
+                                      <Check className="w-4 h-4 flex-shrink-0" />
+                                      <span className="hidden sm:inline">Done</span>
                                     </button>
                                   )}
                                 </div>
@@ -7045,7 +7075,7 @@ export default function ShoppingListDetailPage() {
 
       {/* Product Detail Modal */}
       {selectedItem && (() => {
-        const filteredIndex = shoppingList?.items.findIndex(i => i === selectedItem) ?? -1;
+        const filteredIndex = shoppingList?.items ? findItemIndex(selectedItem, shoppingList.items) : -1;
         const itemIndex = getOriginalIndex(filteredIndex);
         return (
           <ProductDetailModal
