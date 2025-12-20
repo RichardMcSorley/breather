@@ -80,7 +80,7 @@ export async function POST(request: NextRequest) {
       time: time || "",
       processedAt: processedAtDate,
       step: "CREATED",
-      active: true,
+      active: false,
       ...(Array.isArray(additionalRestaurants) && additionalRestaurants.length > 0 && {
         additionalRestaurants: additionalRestaurants.map((r: any) => ({
           name: r.name?.trim() || "",
@@ -94,12 +94,11 @@ export async function POST(request: NextRequest) {
       try {
         const transaction = await Transaction.findById(transactionId);
         if (transaction && transaction.userId === userId && transaction.type === "income") {
-          // Update transaction - add to array and set active to true
+          // Update transaction - add to linked orders
           await Transaction.findByIdAndUpdate(
             transactionId,
             {
               $addToSet: { linkedDeliveryOrderIds: deliveryOrder._id },
-              $set: { active: true }
             },
             { new: true }
           );
