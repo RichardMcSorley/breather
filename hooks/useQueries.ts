@@ -715,7 +715,7 @@ export function useQuickAddOrderTransaction() {
           tag: order.appName,
           isBill: false,
           step: "CREATED",
-          active: true,
+          active: false,
         }),
       });
 

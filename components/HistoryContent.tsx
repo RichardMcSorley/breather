@@ -361,7 +361,7 @@ export default function HistoryPage() {
           tag: order.appName,
           isBill: false,
           step: "CREATED",
-          active: true,
+          active: false,
         }),
       });
 
