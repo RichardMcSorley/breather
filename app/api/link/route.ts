@@ -171,12 +171,11 @@ export async function POST(request: NextRequest) {
           }
         }
 
-        // Update transaction - add to array and set active to true
+        // Update transaction - add to array (do not set active to true)
         await Transaction.findByIdAndUpdate(
           transactionId,
           {
             $addToSet: { linkedDeliveryOrderIds: deliveryOrder._id },
-            $set: { active: true }
           },
           { new: true }
         );
