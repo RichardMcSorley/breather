@@ -31,9 +31,11 @@ export async function POST(request: NextRequest) {
       .limit(limit)
       .lean();
 
-    // Format as dictionary for iOS Shortcuts: displayText -> id
-    // Shortcuts shows dictionary keys in "Choose from List" and returns the value
-    const ordersDict: Record<string, string> = {};
+    // Two arrays for iOS Shortcuts:
+    // - display: array of display texts for "Choose from List"
+    // - ids: array of {id, displayText} to find the matching ID after selection
+    const display: string[] = [];
+    const ids: { id: string; displayText: string }[] = [];
 
     orders.forEach((order) => {
       const moneyText = order.money !== undefined ? `$${order.money}` : "";
@@ -50,10 +52,11 @@ export async function POST(request: NextRequest) {
 
       const displayText = `${parts.join(" ")} - ${restaurantText}${appText ? ` (${appText})` : ""}`;
 
-      ordersDict[displayText] = order._id.toString();
+      display.push(displayText);
+      ids.push({ id: order._id.toString(), displayText });
     });
 
-    return NextResponse.json(ordersDict);
+    return NextResponse.json({ display, ids });
   } catch (error) {
     return handleApiError(error);
   }
