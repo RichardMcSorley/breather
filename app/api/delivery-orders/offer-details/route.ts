@@ -18,8 +18,6 @@ export async function POST(request: NextRequest) {
     const {
       userId,
       appName,
-      // Support both 'money' and 'pay' field names
-      money,
       pay,
       miles,
       drops,
@@ -33,9 +31,6 @@ export async function POST(request: NextRequest) {
       address,
     } = body;
 
-    // Use 'pay' if 'money' not provided (from external API)
-    const moneyValue = money ?? pay;
-
     // Validate required fields
     if (!userId) {
       return NextResponse.json({ error: "Missing userId" }, { status: 400 });
@@ -45,20 +40,24 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Missing appName" }, { status: 400 });
     }
 
-    if (moneyValue === undefined || moneyValue === null) {
-      return NextResponse.json({ error: "Missing money or pay" }, { status: 400 });
-    }
 
-    // Parse money if it's a string (e.g., "$12.50" -> 12.50)
-    let parsedMoney = moneyValue;
-    if (typeof moneyValue === "string") {
-      parsedMoney = parseFloat(moneyValue.replace(/[$,]/g, ""));
-      if (isNaN(parsedMoney)) {
-        return NextResponse.json(
-          { error: "Invalid money format" },
-          { status: 400 }
-        );
+    // Parse pay - handle number, string, or formatted string (e.g., "$", "$8.50", 8.5)
+    let parsedMoney: number | undefined;
+    if (typeof pay === "number") {
+      parsedMoney = pay;
+    } else if (typeof pay === "string") {
+      const cleaned = pay.replace(/[$,\s]/g, "");
+      if (cleaned === "" || cleaned === ".") {
+        parsedMoney = undefined;
+      } else {
+        parsedMoney = parseFloat(cleaned);
+        if (isNaN(parsedMoney)) {
+          parsedMoney = undefined;
+        }
       }
+    } else if (pay !== undefined && pay !== null) {
+      const parsed = parseFloat(String(pay));
+      parsedMoney = isNaN(parsed) ? undefined : parsed;
     }
 
     // Parse miles if provided
@@ -110,14 +109,16 @@ export async function POST(request: NextRequest) {
     const entryId = randomBytes(16).toString("hex");
     const { date: processedAtDate } = getCurrentESTAsUTC();
     const milesToMoneyRatio =
-      parsedMiles && parsedMiles > 0 ? parsedMoney / parsedMiles : undefined;
+      parsedMiles && parsedMiles > 0 && parsedMoney !== undefined
+        ? parsedMoney / parsedMiles
+        : undefined;
 
     const deliveryOrder = await DeliveryOrder.create({
       entryId,
       userId,
       appName: appName.trim(),
       ...(parsedMiles !== undefined && { miles: parsedMiles }),
-      money: parsedMoney,
+      ...(parsedMoney !== undefined && { money: parsedMoney }),
       ...(milesToMoneyRatio !== undefined && { milesToMoneyRatio }),
       restaurantName: finalRestaurantName,
       time: "",
@@ -161,7 +162,7 @@ export async function POST(request: NextRequest) {
       id: deliveryOrder._id.toString(),
       entryId: deliveryOrder.entryId,
       ...(deliveryOrder.miles !== undefined && { miles: deliveryOrder.miles }),
-      money: deliveryOrder.money,
+      ...(deliveryOrder.money !== undefined && { money: deliveryOrder.money }),
       ...(deliveryOrder.milesToMoneyRatio !== undefined && {
         milesToMoneyRatio: deliveryOrder.milesToMoneyRatio,
       }),
