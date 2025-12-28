@@ -19,9 +19,9 @@ export interface IDeliveryOrder extends Document {
   userId: string;
   appName?: string;
   miles?: number;
-  money: number;
+  money?: number;
   milesToMoneyRatio?: number;
-  restaurantName: string;
+  restaurantName?: string;
   restaurantAddress?: string;
   restaurantPlaceId?: string;
   restaurantLat?: number;
@@ -64,7 +64,7 @@ const DeliveryOrderSchema: Schema = new Schema(
     },
     money: {
       type: Number,
-      required: true,
+      required: false,
     },
     milesToMoneyRatio: {
       type: Number,
@@ -72,7 +72,7 @@ const DeliveryOrderSchema: Schema = new Schema(
     },
     restaurantName: {
       type: String,
-      required: true,
+      required: false,
     },
     restaurantAddress: {
       type: String,
