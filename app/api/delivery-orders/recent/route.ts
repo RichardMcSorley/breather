@@ -23,13 +23,9 @@ export async function POST(request: NextRequest) {
     const twentyFourHoursAgo = new Date();
     twentyFourHoursAgo.setHours(twentyFourHoursAgo.getHours() - 24);
 
-    // Get recent orders that are not linked to any transaction and within last 24 hours
+    // Get recent orders within last 24 hours (both linked and unlinked)
     const orders = await DeliveryOrder.find({
       userId,
-      $or: [
-        { linkedTransactionIds: { $exists: false } },
-        { linkedTransactionIds: { $size: 0 } },
-      ],
       processedAt: { $gte: twentyFourHoursAgo },
     })
       .sort({ processedAt: -1 })

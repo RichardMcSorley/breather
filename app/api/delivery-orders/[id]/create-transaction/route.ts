@@ -43,22 +43,25 @@ export async function POST(
       );
     }
 
-    // Extract date/time from order's processedAt (convert UTC to EST)
-    let transactionDate: string;
+    // Extract date/time from order's processedAt and convert to proper format
+    let transactionDate: Date;
     let transactionTime: string;
+    let estDateString: string;
 
     if (order.processedAt) {
       const processedDate = new Date(order.processedAt);
-      // Subtract 5 hours for EST
+      // Subtract 5 hours for EST display
       const estDate = new Date(processedDate.getTime() - 5 * 60 * 60 * 1000);
-      transactionDate = estDate.toISOString().split("T")[0];
+      estDateString = estDate.toISOString().split("T")[0];
       transactionTime = estDate.toTimeString().slice(0, 5);
+      // Convert back to UTC Date object for storage (like quick-transaction does)
+      transactionDate = parseESTAsUTC(estDateString, transactionTime);
     } else {
       // Fallback to current time in EST
-      const now = new Date();
-      const estNow = new Date(now.getTime() - 5 * 60 * 60 * 1000);
-      transactionDate = estNow.toISOString().split("T")[0];
-      transactionTime = estNow.toTimeString().slice(0, 5);
+      const estNow = getCurrentESTAsUTC();
+      estDateString = estNow.estDateString;
+      transactionTime = estNow.timeString;
+      transactionDate = estNow.date;
     }
 
     // Create the transaction
@@ -80,9 +83,9 @@ export async function POST(
     await order.save();
 
     // Calculate today's earnings
-    const { estDateString } = getCurrentESTAsUTC();
-    const estStartDate = parseESTAsUTC(estDateString, "00:00");
-    const estEndDate = parseESTAsUTC(estDateString, "23:59");
+    const { estDateString: todayEstDateString } = getCurrentESTAsUTC();
+    const estStartDate = parseESTAsUTC(todayEstDateString, "00:00");
+    const estEndDate = parseESTAsUTC(todayEstDateString, "23:59");
     estEndDate.setUTCSeconds(59, 999);
 
     const allTodayTransactions = await Transaction.find({
@@ -98,7 +101,7 @@ export async function POST(
 
     const todayIncome = todayTransactions
       .filter((t) => t.type === "income")
-      .reduce((sum, t) => sum + t.amount, 0) + transaction.amount;
+      .reduce((sum, t) => sum + t.amount, 0);
 
     const todayExpenses = todayTransactions
       .filter((t) => t.type === "expense")
@@ -111,7 +114,7 @@ export async function POST(
       transactionId: transaction._id.toString(),
       orderId: order._id.toString(),
       amount: transaction.amount,
-      date: transactionDate,
+      date: estDateString,
       time: transactionTime,
       tag: transaction.tag,
       restaurantName: order.restaurantName,
