@@ -48,6 +48,7 @@ export async function POST(request: NextRequest) {
       const displayText = `${parts.join(" ")} - ${restaurantText}${appText ? ` (${appText})` : ""}`;
 
       return {
+        Name: displayText,
         id: order._id.toString(),
         displayText,
         money: order.money,
