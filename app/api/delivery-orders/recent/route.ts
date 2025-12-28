@@ -31,8 +31,11 @@ export async function POST(request: NextRequest) {
       .limit(limit)
       .lean();
 
-    // Format for iOS shortcut selection
-    const formattedOrders = orders.map((order) => {
+    // Format as dictionary for iOS Shortcuts: displayText -> id
+    // Shortcuts shows dictionary keys in "Choose from List" and returns the value
+    const ordersDict: Record<string, string> = {};
+
+    orders.forEach((order) => {
       const moneyText = order.money !== undefined ? `$${order.money}` : "";
       const milesText = order.miles !== undefined ? `${order.miles}mi` : "";
       const ratioText =
@@ -47,23 +50,10 @@ export async function POST(request: NextRequest) {
 
       const displayText = `${parts.join(" ")} - ${restaurantText}${appText ? ` (${appText})` : ""}`;
 
-      return {
-        Name: displayText,
-        id: order._id.toString(),
-        displayText,
-        money: order.money,
-        miles: order.miles,
-        restaurantName: order.restaurantName,
-        appName: order.appName,
-        processedAt: order.processedAt,
-      };
+      ordersDict[displayText] = order._id.toString();
     });
 
-    return NextResponse.json({
-      success: true,
-      orders: formattedOrders,
-      count: formattedOrders.length,
-    });
+    return NextResponse.json(ordersDict);
   } catch (error) {
     return handleApiError(error);
   }
