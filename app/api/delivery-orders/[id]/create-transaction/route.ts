@@ -71,7 +71,7 @@ export async function POST(
       notes: "",
       tag: order.appName || "",
       step: "CREATED",
-      active: true,
+      active: false,
       linkedDeliveryOrderIds: [order._id],
     });
 
@@ -98,7 +98,7 @@ export async function POST(
 
     const todayIncome = todayTransactions
       .filter((t) => t.type === "income")
-      .reduce((sum, t) => sum + t.amount, 0);
+      .reduce((sum, t) => sum + t.amount, 0) + transaction.amount;
 
     const todayExpenses = todayTransactions
       .filter((t) => t.type === "expense")
