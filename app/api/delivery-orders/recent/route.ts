@@ -13,19 +13,24 @@ export async function POST(request: NextRequest) {
 
     const body = await request.json();
     const { userId, limit: limitParam } = body;
-    const limit = parseInt(limitParam || "10", 10);
+    const limit = parseInt(limitParam || "50", 10);
 
     if (!userId) {
       return NextResponse.json({ error: "Missing userId" }, { status: 400 });
     }
 
-    // Get recent orders that are not linked to any transaction
+    // Calculate 24 hours ago
+    const twentyFourHoursAgo = new Date();
+    twentyFourHoursAgo.setHours(twentyFourHoursAgo.getHours() - 24);
+
+    // Get recent orders that are not linked to any transaction and within last 24 hours
     const orders = await DeliveryOrder.find({
       userId,
       $or: [
         { linkedTransactionIds: { $exists: false } },
         { linkedTransactionIds: { $size: 0 } },
       ],
+      processedAt: { $gte: twentyFourHoursAgo },
     })
       .sort({ processedAt: -1 })
       .limit(limit)
