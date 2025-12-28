@@ -240,6 +240,9 @@ export async function GET(request: NextRequest) {
 
         // Check amount filter (match order's money field)
         if (filterAmountNum !== null) {
+          if (order.money === undefined) {
+            return false;
+          }
           const orderMoneyMatch = Math.abs(order.money - filterAmountNum) < 0.01;
           if (!orderMoneyMatch) {
             return false;

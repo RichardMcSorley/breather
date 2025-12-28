@@ -103,6 +103,7 @@ export async function attemptAutoLinkTransactionToOrder(
 
   // Filter by amount match (within $0.01)
   const amountMatchedOrders = matchingOrders.filter((order) => {
+    if (order.money === undefined) return false;
     const amountDiff = Math.abs(transaction.amount - order.money);
     return amountDiff < 0.01;
   });
