@@ -21,6 +21,10 @@ export const queryKeys = {
   deliveryOrders: (userId?: string, limit?: number) => ["deliveryOrders", userId, limit] as const,
   emailConfig: () => ["emailConfig"] as const,
   emailList: (limit?: number, offset?: number) => ["emailList", limit, offset] as const,
+  ious: () => ["ious"] as const,
+  iouPayments: () => ["iouPayments"] as const,
+  iouSummary: () => ["iouSummary"] as const,
+  dailyRateAgreements: () => ["dailyRateAgreements"] as const,
 };
 
 // Query Hooks
@@ -909,6 +913,316 @@ export function useEmailList(limit: number = 50, offset: number = 0) {
         throw new Error(errorData.error || "Failed to fetch emails");
       }
       return res.json();
+    },
+  });
+}
+
+// IOU Hooks
+
+export function useIOUs() {
+  return useQuery({
+    queryKey: queryKeys.ious(),
+    queryFn: async () => {
+      const res = await fetch("/api/ious?isActive=true");
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({ error: "Unknown error" }));
+        throw new Error(errorData.error || "Failed to fetch IOUs");
+      }
+      const data = await res.json();
+      return { ious: data.ious };
+    },
+  });
+}
+
+export function useIOUPayments() {
+  return useQuery({
+    queryKey: queryKeys.iouPayments(),
+    queryFn: async () => {
+      const res = await fetch("/api/ious/payments");
+      if (!res.ok) {
+        throw new Error("Failed to fetch IOU payments");
+      }
+      const data = await res.json();
+      return { payments: data.payments || [] };
+    },
+  });
+}
+
+export function useIOUSummary() {
+  return useQuery({
+    queryKey: queryKeys.iouSummary(),
+    queryFn: async () => {
+      const res = await fetch("/api/ious/summary");
+      if (!res.ok) {
+        throw new Error("Failed to fetch IOU summary");
+      }
+      const data = await res.json();
+      return { summary: data.summary || [] };
+    },
+  });
+}
+
+export function useCreateIOU() {
+  const queryClient = useQueryClient();
+  const toast = useToast();
+
+  return useMutation({
+    mutationFn: async (data: any) => {
+      const res = await fetch("/api/ious", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+      });
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({ error: "Unknown error" }));
+        throw new Error(errorData.error || "Failed to create IOU");
+      }
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["ious"] });
+      queryClient.invalidateQueries({ queryKey: ["iouSummary"] });
+      toast.success("IOU saved successfully");
+    },
+    onError: (error: Error) => {
+      toast.error(error.message || "Error saving IOU");
+    },
+  });
+}
+
+export function useUpdateIOU() {
+  const queryClient = useQueryClient();
+  const toast = useToast();
+
+  return useMutation({
+    mutationFn: async ({ id, ...data }: { id: string; [key: string]: any }) => {
+      const res = await fetch(`/api/ious/${id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+      });
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({ error: "Unknown error" }));
+        throw new Error(errorData.error || "Failed to update IOU");
+      }
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["ious"] });
+      queryClient.invalidateQueries({ queryKey: ["iouSummary"] });
+      toast.success("IOU updated successfully");
+    },
+    onError: (error: Error) => {
+      toast.error(error.message || "Error updating IOU");
+    },
+  });
+}
+
+export function useDeleteIOU() {
+  const queryClient = useQueryClient();
+  const toast = useToast();
+
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const res = await fetch(`/api/ious/${id}`, {
+        method: "DELETE",
+      });
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({ error: "Unknown error" }));
+        throw new Error(errorData.error || "Failed to delete IOU");
+      }
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["ious"] });
+      queryClient.invalidateQueries({ queryKey: ["iouSummary"] });
+      toast.success("IOU deleted successfully");
+    },
+    onError: (error: Error) => {
+      toast.error(error.message || "Error deleting IOU");
+    },
+  });
+}
+
+export function useCreateIOUPayment() {
+  const queryClient = useQueryClient();
+  const toast = useToast();
+
+  return useMutation({
+    mutationFn: async (data: any) => {
+      const res = await fetch("/api/ious/payments", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+      });
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({ error: "Unknown error" }));
+        throw new Error(errorData.error || "Failed to create payment");
+      }
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["iouPayments"] });
+      queryClient.invalidateQueries({ queryKey: ["ious"] });
+      queryClient.invalidateQueries({ queryKey: ["iouSummary"] });
+      queryClient.invalidateQueries({ queryKey: ["dailyRateAgreements"] });
+      toast.success("Payment recorded successfully");
+    },
+    onError: (error: Error) => {
+      toast.error(error.message || "Error recording payment");
+    },
+  });
+}
+
+export function useUpdateIOUPayment() {
+  const queryClient = useQueryClient();
+  const toast = useToast();
+
+  return useMutation({
+    mutationFn: async ({ id, ...data }: { id: string; [key: string]: any }) => {
+      const res = await fetch(`/api/ious/payments/${id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+      });
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({ error: "Unknown error" }));
+        throw new Error(errorData.error || "Failed to update payment");
+      }
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["iouPayments"] });
+      queryClient.invalidateQueries({ queryKey: ["ious"] });
+      queryClient.invalidateQueries({ queryKey: ["iouSummary"] });
+      toast.success("Payment updated successfully");
+    },
+    onError: (error: Error) => {
+      toast.error(error.message || "Error updating payment");
+    },
+  });
+}
+
+export function useDeleteIOUPayment() {
+  const queryClient = useQueryClient();
+  const toast = useToast();
+
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const res = await fetch(`/api/ious/payments/${id}`, {
+        method: "DELETE",
+      });
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({ error: "Unknown error" }));
+        throw new Error(errorData.error || "Failed to delete payment");
+      }
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["iouPayments"] });
+      queryClient.invalidateQueries({ queryKey: ["ious"] });
+      queryClient.invalidateQueries({ queryKey: ["iouSummary"] });
+      queryClient.invalidateQueries({ queryKey: ["dailyRateAgreements"] });
+      toast.success("Payment deleted successfully");
+    },
+    onError: (error: Error) => {
+      toast.error(error.message || "Error deleting payment");
+    },
+  });
+}
+
+// Daily Rate Agreement Hooks
+
+export function useDailyRateAgreements(includeStatus: boolean = true) {
+  return useQuery({
+    queryKey: queryKeys.dailyRateAgreements(),
+    queryFn: async () => {
+      const res = await fetch(`/api/ious/agreements?includeStatus=${includeStatus}`);
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({ error: "Unknown error" }));
+        throw new Error(errorData.error || "Failed to fetch agreements");
+      }
+      const data = await res.json();
+      return { agreements: data.agreements || [], statuses: data.statuses || [] };
+    },
+  });
+}
+
+export function useCreateDailyRateAgreement() {
+  const queryClient = useQueryClient();
+  const toast = useToast();
+
+  return useMutation({
+    mutationFn: async (data: any) => {
+      const res = await fetch("/api/ious/agreements", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+      });
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({ error: "Unknown error" }));
+        throw new Error(errorData.error || "Failed to create agreement");
+      }
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["dailyRateAgreements"] });
+      toast.success("Agreement created successfully");
+    },
+    onError: (error: Error) => {
+      toast.error(error.message || "Error creating agreement");
+    },
+  });
+}
+
+export function useUpdateDailyRateAgreement() {
+  const queryClient = useQueryClient();
+  const toast = useToast();
+
+  return useMutation({
+    mutationFn: async ({ id, ...data }: { id: string; [key: string]: any }) => {
+      const res = await fetch(`/api/ious/agreements/${id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+      });
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({ error: "Unknown error" }));
+        throw new Error(errorData.error || "Failed to update agreement");
+      }
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["dailyRateAgreements"] });
+      toast.success("Agreement updated successfully");
+    },
+    onError: (error: Error) => {
+      toast.error(error.message || "Error updating agreement");
+    },
+  });
+}
+
+export function useDeleteDailyRateAgreement() {
+  const queryClient = useQueryClient();
+  const toast = useToast();
+
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const res = await fetch(`/api/ious/agreements/${id}`, {
+        method: "DELETE",
+      });
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({ error: "Unknown error" }));
+        throw new Error(errorData.error || "Failed to delete agreement");
+      }
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["dailyRateAgreements"] });
+      toast.success("Agreement deleted successfully");
+    },
+    onError: (error: Error) => {
+      toast.error(error.message || "Error deleting agreement");
     },
   });
 }

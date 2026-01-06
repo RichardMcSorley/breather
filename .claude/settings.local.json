@@ -6,7 +6,10 @@
       "WebSearch",
       "WebFetch(domain:talk.automators.fm)",
       "WebFetch(domain:medium.com)",
-      "WebFetch(domain:anotioneer.substack.com)"
+      "WebFetch(domain:anotioneer.substack.com)",
+      "Bash(tree:*)",
+      "Bash(cat:*)",
+      "Skill(frontend-design)"
     ]
   }
 }

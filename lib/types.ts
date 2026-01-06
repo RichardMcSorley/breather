@@ -6,6 +6,8 @@ import { ITransaction } from "./models/Transaction";
 import { IBill } from "./models/Bill";
 import { IMileage } from "./models/Mileage";
 import { IBillPayment } from "./models/BillPayment";
+import { IIOU } from "./models/IOU";
+import { IIOUPayment } from "./models/IOUPayment";
 import { TransactionType } from "./validation";
 
 /**
@@ -241,5 +243,145 @@ export interface FormattedBillPayment {
   notes?: string;
   createdAt: string;
   updatedAt: string;
+}
+
+/**
+ * IOU types
+ */
+export type IOUResponse = Omit<IIOU, "_id" | "date" | "createdAt" | "updatedAt"> & {
+  _id: string;
+  date: string; // YYYY-MM-DD format
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type IOUPaymentResponse = Omit<IIOUPayment, "_id" | "iouId" | "paymentDate" | "createdAt" | "updatedAt"> & {
+  _id: string;
+  iouId: string | { _id: string; personName: string; description: string };
+  paymentDate: string; // YYYY-MM-DD format
+  createdAt: string;
+  updatedAt: string;
+};
+
+export interface IOUQuery {
+  userId: string;
+  isActive?: boolean;
+  personName?: string;
+}
+
+export interface IOUPaymentQuery {
+  userId: string;
+  iouId?: string;
+  personName?: string;
+  paymentDate?: {
+    $gte?: Date;
+    $lte?: Date;
+  };
+}
+
+export interface IOUListResponse {
+  ious: IOUResponse[];
+}
+
+export interface IOUPaymentListResponse {
+  payments: IOUPaymentResponse[];
+}
+
+export interface CreateIOURequest {
+  personName: string;
+  description: string;
+  amount: number;
+  date: string;
+  notes?: string;
+  isActive?: boolean;
+}
+
+export interface UpdateIOURequest {
+  personName?: string;
+  description?: string;
+  amount?: number;
+  date?: string;
+  notes?: string;
+  isActive?: boolean;
+}
+
+export interface CreateIOUPaymentRequest {
+  iouId: string;
+  personName: string;
+  amount: number;
+  paymentDate: string;
+  notes?: string;
+}
+
+export interface UpdateIOUPaymentRequest {
+  iouId?: string;
+  personName?: string;
+  amount?: number;
+  paymentDate?: string;
+  notes?: string;
+}
+
+export interface IOUSummary {
+  personName: string;
+  totalOwed: number;
+  totalPaid: number;
+  balance: number;
+  iouCount: number;
+  paymentCount: number;
+}
+
+/**
+ * Daily Rate Agreement types
+ */
+export interface DailyRateAgreementResponse {
+  _id: string;
+  userId: string;
+  personName: string;
+  dailyRate: number;
+  startDate: string; // YYYY-MM-DD format
+  isActive: boolean;
+  notes?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreateDailyRateAgreementRequest {
+  personName: string;
+  dailyRate: number;
+  startDate: string;
+  notes?: string;
+  isActive?: boolean;
+}
+
+export interface UpdateDailyRateAgreementRequest {
+  personName?: string;
+  dailyRate?: number;
+  startDate?: string;
+  notes?: string;
+  isActive?: boolean;
+}
+
+export interface DailyRateDay {
+  date: string; // YYYY-MM-DD
+  dayNumber: number;
+  expectedAmount: number;
+  cumulativeExpected: number;
+  cumulativePaid: number;
+  balance: number; // positive = owes, negative = ahead
+  isPaid: boolean;
+}
+
+export interface DailyRateAgreementStatus {
+  agreement: DailyRateAgreementResponse;
+  daysElapsed: number;
+  expectedTotal: number;
+  totalPaid: number;
+  runningBalance: number; // expectedTotal - totalPaid (positive = owes, negative = ahead)
+  daysAhead: number; // negative means behind
+  currentMonthExpected: number;
+  currentMonthPaid: number;
+  currentMonthBalance: number;
+  iouDebt: number; // Amount of IOUs that must be paid first
+  dailyBreakdown: DailyRateDay[];
 }
 

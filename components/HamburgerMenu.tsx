@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import Link from "next/link";
-import { Receipt, Package, X, List } from "lucide-react";
+import { Receipt, Package, X, List, HandCoins } from "lucide-react";
 
 interface HamburgerMenuProps {
   isOpen: boolean;
@@ -33,6 +33,7 @@ export default function HamburgerMenu({ isOpen, onClose }: HamburgerMenuProps) {
   }, [isOpen, onClose]);
 
   const menuItems = [
+    { href: "/ious", label: "IOUs", icon: HandCoins },
     { href: "/ocr-data", label: "Customers", icon: Receipt },
     { href: "/delivery-orders", label: "Orders", icon: Package },
     { href: "/shopping-lists", label: "Shopping Lists", icon: List },
