@@ -1095,6 +1095,7 @@ export function useUpdateIOUPayment() {
       queryClient.invalidateQueries({ queryKey: ["iouPayments"] });
       queryClient.invalidateQueries({ queryKey: ["ious"] });
       queryClient.invalidateQueries({ queryKey: ["iouSummary"] });
+      queryClient.invalidateQueries({ queryKey: ["dailyRateAgreements"] });
       toast.success("Payment updated successfully");
     },
     onError: (error: Error) => {

@@ -28,9 +28,9 @@ export async function GET(request: NextRequest) {
       },
     ]);
 
-    // Get all payments grouped by person
+    // Get all non-agreement payments grouped by person (agreement payments are separate)
     const paymentsByPerson = await IOUPayment.aggregate([
-      { $match: { userId: session.user.id } },
+      { $match: { userId: session.user.id, isAgreementPayment: { $ne: true } } },
       {
         $group: {
           _id: "$personName",

@@ -7,6 +7,7 @@ export interface IIOUPayment extends Document {
   amount: number;
   paymentDate: Date;
   notes?: string;
+  isAgreementPayment?: boolean; // If true, counts directly toward daily rate agreement
   createdAt: Date;
   updatedAt: Date;
 }
@@ -37,6 +38,10 @@ const IOUPaymentSchema: Schema = new Schema(
     },
     notes: {
       type: String,
+    },
+    isAgreementPayment: {
+      type: Boolean,
+      default: false,
     },
   },
   {

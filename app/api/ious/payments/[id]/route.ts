@@ -25,7 +25,7 @@ export async function PUT(
     }
 
     const body = await request.json();
-    const { iouId, personName, amount, paymentDate, notes } = body;
+    const { iouId, personName, amount, paymentDate, notes, isAgreementPayment } = body;
 
     const updateData: Partial<{
       iouId: string;
@@ -33,6 +33,7 @@ export async function PUT(
       amount: number;
       paymentDate: Date;
       notes: string | null;
+      isAgreementPayment: boolean;
     }> = {};
 
     if (iouId !== undefined) {
@@ -60,6 +61,9 @@ export async function PUT(
     }
     if (notes !== undefined) {
       updateData.notes = notes ? sanitizeString(notes) || null : null;
+    }
+    if (isAgreementPayment !== undefined) {
+      updateData.isAgreementPayment = isAgreementPayment;
     }
 
     const payment = await IOUPayment.findOneAndUpdate(

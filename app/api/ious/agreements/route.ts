@@ -3,7 +3,6 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "../../auth/[...nextauth]/config";
 import connectDB from "@/lib/mongodb";
 import DailyRateAgreement from "@/lib/models/DailyRateAgreement";
-import IOU from "@/lib/models/IOU";
 import IOUPayment from "@/lib/models/IOUPayment";
 import { handleApiError } from "@/lib/api-error-handler";
 import { parseFloatSafe, sanitizeString } from "@/lib/validation";
@@ -53,24 +52,15 @@ export async function GET(request: NextRequest) {
         const daysElapsed = Math.max(0, Math.floor((today.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24)) + 1);
         const expectedTotal = daysElapsed * agreement.dailyRate;
 
-        // Get all IOUs for this person (to calculate what must be paid off first)
-        const ious = await IOU.find({
+        // Get only agreement payments for this person (completely separate from IOU payments)
+        const agreementPayments = await IOUPayment.find({
           userId: session.user.id,
           personName: agreement.personName,
-          isActive: true,
+          isAgreementPayment: true,
         }).lean();
-        const totalIOUsOwed = ious.reduce((sum, iou) => sum + iou.amount, 0);
 
-        // Get all payments for this person
-        const payments = await IOUPayment.find({
-          userId: session.user.id,
-          personName: agreement.personName,
-        }).lean();
-        const totalPayments = payments.reduce((sum, p) => sum + p.amount, 0);
-
-        // Payments first go toward IOUs, only excess counts toward agreement
-        const paymentsAfterIOUs = Math.max(0, totalPayments - totalIOUsOwed);
-        const runningBalance = expectedTotal - paymentsAfterIOUs;
+        const totalTowardAgreement = agreementPayments.reduce((sum, p) => sum + p.amount, 0);
+        const runningBalance = expectedTotal - totalTowardAgreement;
         const daysAhead = Math.floor(-runningBalance / agreement.dailyRate);
 
         // Calculate current month stats
@@ -78,17 +68,14 @@ export async function GET(request: NextRequest) {
         const daysInCurrentMonth = Math.max(0, Math.floor((today.getTime() - effectiveMonthStart.getTime()) / (1000 * 60 * 60 * 24)) + 1);
         const currentMonthExpected = startDate <= today ? daysInCurrentMonth * agreement.dailyRate : 0;
 
-        // For monthly, we still show all payments this month (user can see raw payment activity)
-        const currentMonthPayments = payments.filter((p) => {
+        // For monthly stats, only count agreement payments this month
+        const currentMonthAgreementPayments = agreementPayments.filter((p) => {
           const paymentDate = new Date(p.paymentDate);
           return paymentDate >= currentMonthStart && paymentDate <= currentMonthEnd;
         });
-        const currentMonthPaid = currentMonthPayments.reduce((sum, p) => sum + p.amount, 0);
 
-        // Monthly balance considers IOU debt as well
-        // If IOUs aren't paid off yet, monthly balance reflects that
-        const iouRemainingDebt = Math.max(0, totalIOUsOwed - totalPayments);
-        const currentMonthBalance = currentMonthExpected - currentMonthPaid + iouRemainingDebt;
+        const currentMonthPaidTowardAgreement = currentMonthAgreementPayments.reduce((sum, p) => sum + p.amount, 0);
+        const currentMonthBalance = currentMonthExpected - currentMonthPaidTowardAgreement;
 
         // Generate daily breakdown (most recent first, limited to last 60 days for performance)
         const dailyBreakdown: DailyRateDay[] = [];
@@ -100,7 +87,7 @@ export async function GET(request: NextRequest) {
           const dateStr = formatDateAsUTC(dayDate);
 
           const cumulativeExpected = dayNumber * agreement.dailyRate;
-          const cumulativePaid = paymentsAfterIOUs;
+          const cumulativePaid = totalTowardAgreement;
           const balance = cumulativeExpected - cumulativePaid;
 
           dailyBreakdown.push({
@@ -118,13 +105,13 @@ export async function GET(request: NextRequest) {
           agreement,
           daysElapsed,
           expectedTotal,
-          totalPaid: paymentsAfterIOUs, // Only show what counts toward agreement
+          totalPaid: totalTowardAgreement,
           runningBalance,
           daysAhead,
           currentMonthExpected,
-          currentMonthPaid,
+          currentMonthPaid: currentMonthPaidTowardAgreement,
           currentMonthBalance,
-          iouDebt: iouRemainingDebt,
+          iouDebt: 0, // Agreements are now completely separate from IOUs
           dailyBreakdown,
         };
       })

@@ -78,7 +78,7 @@ export async function POST(request: NextRequest) {
     await connectDB();
 
     const body = await request.json();
-    const { iouId, personName, amount, paymentDate, notes } = body;
+    const { iouId, personName, amount, paymentDate, notes, isAgreementPayment } = body;
 
     if (!iouId || !personName || amount === undefined || !paymentDate) {
       return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
@@ -117,6 +117,7 @@ export async function POST(request: NextRequest) {
       amount: parsedAmount,
       paymentDate: paymentDateObj,
       notes: notes ? sanitizeString(notes) || null : null,
+      isAgreementPayment: isAgreementPayment || false,
     });
 
     await payment.populate("iouId", "personName description");

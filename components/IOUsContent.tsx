@@ -91,6 +91,7 @@ export default function IOUsContent() {
     amount: "",
     paymentDate: getTodayLocalDate(),
     notes: "",
+    isAgreementPayment: false,
   });
 
   // Daily Rate Agreement state
@@ -146,15 +147,31 @@ export default function IOUsContent() {
     return grouped;
   }, [ious]);
 
-  // Group payments by person
+  // Group regular payments by person (exclude agreement payments)
   const paymentsByPerson = useMemo(() => {
     const grouped: Record<string, IOUPaymentResponse[]> = {};
-    payments.forEach((payment: IOUPaymentResponse) => {
-      if (!grouped[payment.personName]) {
-        grouped[payment.personName] = [];
-      }
-      grouped[payment.personName].push(payment);
-    });
+    payments
+      .filter((payment: IOUPaymentResponse) => !payment.isAgreementPayment)
+      .forEach((payment: IOUPaymentResponse) => {
+        if (!grouped[payment.personName]) {
+          grouped[payment.personName] = [];
+        }
+        grouped[payment.personName].push(payment);
+      });
+    return grouped;
+  }, [payments]);
+
+  // Group agreement payments by person
+  const agreementPaymentsByPerson = useMemo(() => {
+    const grouped: Record<string, IOUPaymentResponse[]> = {};
+    payments
+      .filter((payment: IOUPaymentResponse) => payment.isAgreementPayment)
+      .forEach((payment: IOUPaymentResponse) => {
+        if (!grouped[payment.personName]) {
+          grouped[payment.personName] = [];
+        }
+        grouped[payment.personName].push(payment);
+      });
     return grouped;
   }, [payments]);
 
@@ -205,7 +222,7 @@ export default function IOUsContent() {
     setShowEditIOUModal(true);
   };
 
-  const handleAddPayment = (personName: string) => {
+  const handleAddPayment = (personName: string, forAgreement: boolean = false) => {
     setSelectedPersonName(personName);
     const personIOUs = iousByPerson[personName] || [];
     if (personIOUs.length > 0) {
@@ -215,6 +232,7 @@ export default function IOUsContent() {
       amount: "",
       paymentDate: getTodayLocalDate(),
       notes: "",
+      isAgreementPayment: forAgreement,
     });
     setShowAddPaymentModal(true);
   };
@@ -225,6 +243,7 @@ export default function IOUsContent() {
       amount: payment.amount.toString(),
       paymentDate: payment.paymentDate,
       notes: payment.notes || "",
+      isAgreementPayment: payment.isAgreementPayment || false,
     });
     setShowEditPaymentModal(true);
   };
@@ -271,6 +290,7 @@ export default function IOUsContent() {
         amount,
         paymentDate: paymentFormData.paymentDate,
         notes: paymentFormData.notes || undefined,
+        isAgreementPayment: paymentFormData.isAgreementPayment,
       });
     } else {
       await createIOUPayment.mutateAsync({
@@ -279,6 +299,7 @@ export default function IOUsContent() {
         amount,
         paymentDate: paymentFormData.paymentDate,
         notes: paymentFormData.notes || undefined,
+        isAgreementPayment: paymentFormData.isAgreementPayment,
       });
     }
 
@@ -385,20 +406,25 @@ export default function IOUsContent() {
       amount,
       paymentDate: paymentFormData.paymentDate,
       notes: paymentFormData.notes || undefined,
+      isAgreementPayment: paymentFormData.isAgreementPayment,
     });
 
     setShowQuickPaymentModal(false);
     setSelectedPersonName("");
   };
 
-  // Calculate total balance across all people
+  // Calculate total balance across all people (IOUs + Daily Rate Agreements)
   const totalBalance = useMemo(() => {
-    return summary.reduce((sum: number, s: IOUSummary) => sum + s.balance, 0);
-  }, [summary]);
+    const iouBalance = summary.reduce((sum: number, s: IOUSummary) => sum + s.balance, 0);
+    const agreementBalance = agreementStatuses.reduce((sum: number, s: DailyRateAgreementStatus) => sum + s.runningBalance, 0);
+    return iouBalance + agreementBalance;
+  }, [summary, agreementStatuses]);
 
   const totalPaid = useMemo(() => {
-    return summary.reduce((sum: number, s: IOUSummary) => sum + s.totalPaid, 0);
-  }, [summary]);
+    const iouPaid = summary.reduce((sum: number, s: IOUSummary) => sum + s.totalPaid, 0);
+    const agreementPaid = agreementStatuses.reduce((sum: number, s: DailyRateAgreementStatus) => sum + s.totalPaid, 0);
+    return iouPaid + agreementPaid;
+  }, [summary, agreementStatuses]);
 
   if (!session) {
     return (
@@ -429,6 +455,7 @@ export default function IOUsContent() {
                 amount: "",
                 paymentDate: getTodayLocalDate(),
                 notes: "",
+                isAgreementPayment: true, // Default to agreement payment from header
               });
               setShowQuickPaymentModal(true);
             }}
@@ -448,7 +475,7 @@ export default function IOUsContent() {
       </div>
 
       {/* Stats Cards */}
-      {summary.length > 0 && (
+      {(summary.length > 0 || agreementStatuses.length > 0) && (
         <div className="grid grid-cols-2 gap-4">
           {/* Total Owed Card */}
           <div className="relative overflow-hidden bg-gradient-to-br from-emerald-500 to-teal-500 rounded-2xl p-5 shadow-lg shadow-emerald-500/20 dark:shadow-emerald-500/10">
@@ -639,9 +666,77 @@ export default function IOUsContent() {
                   </button>
                 </div>
 
+                {/* Agreement Payments */}
+                {expandedAgreements.has(status.agreement._id) && (
+                  <div className="px-4 pb-3">
+                    <div className="flex items-center justify-between mb-2">
+                      <h4 className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                        Payments
+                      </h4>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleAddPayment(status.agreement.personName, true);
+                        }}
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-violet-600 dark:text-violet-400 hover:bg-violet-50 dark:hover:bg-violet-900/20 rounded-lg transition-colors"
+                      >
+                        <Plus className="w-3.5 h-3.5" />
+                        Add Payment
+                      </button>
+                    </div>
+                    {(agreementPaymentsByPerson[status.agreement.personName] || []).length === 0 ? (
+                      <p className="text-sm text-gray-400 dark:text-gray-500 text-center py-4 bg-white/40 dark:bg-gray-800/40 rounded-xl">
+                        No payments recorded yet
+                      </p>
+                    ) : (
+                      <div className="space-y-2 max-h-48 overflow-y-auto">
+                        {(agreementPaymentsByPerson[status.agreement.personName] || []).map((payment: IOUPaymentResponse) => (
+                          <div
+                            key={payment._id}
+                            className="flex items-center justify-between p-3 bg-violet-50 dark:bg-violet-900/20 rounded-xl border border-violet-100 dark:border-violet-800/30 group"
+                          >
+                            <div className="min-w-0 flex-1">
+                              <p className="font-medium text-violet-700 dark:text-violet-400">
+                                +{formatCurrency(payment.amount)}
+                              </p>
+                              <p className="text-sm text-violet-600/70 dark:text-violet-500/70">
+                                {formatDate(payment.paymentDate)}
+                                {payment.notes && <span> · {payment.notes}</span>}
+                              </p>
+                            </div>
+                            <div className="flex items-center gap-1 ml-3">
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleEditPayment(payment);
+                                }}
+                                className="p-2 text-violet-400 hover:text-violet-600 dark:hover:text-violet-300 opacity-0 group-hover:opacity-100 transition-opacity"
+                              >
+                                <Pencil className="w-4 h-4" />
+                              </button>
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleDeletePayment(payment);
+                                }}
+                                className="p-2 text-violet-400 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+
                 {/* Daily Breakdown */}
                 {expandedAgreements.has(status.agreement._id) && status.dailyBreakdown && (
                   <div className="px-4 pb-4">
+                    <h4 className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2">
+                      Day Breakdown
+                    </h4>
                     <div className="bg-white/60 dark:bg-gray-800/60 rounded-xl overflow-hidden border border-gray-100 dark:border-gray-700/50">
                       <div className="max-h-80 overflow-y-auto">
                         <table className="w-full text-sm">
@@ -1123,7 +1218,7 @@ export default function IOUsContent() {
           setSelectedIOU(null);
           setSelectedPersonName("");
         }}
-        title={`Record Payment from ${selectedPersonName}`}
+        title={`Record Payment from ${selectedPersonName}${paymentFormData.isAgreementPayment ? " (Daily Rate)" : ""}`}
         footer={
           <div className="flex gap-3">
             <Button
@@ -1148,6 +1243,12 @@ export default function IOUsContent() {
         }
       >
         <div className="space-y-4">
+          {paymentFormData.isAgreementPayment && (
+            <div className="p-3 bg-violet-50 dark:bg-violet-900/20 rounded-lg border border-violet-200 dark:border-violet-800/50">
+              <p className="text-sm font-medium text-violet-700 dark:text-violet-300">Daily Rate Payment</p>
+              <p className="text-xs text-violet-600/70 dark:text-violet-400/70">This payment will count toward the daily rate agreement</p>
+            </div>
+          )}
           <Input
             label="Amount"
             type="number"
@@ -1428,6 +1529,18 @@ export default function IOUsContent() {
             onChange={(e) => setPaymentFormData({ ...paymentFormData, notes: e.target.value })}
             placeholder="Any additional notes"
           />
+          <label className="flex items-center gap-3 p-3 bg-violet-50 dark:bg-violet-900/20 rounded-lg border border-violet-200 dark:border-violet-800/50 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={paymentFormData.isAgreementPayment}
+              onChange={(e) => setPaymentFormData({ ...paymentFormData, isAgreementPayment: e.target.checked })}
+              className="w-4 h-4 rounded border-violet-300 text-violet-600 focus:ring-violet-500"
+            />
+            <div>
+              <p className="text-sm font-medium text-violet-700 dark:text-violet-300">Daily Rate Payment</p>
+              <p className="text-xs text-violet-600/70 dark:text-violet-400/70">Counts directly toward the daily rate agreement</p>
+            </div>
+          </label>
         </div>
       </Modal>
     </div>

@@ -259,6 +259,7 @@ export type IOUPaymentResponse = Omit<IIOUPayment, "_id" | "iouId" | "paymentDat
   _id: string;
   iouId: string | { _id: string; personName: string; description: string };
   paymentDate: string; // YYYY-MM-DD format
+  isAgreementPayment?: boolean;
   createdAt: string;
   updatedAt: string;
 };
@@ -311,6 +312,7 @@ export interface CreateIOUPaymentRequest {
   amount: number;
   paymentDate: string;
   notes?: string;
+  isAgreementPayment?: boolean;
 }
 
 export interface UpdateIOUPaymentRequest {
@@ -319,6 +321,7 @@ export interface UpdateIOUPaymentRequest {
   amount?: number;
   paymentDate?: string;
   notes?: string;
+  isAgreementPayment?: boolean;
 }
 
 export interface IOUSummary {
