@@ -15,7 +15,7 @@ export async function POST(request: NextRequest) {
     await connectDB();
 
     const body = await request.json();
-    const { userId, amount, source, localDate, localTime } = body;
+    const { userId, amount, source, localDate, localTime, date } = body;
 
     // Validate required fields
     if (!userId) {
@@ -48,8 +48,24 @@ export async function POST(request: NextRequest) {
     let userDate: Date;
     let timeString: string;
     let estDateString: string;
-    
-    if (localDate && localTime) {
+
+    if (date && typeof date === "string") {
+      // Parse provided date (RFC 2822 format: 'EEE, dd MMM yyyy HH:mm:ss Z')
+      const parsedDate = new Date(date);
+      if (!isNaN(parsedDate.getTime())) {
+        // Subtract 5 hours for EST display
+        const estDate = new Date(parsedDate.getTime() - 5 * 60 * 60 * 1000);
+        estDateString = estDate.toISOString().split("T")[0];
+        timeString = estDate.toTimeString().slice(0, 5);
+        userDate = parseESTAsUTC(estDateString, timeString);
+      } else {
+        // Fallback to current time if parsing fails
+        const estNow = getCurrentESTAsUTC();
+        estDateString = estNow.estDateString;
+        timeString = estNow.timeString;
+        userDate = estNow.date;
+      }
+    } else if (localDate && localTime) {
       // Parse user's local date and time (assumed to be EST) and convert to UTC
       estDateString = localDate;
       timeString = localTime.slice(0, 5); // HH:MM format

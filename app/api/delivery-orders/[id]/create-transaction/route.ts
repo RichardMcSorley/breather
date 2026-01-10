@@ -18,7 +18,7 @@ export async function POST(
 
     const { id: orderId } = await params;
     const body = await request.json();
-    const { userId } = body;
+    const { userId, date } = body;
 
     if (!userId) {
       return NextResponse.json({ error: "Missing userId" }, { status: 400 });
@@ -43,12 +43,29 @@ export async function POST(
       );
     }
 
-    // Extract date/time from order's processedAt and convert to proper format
+    // Extract date/time - use provided date if available (format: 'EEE, dd MMM yyyy HH:mm:ss Z'),
+    // otherwise use order's processedAt, or fallback to current time
     let transactionDate: Date;
     let transactionTime: string;
     let estDateString: string;
 
-    if (order.processedAt) {
+    if (date && typeof date === "string") {
+      // Parse provided date (RFC 2822 format)
+      const parsedDate = new Date(date);
+      if (!isNaN(parsedDate.getTime())) {
+        // Subtract 5 hours for EST display
+        const estDate = new Date(parsedDate.getTime() - 5 * 60 * 60 * 1000);
+        estDateString = estDate.toISOString().split("T")[0];
+        transactionTime = estDate.toTimeString().slice(0, 5);
+        transactionDate = parseESTAsUTC(estDateString, transactionTime);
+      } else {
+        // Fallback to current time if parsing fails
+        const estNow = getCurrentESTAsUTC();
+        estDateString = estNow.estDateString;
+        transactionTime = estNow.timeString;
+        transactionDate = estNow.date;
+      }
+    } else if (order.processedAt) {
       const processedDate = new Date(order.processedAt);
       // Subtract 5 hours for EST display
       const estDate = new Date(processedDate.getTime() - 5 * 60 * 60 * 1000);

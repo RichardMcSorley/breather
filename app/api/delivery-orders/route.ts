@@ -13,7 +13,7 @@ export async function POST(request: NextRequest) {
     await connectDB();
 
     const body = await request.json();
-    const { userId, screenshot, appName, ocrText, lat, lon, alt, address } = body;
+    const { userId, screenshot, appName, ocrText, lat, lon, alt, address, date } = body;
 
     // Validate required fields
     if (!userId) {
@@ -52,8 +52,19 @@ export async function POST(request: NextRequest) {
         ? processed.money / processed.miles 
         : undefined;
 
-      // Get current EST time and convert to UTC (matches transaction log timezone logic)
-      const { date: processedAtDate } = getCurrentESTAsUTC();
+      // Use provided date if available (format: 'EEE, dd MMM yyyy HH:mm:ss Z'), otherwise get current EST time
+      let processedAtDate: Date;
+      if (date && typeof date === "string") {
+        const parsedDate = new Date(date);
+        if (!isNaN(parsedDate.getTime())) {
+          processedAtDate = parsedDate;
+        } else {
+          // Fallback to current EST time if date parsing fails
+          processedAtDate = getCurrentESTAsUTC().date;
+        }
+      } else {
+        processedAtDate = getCurrentESTAsUTC().date;
+      }
 
       // First restaurant becomes the main restaurant, additional restaurants go to additionalRestaurants
       const firstRestaurant = restaurants.length > 0 ? restaurants[0] : null;

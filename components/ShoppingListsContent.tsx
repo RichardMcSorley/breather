@@ -693,7 +693,7 @@ export default function ShoppingListsPage() {
         {selectedLocation && (
           <button
             onClick={() => setQuickSearchModalOpen(true)}
-            className="fixed bottom-[100px] right-6 w-14 h-14 bg-green-600 text-white rounded-full shadow-lg hover:bg-green-700 transition-colors flex items-center justify-center z-[60]"
+            className="fixed bottom-[150px] right-6 w-14 h-14 bg-green-600 text-white rounded-full shadow-lg hover:bg-green-700 transition-colors flex items-center justify-center z-[60]"
             aria-label="Search Kroger products"
           >
             <Search className="w-6 h-6" />
