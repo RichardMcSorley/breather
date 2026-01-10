@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { MapPin, Edit2, ArrowRight } from "lucide-react";
 import Input from "./ui/Input";
 import { KrogerLocation } from "@/lib/types/kroger";
@@ -20,15 +20,52 @@ export default function KrogerStoreSelector({
   const [error, setError] = useState<string | null>(null);
   const [isChanging, setIsChanging] = useState(false);
 
-  // Reset change mode when a location is selected
-  useEffect(() => {
-    if (selectedLocation) {
-      setIsChanging(false);
-      setLocations([]);
-      setZipCode("");
-      setError(null);
+  // Helper function to search locations by zip code
+  const searchLocations = async (zip: string) => {
+    if (!zip.trim() || !/^\d{5}$/.test(zip.trim())) {
+      return;
     }
-  }, [selectedLocation]);
+
+    setSearching(true);
+    setError(null);
+
+    try {
+      const response = await fetch(
+        `/api/kroger/locations/search?zipCode=${encodeURIComponent(zip.trim())}&limit=10`
+      );
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ error: "Failed to search locations" }));
+        throw new Error(errorData.error || "Failed to search locations");
+      }
+
+      const data = await response.json();
+      setLocations(data.data || []);
+
+      if (data.data && data.data.length === 0) {
+        setError("No Kroger stores found near this zip code");
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to search locations");
+      setLocations([]);
+    } finally {
+      setSearching(false);
+    }
+  };
+
+  // When entering change mode, prefill zip code and fetch stores
+  const handleChangeClick = () => {
+    if (selectedLocation) {
+      const zip = selectedLocation.address.zipCode;
+      setZipCode(zip);
+      setIsChanging(true);
+      setError(null);
+      // Automatically search for stores near the current location's zip
+      searchLocations(zip);
+    } else {
+      setIsChanging(true);
+    }
+  };
 
   const handleSearch = async () => {
     if (!zipCode.trim()) {
@@ -42,31 +79,7 @@ export default function KrogerStoreSelector({
       return;
     }
 
-    setSearching(true);
-    setError(null);
-
-    try {
-      const response = await fetch(
-        `/api/kroger/locations/search?zipCode=${encodeURIComponent(zipCode.trim())}&limit=10`
-      );
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ error: "Failed to search locations" }));
-        throw new Error(errorData.error || "Failed to search locations");
-      }
-
-      const data = await response.json();
-      setLocations(data.data || []);
-      
-      if (data.data && data.data.length === 0) {
-        setError("No Kroger stores found near this zip code");
-      }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to search locations");
-      setLocations([]);
-    } finally {
-      setSearching(false);
-    }
+    await searchLocations(zipCode);
   };
 
   const handleKeyPress = (e: React.KeyboardEvent<HTMLInputElement>) => {
@@ -78,6 +91,8 @@ export default function KrogerStoreSelector({
   const handleLocationSelect = (location: KrogerLocation) => {
     onLocationSelected(location);
     setIsChanging(false);
+    // Update zipCode to the newly selected location's zip so it's prefilled next time
+    setZipCode(location.address.zipCode);
   };
 
   return (
@@ -103,7 +118,7 @@ export default function KrogerStoreSelector({
                 </div>
               </div>
               <button
-                onClick={() => setIsChanging(true)}
+                onClick={handleChangeClick}
                 className="px-3 py-2 bg-[#2a2d3e] dark:bg-[#2a2d3e] text-gray-300 dark:text-gray-300 rounded-lg hover:bg-[#3a3d4e] dark:hover:bg-[#3a3d4e] transition-colors flex items-center gap-2 text-sm flex-shrink-0"
               >
                 <Edit2 className="w-4 h-4" />
