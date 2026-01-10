@@ -323,11 +323,16 @@ export default function BillsPage() {
     // Find the bill by ID
     const bill = bills.find((b: Bill) => b._id === entry.billId);
     if (bill) {
+      // Calculate remaining amount after prior payments
+      const paymentKey = `${entry.billId}-${entry.date}`;
+      const paidAmount = paidPayments[paymentKey] || 0;
+      const remainingToPay = Math.max(0, entry.payment - paidAmount);
+
       setSelectedBill(bill);
       setSelectedPlanEntry(entry);
       setEditingPayment(null);
       setMarkPaidData({
-        amount: entry.payment.toString(),
+        amount: remainingToPay.toString(),
         paymentDate: entry.date,
         notes: "",
       });
@@ -976,8 +981,20 @@ export default function BillsPage() {
               }
             />
             {selectedPlanEntry && (
-              <div className="text-sm text-gray-600 dark:text-gray-400">
-                Planned amount: {formatCurrency(selectedPlanEntry.payment)}
+              <div className="text-sm text-gray-600 dark:text-gray-400 space-y-1">
+                <div>Planned amount: {formatCurrency(selectedPlanEntry.payment)}</div>
+                {(() => {
+                  const paymentKey = `${selectedPlanEntry.billId}-${selectedPlanEntry.date}`;
+                  const paidAmount = paidPayments[paymentKey] || 0;
+                  if (paidAmount > 0) {
+                    return (
+                      <div className="text-blue-600 dark:text-blue-400">
+                        Already paid: {formatCurrency(paidAmount)} · Remaining: {formatCurrency(Math.max(0, selectedPlanEntry.payment - paidAmount))}
+                      </div>
+                    );
+                  }
+                  return null;
+                })()}
               </div>
             )}
             <Input
