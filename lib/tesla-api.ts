@@ -169,7 +169,7 @@ export function getTeslaAuthUrl(state?: string): string {
     client_id: TESLA_CLIENT_ID,
     redirect_uri: TESLA_REDIRECT_URI,
     response_type: "code",
-    scope: "openid offline_access vehicle_device_data",
+    scope: "openid offline_access vehicle_device_data vehicle_cmds",
     state: state || crypto.randomBytes(16).toString("hex"),
   });
 
