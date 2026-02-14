@@ -29,6 +29,7 @@ export async function POST(request: NextRequest) {
       lon,
       alt,
       address,
+      ocrText,
     } = body;
 
     // Validate required fields
@@ -124,6 +125,7 @@ export async function POST(request: NextRequest) {
       time: "",
       metadata: {
         source: "offer-details-api",
+        ...(ocrText && { ocrText }),
         extractedData: {
           restaurants: parsedRestaurants.length > 0 ? parsedRestaurants : undefined,
           ...(drops !== undefined && { drops }),
