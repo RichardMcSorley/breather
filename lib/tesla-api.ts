@@ -342,6 +342,87 @@ export async function getVehicleData(
 }
 
 /**
+ * Send a command to the vehicle
+ */
+async function sendVehicleCommand(
+  vehicleTag: string,
+  accessToken: string,
+  command: string,
+  body: Record<string, unknown> = {}
+): Promise<{ result: boolean; reason?: string }> {
+  const response = await fetch(
+    `${TESLA_API_BASE_URL}/api/1/vehicles/${vehicleTag}/command/${command}`,
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(body),
+    }
+  );
+
+  if (!response.ok) {
+    if (response.status === 401) {
+      throw new Error("Invalid or expired access token");
+    }
+    if (response.status === 408) {
+      throw new Error("Vehicle is asleep — wake it first");
+    }
+    const error = await response.json().catch(() => ({ error: "Unknown error" }));
+    throw new Error(error.error || error.reason || `Command ${command} failed`);
+  }
+
+  const data = await response.json();
+  return data.response;
+}
+
+/**
+ * Start climate control (HVAC)
+ */
+export async function startClimate(vehicleTag: string, accessToken: string) {
+  return sendVehicleCommand(vehicleTag, accessToken, "auto_conditioning_start");
+}
+
+/**
+ * Stop climate control (HVAC)
+ */
+export async function stopClimate(vehicleTag: string, accessToken: string) {
+  return sendVehicleCommand(vehicleTag, accessToken, "auto_conditioning_stop");
+}
+
+/**
+ * Set driver and passenger temperature (in Celsius)
+ */
+export async function setTemps(
+  vehicleTag: string,
+  accessToken: string,
+  driverTemp: number,
+  passengerTemp?: number
+) {
+  return sendVehicleCommand(vehicleTag, accessToken, "set_temps", {
+    driver_temp: driverTemp,
+    passenger_temp: passengerTemp ?? driverTemp,
+  });
+}
+
+/**
+ * Set seat heater level (0=off, 1=low, 2=med, 3=high)
+ * Seat: 0=driver, 1=passenger, 2=rear-left, 4=rear-center, 5=rear-right
+ */
+export async function setSeatHeater(
+  vehicleTag: string,
+  accessToken: string,
+  seat: number,
+  level: number
+) {
+  return sendVehicleCommand(vehicleTag, accessToken, "remote_seat_heater_request", {
+    heater: seat,
+    level,
+  });
+}
+
+/**
  * Get odometer reading from vehicle data
  */
 export function getOdometerFromVehicleData(vehicleData: TeslaVehicleData): number | null {
