@@ -10,7 +10,8 @@
  */
 
 const mongoose = require('mongoose');
-const uri = 'mongodb+srv://z3o6gogp_db_user:d783D5ZI0o9Vvxqd@cluster0.kiijs29.mongodb.net/?appName=Cluster0';
+const uri = process.env.MONGODB_URI;
+if (!uri) { console.error('MONGODB_URI env var required'); process.exit(1); }
 
 async function run() {
   await mongoose.connect(uri);
