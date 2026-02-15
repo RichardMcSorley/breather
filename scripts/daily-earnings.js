@@ -10,6 +10,9 @@
  */
 
 const mongoose = require('mongoose');
+// Load .env.local from project root
+require('dotenv').config({ path: require('path').join(__dirname, '..', '.env.local') });
+
 const uri = process.env.MONGODB_URI;
 if (!uri) { console.error('MONGODB_URI env var required'); process.exit(1); }
 
