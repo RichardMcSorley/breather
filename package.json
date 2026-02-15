@@ -19,6 +19,7 @@
     "test:ci": "vitest run --coverage --reporter=verbose"
   },
   "dependencies": {
+    "@fal-ai/client": "^1.9.1",
     "@google-cloud/vision": "^5.3.4",
     "@google/genai": "^1.31.0",
     "@tanstack/react-query": "^5.56.0",

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { GoogleGenAI } from "@google/genai";
+import { fal } from "@fal-ai/client";
 import connectDB from "@/lib/mongodb";
 import DeliveryOrder from "@/lib/models/DeliveryOrder";
 import { randomBytes } from "crypto";
@@ -12,7 +12,9 @@ import {
   OfferEvaluation,
 } from "@/lib/calculations";
 
-const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
+fal.config({
+  credentials: process.env.FAL_KEY,
+});
 
 const SYSTEM_PROMPT = `You extract delivery offer details from text. Return ONLY valid JSON.
 
@@ -190,21 +192,22 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    if (!GEMINI_API_KEY) {
+    if (!process.env.FAL_KEY) {
       return NextResponse.json(
-        { error: "GEMINI_API_KEY not configured" },
+        { error: "FAL_KEY not configured" },
         { status: 500, headers: corsHeaders }
       );
     }
 
-    // Parse OCR text with Gemini Flash
-    const ai = new GoogleGenAI({ apiKey: GEMINI_API_KEY });
-    const result = await ai.models.generateContent({
-      model: "gemini-2.0-flash",
-      contents: `${SYSTEM_PROMPT}\n\nInput: "${text}"\nOutput:`,
+    // Parse OCR text with FAL AI (openrouter/router → Gemini Flash)
+    const result = await fal.subscribe("openrouter/router", {
+      input: {
+        prompt: `${SYSTEM_PROMPT}\n\nInput: "${text}"\nOutput:`,
+        model: "google/gemini-3-flash-preview",
+      },
     });
 
-    const output = result.text ?? "";
+    const output = (result.data as { output?: string })?.output || "";
 
     // Extract JSON from response
     let parsed: {
