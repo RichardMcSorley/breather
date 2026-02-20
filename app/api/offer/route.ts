@@ -53,7 +53,8 @@ function buildDisplay(
     items?: number;
     restaurants?: string[];
   },
-  evaluation: OfferEvaluation | null
+  evaluation: OfferEvaluation | null,
+  createdOrderId?: string
 ): string[] {
   const display: string[] = [];
 
@@ -139,6 +140,12 @@ function buildDisplay(
   if (!parsed.miles || parsed.miles === 0) {
     display.push(`Max ${evaluation.maxMiles.toFixed(1)} mi`);
     display.push(`Max ${evaluation.maxItems} items`);
+  }
+
+  // === ACTION ===
+  if (createdOrderId) {
+    display.push("Tally Offer");
+    display.push(createdOrderId);
   }
 
   // === URL ===
@@ -245,8 +252,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Build display
-    const display = buildDisplay(parsed, evaluation);
+    let createdOrderId: string | undefined;
 
     // Store in DB if userId and appName provided
     if (userId && appName && evaluation) {
@@ -302,6 +308,8 @@ export async function POST(request: NextRequest) {
           }),
         });
 
+        createdOrderId = deliveryOrder._id?.toString();
+
         try {
           await attemptAutoLinkOrderToTransaction(deliveryOrder, userId);
         } catch (autoLinkError) {
@@ -312,6 +320,9 @@ export async function POST(request: NextRequest) {
         // Don't fail the request — parsing + evaluation still succeeded
       }
     }
+
+    // Build display (include Tally Order id when an order is created)
+    const display = buildDisplay(parsed, evaluation, createdOrderId);
 
     // Build URL
     const params = new URLSearchParams();
@@ -336,6 +347,7 @@ export async function POST(request: NextRequest) {
         miles: parsed.miles,
         pickups: parsed.pickups,
         restaurants: parsed.restaurants,
+        createdOrderId,
       },
       { headers: corsHeaders }
     );
