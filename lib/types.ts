@@ -387,4 +387,3 @@ export interface DailyRateAgreementStatus {
   iouDebt: number; // Amount of IOUs that must be paid first
   dailyBreakdown: DailyRateDay[];
 }
-
