@@ -34,8 +34,26 @@ async function run() {
     day = estOffset.getDate();
   }
 
-  // Build UTC range for the EST day
-  const startEST = new Date(`${year}-${String(month).padStart(2,'0')}-${String(day).padStart(2,'0')}T00:00:00-05:00`);
+  // Build UTC range for the Eastern Time day (handles DST automatically)
+  const dateStr = `${year}-${String(month).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
+  
+  // Use Intl.DateTimeFormat to get proper timezone offset for the specific date
+  const formatter = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'America/New_York',
+    timeZoneName: 'shortOffset'
+  });
+  const testDate = new Date(`${dateStr}T12:00:00Z`);
+  const parts = formatter.formatToParts(testDate);
+  const tzPart = parts.find(p => p.type === 'timeZoneName');
+  // tzPart.value is like "GMT-4" or "GMT-5"
+  const offsetMatch = tzPart?.value?.match(/GMT([+-]?\d+)/);
+  const offsetHours = offsetMatch ? parseInt(offsetMatch[1]) : -5;
+  // Convert to ISO offset format (e.g., -04:00)
+  const offsetStr = offsetHours <= 0 
+    ? `-${String(Math.abs(offsetHours)).padStart(2,'0')}:00`
+    : `+${String(offsetHours).padStart(2,'0')}:00`;
+  
+  const startEST = new Date(`${dateStr}T00:00:00${offsetStr}`);
   const endEST = new Date(startEST.getTime() + 24 * 60 * 60 * 1000);
 
   // Fetch transactions

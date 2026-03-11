@@ -7,7 +7,7 @@ import Transaction from "@/lib/models/Transaction";
 import DeliveryOrder from "@/lib/models/DeliveryOrder";
 import OcrExport from "@/lib/models/OcrExport";
 import { handleApiError } from "@/lib/api-error-handler";
-import { parseDateAsUTC, parseDateOnlyAsUTC, formatDateAsUTC } from "@/lib/date-utils";
+import { parseDateAsUTC, parseDateOnlyAsUTC, formatDateAsUTC, formatDateAsET } from "@/lib/date-utils";
 import { parseFloatSafe, validatePagination, isValidEnum, TRANSACTION_TYPES } from "@/lib/validation";
 import { TransactionQuery, FormattedTransaction, TransactionListResponse } from "@/lib/types";
 import { attemptAutoLinkTransactionToCustomer, attemptAutoLinkTransactionToOrder } from "@/lib/auto-link-helper";
@@ -160,13 +160,13 @@ export async function GET(request: NextRequest) {
       Transaction.countDocuments(query),
     ]);
 
-    // Format dates as YYYY-MM-DD strings to avoid timezone issues
+    // Format dates as YYYY-MM-DD strings in Eastern Time to match user's local view
     const formattedTransactions: FormattedTransaction[] = transactions.map((t: any) => {
       const formatted: any = {
         ...t,
         _id: t._id.toString(),
-        date: t.date ? formatDateAsUTC(new Date(t.date)) : "",
-        dueDate: t.dueDate ? formatDateAsUTC(new Date(t.dueDate)) : undefined,
+        date: t.date ? formatDateAsET(new Date(t.date)) : "",
+        dueDate: t.dueDate ? formatDateAsET(new Date(t.dueDate)) : undefined,
         step: t.step,
         active: t.active,
         createdAt: t.createdAt.toISOString(),
@@ -296,16 +296,16 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Convert to plain object and format dates as YYYY-MM-DD strings using UTC
+    // Convert to plain object and format dates as YYYY-MM-DD strings in Eastern Time
     const transactionObj = finalTransaction.toObject();
     let formattedDate: string | undefined;
     if (transactionObj.date) {
-      formattedDate = formatDateAsUTC(new Date(transactionObj.date));
+      formattedDate = formatDateAsET(new Date(transactionObj.date));
     }
     
     let formattedDueDate: string | undefined;
     if (transactionObj.dueDate) {
-      formattedDueDate = formatDateAsUTC(new Date(transactionObj.dueDate));
+      formattedDueDate = formatDateAsET(new Date(transactionObj.dueDate));
     }
 
     return NextResponse.json({

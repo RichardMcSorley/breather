@@ -4,7 +4,7 @@ import { authOptions } from "../../auth/[...nextauth]/config";
 import connectDB from "@/lib/mongodb";
 import Transaction from "@/lib/models/Transaction";
 import { handleApiError } from "@/lib/api-error-handler";
-import { formatDateAsUTC } from "@/lib/date-utils";
+import { formatDateAsUTC, formatDateAsET } from "@/lib/date-utils";
 
 export async function GET(request: NextRequest) {
   try {
@@ -25,10 +25,10 @@ export async function GET(request: NextRequest) {
       .lean();
 
     // Return all transactions with date and time so frontend can format them
-    // Frontend will group by date using the same formatDate function
+    // Frontend will group by date using the same formatDate function (in Eastern Time)
     return NextResponse.json({ 
       transactions: transactions.map(t => ({
-        date: formatDateAsUTC(new Date(t.date)),
+        date: formatDateAsET(new Date(t.date)),
         time: t.time,
         type: t.type,
         amount: t.amount,

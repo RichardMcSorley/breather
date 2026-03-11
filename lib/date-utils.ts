@@ -148,48 +148,58 @@ export function formatDateAsUTC(date: Date): string {
 }
 
 /**
- * Gets current EST date/time and converts to UTC
+ * Formats a Date object as YYYY-MM-DD string using Eastern Time (handles DST)
+ */
+export function formatDateAsET(date: Date): string {
+  const formatter = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'America/New_York',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  });
+  
+  const parts = formatter.formatToParts(date);
+  const getPart = (type: string) => parts.find(p => p.type === type)?.value || '00';
+  
+  const year = getPart('year');
+  const month = getPart('month');
+  const day = getPart('day');
+  
+  return `${year}-${month}-${day}`;
+}
+
+/**
+ * Gets current Eastern Time date/time and converts to UTC
+ * Properly handles EST/EDT (Daylight Saving Time)
  */
 export function getCurrentESTAsUTC(): { date: Date; timeString: string; estDateString: string } {
-  const EST_OFFSET_HOURS = 5;
   const now = new Date();
   
-  // Get UTC components
-  const utcYear = now.getUTCFullYear();
-  const utcMonth = now.getUTCMonth();
-  const utcDay = now.getUTCDate();
-  const utcHour = now.getUTCHours();
-  const utcMinute = now.getUTCMinutes();
+  // Use Intl to get the correct Eastern Time components (handles DST automatically)
+  const etFormatter = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'America/New_York',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  });
   
-  // Convert UTC to EST (subtract 5 hours)
-  let estHour = utcHour - EST_OFFSET_HOURS;
-  let estDay = utcDay;
-  let estMonth = utcMonth;
-  let estYear = utcYear;
+  const parts = etFormatter.formatToParts(now);
+  const getPart = (type: string) => parts.find(p => p.type === type)?.value || '00';
   
-  // Handle day/hour rollover when subtracting hours
-  if (estHour < 0) {
-    estHour += 24;
-    estDay -= 1;
-    if (estDay < 1) {
-      estMonth -= 1;
-      if (estMonth < 0) {
-        estMonth = 11;
-        estYear -= 1;
-      }
-      // Get days in previous month
-      const daysInPrevMonth = new Date(estYear, estMonth + 1, 0).getDate();
-      estDay = daysInPrevMonth;
-    }
-  }
+  const etYear = parseInt(getPart('year'));
+  const etMonth = parseInt(getPart('month'));
+  const etDay = parseInt(getPart('day'));
+  const etHour = parseInt(getPart('hour'));
+  const etMinute = parseInt(getPart('minute'));
   
   // Create EST date string
-  const estDateString = `${estYear}-${String(estMonth + 1).padStart(2, '0')}-${String(estDay).padStart(2, '0')}`;
-  const timeString = `${String(estHour).padStart(2, '0')}:${String(utcMinute).padStart(2, '0')}`;
+  const estDateString = `${etYear}-${String(etMonth).padStart(2, '0')}-${String(etDay).padStart(2, '0')}`;
+  const timeString = `${String(etHour).padStart(2, '0')}:${String(etMinute).padStart(2, '0')}`;
   
-  // Convert EST to UTC for storage (add offset back)
-  const date = parseESTAsUTC(estDateString, timeString);
-  
-  return { date, timeString, estDateString };
+  // Return the actual current UTC time (which is what we want to store)
+  return { date: now, timeString, estDateString };
 }
 
