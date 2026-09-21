@@ -109,7 +109,8 @@ function buildPendingDisplay(
   if (items !== undefined && items > 0) work.push(`${items} items`);
 
   const display = [
-    `Fast: ${fastEvaluation.decision} · Slow: ${slowEvaluation.decision}`,
+    `Fast: ${fastEvaluation.decision} · Min pay: ${formatMinimumPay(fastEvaluation)}`,
+    `Slow: ${slowEvaluation.decision} · Min pay: ${formatMinimumPay(slowEvaluation)}`,
     `Verdict: ${decisionLabel}`,
     `Offer: $${pay.toFixed(2)} · ${miles.toFixed(1)} mi${
       payPerMile === null ? "" : ` · $${payPerMile.toFixed(2)}/mi`
@@ -127,6 +128,17 @@ function buildPendingDisplay(
   }
 
   return display;
+}
+
+function formatMinimumPay(evaluation: JevPolicyEvaluation) {
+  if (evaluation.requiredPayMinimum === null) return "unknown";
+  if (
+    evaluation.requiredPayMaximum === null ||
+    evaluation.requiredPayMaximum === evaluation.requiredPayMinimum
+  ) {
+    return `$${evaluation.requiredPayMinimum.toFixed(2)}`;
+  }
+  return `$${evaluation.requiredPayMinimum.toFixed(2)}–$${evaluation.requiredPayMaximum.toFixed(2)}`;
 }
 
 // Build compact display array for iOS shortcuts
