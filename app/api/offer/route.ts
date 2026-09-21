@@ -60,30 +60,51 @@ function buildPendingDisplay(
   payEstimated: boolean,
   fastEvaluation: JevPolicyEvaluation,
   slowEvaluation: JevPolicyEvaluation,
+  offerEstimate: OfferEvaluation,
   pickups: number | undefined,
   drops: number | undefined,
   items: number | undefined,
   orderKind: string,
   createdOrderId?: string,
 ) {
-  const decisionLabel =
-    fastEvaluation.decision === "accept" && slowEvaluation.decision === "accept"
-      ? "TAKE IT"
-      : fastEvaluation.decision === "decline" &&
-          slowEvaluation.decision === "decline"
-        ? "PASS"
-        : fastEvaluation.decision === "decline" &&
-            slowEvaluation.decision === "accept"
-          ? "ACCEPT IF SLOW"
-          : "ACCEPT IF FAST";
+  let decisionLabel = "REVIEW";
+  if (
+    fastEvaluation.decision === "accept" &&
+    slowEvaluation.decision === "accept"
+  ) {
+    decisionLabel = "TAKE IT";
+  } else if (
+    fastEvaluation.decision === "decline" &&
+    slowEvaluation.decision === "decline"
+  ) {
+    decisionLabel = "PASS";
+  } else if (
+    fastEvaluation.decision === "decline" &&
+    slowEvaluation.decision === "accept"
+  ) {
+    decisionLabel = "ACCEPT IF SLOW";
+  } else if (
+    fastEvaluation.decision === "accept" &&
+    slowEvaluation.decision === "decline"
+  ) {
+    decisionLabel = "ACCEPT IF FAST";
+  }
   const payPerMile = miles > 0 ? pay / miles : null;
-  const reason =
-    fastEvaluation.decision === slowEvaluation.decision
-      ? slowEvaluation.reason
-      : fastEvaluation.decision === "decline" &&
-          slowEvaluation.decision === "accept"
-        ? "Slow conditions pass the lower $5 threshold; fast conditions require $7."
-        : "Fast conditions pass the higher $7 threshold.";
+  let reason = "Use current order speed before accepting.";
+  if (fastEvaluation.decision === slowEvaluation.decision) {
+    reason = slowEvaluation.reason;
+  } else if (
+    fastEvaluation.decision === "decline" &&
+    slowEvaluation.decision === "accept"
+  ) {
+    reason =
+      "Slow conditions pass the lower $5 threshold; fast conditions require $7.";
+  } else if (
+    fastEvaluation.decision === "accept" &&
+    slowEvaluation.decision === "decline"
+  ) {
+    reason = "Fast conditions pass the higher $7 threshold.";
+  }
   const work = [
     `${pickups ?? 1} pickup${pickups === 1 ? "" : "s"}`,
     `${drops ?? 1} dropoff${drops === 1 ? "" : "s"}`,
@@ -99,6 +120,7 @@ function buildPendingDisplay(
       payPerMile === null ? "" : ` · $${payPerMile.toFixed(2)}/mi`
     }`,
     `Work: ${work.join(" · ")}`,
+    `Estimate: ${Math.round(offerEstimate.totalMinutes)} min · $${offerEstimate.effectiveHourly.toFixed(2)}/hr`,
     `${payEstimated ? "Estimated pay" : "Pay"}: $${pay.toFixed(2)}${
       payEstimated ? " (OCR pending)" : ""
     }`,
@@ -351,6 +373,16 @@ export async function POST(request: NextRequest) {
         5,
         confirmedFacts,
       );
+      const offerEstimate = evaluateOffer(
+        {
+          pay: resolved.pay,
+          pickups: resolved.pickups,
+          drops: resolved.drops,
+          miles: resolved.miles,
+          items: resolved.items,
+        },
+        DEFAULT_SETTINGS,
+      );
       let createdOrderId: string | undefined;
 
       if (userId && appName) {
@@ -420,6 +452,7 @@ export async function POST(request: NextRequest) {
         resolved.payEstimated,
         fastEvaluation,
         slowEvaluation,
+        offerEstimate,
         resolved.pickups,
         resolved.drops,
         resolved.items,
@@ -449,6 +482,11 @@ export async function POST(request: NextRequest) {
           createdOrderId,
           fastEvaluation,
           slowEvaluation,
+          estimate: {
+            totalMinutes: offerEstimate.totalMinutes,
+            effectiveHourly: offerEstimate.effectiveHourly,
+            breakdown: offerEstimate.breakdown,
+          },
         },
         { headers: corsHeaders },
       );
