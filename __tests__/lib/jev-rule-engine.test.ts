@@ -38,6 +38,24 @@ describe("evaluateJevPolicy", () => {
     expect(result.mileageMinimum).toBe(1.5);
   });
 
+  it("does not add a fixed fee to shopping orders", () => {
+    const result = evaluateJevPolicy(
+      {
+        payBand: "7_to_7_99",
+        milesBand: "1_to_1_99",
+        pickups: "one",
+        dropoffs: "one",
+        itemsBand: "six_to_ten",
+        orderKind: "shopping_order",
+      },
+      5,
+      { pay: 7.94, miles: 1.9, pickups: 1, drops: 1, items: 8 },
+    );
+
+    expect(result.requiredPayMinimum).toBe(7.8);
+    expect(result.decision).toBe("accept");
+  });
+
   it("uses confirmed pay and miles instead of rejecting a mixed band", () => {
     const result = evaluateJevPolicy(
       {

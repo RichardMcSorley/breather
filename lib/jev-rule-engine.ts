@@ -180,11 +180,7 @@ export function evaluateJevPolicy(
     };
   }
 
-  const shopping =
-    classification.orderKind === "shopping_order" ||
-    classification.orderKind === "shopping_batch";
   const mileageMinimum = 1.5;
-  const shoppingSetup = shopping ? 1.75 : 0;
   const pickupMinimum = facts?.pickups ?? pickups[0];
   const pickupMaximum = facts?.pickups ?? pickups[1];
   const dropMinimum = facts?.drops ?? drops[0];
@@ -193,11 +189,9 @@ export function evaluateJevPolicy(
   const itemMaximum = facts?.items ?? items[1];
   const requiredPayMinimum =
     basePay * dropMinimum * (1 + 0.4 * (pickupMinimum - 1)) +
-    shoppingSetup +
     itemMinimum * 0.35;
   const requiredPayMaximum =
     basePay * dropMaximum * (1 + 0.4 * (pickupMaximum - 1)) +
-    shoppingSetup +
     itemMaximum * 0.35;
   const bestPayPerMile = (facts?.pay ?? pay[1]) / (facts?.miles ?? miles[0]);
   const worstPayPerMile = (facts?.pay ?? pay[0]) / (facts?.miles ?? miles[1]);
