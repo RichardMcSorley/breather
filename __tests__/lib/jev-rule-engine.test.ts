@@ -18,6 +18,24 @@ describe("evaluateJevPolicy", () => {
     expect(result.decision).toBe("accept");
     expect(result.reason).toContain("clears");
     expect(result.requiredPayMaximum).toBe(5);
+    expect(result.mileageMinimum).toBe(1.5);
+  });
+
+  it("uses one mileage floor for shopping workload", () => {
+    const result = evaluateJevPolicy(
+      {
+        payBand: "12_to_14_99",
+        milesBand: "5_to_5_99",
+        pickups: "one",
+        dropoffs: "one",
+        itemsBand: "eleven_to_fifteen",
+        orderKind: "shopping_order",
+      },
+      5,
+      { pay: 12, miles: 8, pickups: 1, drops: 1, items: 12 },
+    );
+
+    expect(result.mileageMinimum).toBe(1.5);
   });
 
   it("uses confirmed pay and miles instead of rejecting a mixed band", () => {

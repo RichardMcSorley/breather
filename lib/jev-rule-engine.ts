@@ -183,10 +183,7 @@ export function evaluateJevPolicy(
   const shopping =
     classification.orderKind === "shopping_order" ||
     classification.orderKind === "shopping_batch";
-  const batch =
-    classification.orderKind === "delivery_batch" ||
-    classification.orderKind === "shopping_batch";
-  const mileageMinimum = shopping || batch ? 2.5 : 2;
+  const mileageMinimum = 1.5;
   const shoppingSetup = shopping ? 1.75 : 0;
   const pickupMinimum = facts?.pickups ?? pickups[0];
   const pickupMaximum = facts?.pickups ?? pickups[1];
