@@ -92,7 +92,11 @@ function buildPendingDisplay(
   const payPerMile = miles > 0 ? pay / miles : null;
   let reason = "Use current order speed before accepting.";
   if (fastEvaluation.decision === slowEvaluation.decision) {
-    reason = slowEvaluation.reason;
+    reason =
+      fastEvaluation.decision === "accept" ||
+      fastEvaluation.decision === "decline"
+        ? `Fast: ${fastEvaluation.reason} Slow: ${slowEvaluation.reason}`
+        : slowEvaluation.reason;
   } else if (
     fastEvaluation.decision === "decline" &&
     slowEvaluation.decision === "accept"
