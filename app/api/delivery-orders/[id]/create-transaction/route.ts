@@ -11,7 +11,7 @@ import { parseESTAsUTC, getCurrentESTAsUTC } from "@/lib/date-utils";
  */
 export async function POST(
   request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
+  { params }: { params: Promise<{ id: string }> },
 ) {
   try {
     await connectDB();
@@ -39,7 +39,7 @@ export async function POST(
     if (order.linkedTransactionIds && order.linkedTransactionIds.length > 0) {
       return NextResponse.json(
         { error: "Order already linked to a transaction" },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
@@ -81,14 +81,25 @@ export async function POST(
       transactionDate = estNow.date;
     }
 
-    // Create the transaction
+    if (order.money === undefined || order.money <= 0) {
+      return NextResponse.json(
+        { error: "Order pay estimate is not available yet" },
+        { status: 409 },
+      );
+    }
+
+    // Create the transaction. Pending Jev orders use a conservative estimate;
+    // the background OCR worker later corrects this amount.
     const transaction = await Transaction.create({
       userId,
-      amount: order.money || 0,
+      amount: order.money,
+      amountEstimated: order.moneyEstimated === true,
       type: "income",
       date: transactionDate,
       time: transactionTime,
-      notes: "",
+      notes: order.moneyEstimated
+        ? "Estimated pay; pending OCR correction"
+        : "",
       tag: order.appName || "",
       step: "CREATED",
       active: false,
@@ -131,6 +142,7 @@ export async function POST(
       transactionId: transaction._id.toString(),
       orderId: order._id.toString(),
       amount: transaction.amount,
+      amountEstimated: transaction.amountEstimated === true,
       date: estDateString,
       time: transactionTime,
       tag: transaction.tag,

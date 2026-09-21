@@ -11,10 +11,20 @@ import {
   DEFAULT_SETTINGS,
   OfferEvaluation,
 } from "@/lib/calculations";
+import {
+  classifyOcrOfferWithJev,
+  evaluateOfferWithJev,
+} from "@/lib/jev-offer-evaluator";
+import {
+  classificationFromAnswers,
+  evaluateJevPolicy,
+} from "@/lib/jev-rule-engine";
+import { extractRegexOfferCandidates } from "@/lib/ocr-offer-extractor";
+import { resolveRegexOfferCandidates } from "@/lib/ocr-offer-resolution";
 
-fal.config({
-  credentials: process.env.FAL_KEY,
-});
+type JevEvaluation = Awaited<ReturnType<typeof evaluateOfferWithJev>>;
+
+fal.config({ credentials: process.env.FAL_KEY });
 
 const SYSTEM_PROMPT = `You extract delivery offer details from text. Return ONLY valid JSON.
 
@@ -43,6 +53,29 @@ Output: {"pay": 48.55, "miles": 34.1, "drops": 2, "items": 44, "restaurants": ["
 Input: "12 bucks 2 pickups 5 miles"
 Output: {"pay": 12, "pickups": 2, "miles": 5, "restaurants": []}`;
 
+function buildPendingDisplay(
+  pay: number,
+  payEstimated: boolean,
+  fastDecision: string,
+  slowDecision: string,
+  createdOrderId?: string,
+) {
+  const display = [
+    `Jev fast: ${fastDecision}`,
+    `Jev slow: ${slowDecision}`,
+    `${payEstimated ? "Estimated" : "Pay"}: $${pay.toFixed(2)}${
+      payEstimated ? " (Jev band fallback; OCR pending)" : " (regex confirmed)"
+    }`,
+  ];
+
+  if (createdOrderId) {
+    display.push("Tally Offer");
+    display.push(createdOrderId);
+  }
+
+  return display;
+}
+
 // Build compact display array for iOS shortcuts
 function buildDisplay(
   parsed: {
@@ -54,19 +87,39 @@ function buildDisplay(
     restaurants?: string[];
   },
   evaluation: OfferEvaluation | null,
-  createdOrderId?: string
+  createdOrderId?: string,
+  jev: JevEvaluation = null,
 ): string[] {
   const display: string[] = [];
 
   if (!evaluation) {
-    display.push("⚠️ Could not evaluate");
+    const jevAcceptance = jev?.answers.acceptance;
+    if (jevAcceptance?.type === "choice") {
+      const confidence =
+        jevAcceptance.confidence !== undefined
+          ? ` (${Math.round(jevAcceptance.confidence * 100)}% confidence)`
+          : "";
+      display.push(`Jev: ${jevAcceptance.choice}${confidence}`);
+      display.push("Calculator: exact offer fields unavailable");
+    } else {
+      display.push("⚠️ Could not evaluate");
+    }
     return display;
   }
 
   // === VERDICT ===
   display.push(
-    `${evaluation.verdictEmoji} ${evaluation.verdictText} — $${evaluation.effectiveHourly.toFixed(2)}/hr`
+    `${evaluation.verdictEmoji} ${evaluation.verdictText} — $${evaluation.effectiveHourly.toFixed(2)}/hr`,
   );
+
+  const jevAcceptance = jev?.answers.acceptance;
+  if (jevAcceptance?.type === "choice") {
+    const confidence =
+      jevAcceptance.confidence !== undefined
+        ? ` (${Math.round(jevAcceptance.confidence * 100)}% confidence)`
+        : "";
+    display.push(`Jev: ${jevAcceptance.choice}${confidence}`);
+  }
 
   // === OFFER ===
   const offerParts: string[] = [];
@@ -163,7 +216,10 @@ function buildDisplay(
 
 // CORS headers
 const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Origin":
+    process.env.OFFER_CORS_ORIGIN ??
+    process.env.NEXTAUTH_URL ??
+    "http://localhost:3000",
   "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
   "Access-Control-Allow-Headers": "Content-Type",
 };
@@ -184,29 +240,163 @@ export async function GET() {
         date: "optional - ISO date string",
       },
     },
-    { headers: corsHeaders }
+    { headers: corsHeaders },
   );
 }
 
 export async function POST(request: NextRequest) {
   try {
-    const { text, userId, appName, date } = await request.json();
+    const {
+      text,
+      userId,
+      appName,
+      date,
+      mode = "jev_pending",
+    } = await request.json();
 
     if (!text) {
       return NextResponse.json(
         { error: "No text provided" },
-        { status: 400, headers: corsHeaders }
+        { status: 400, headers: corsHeaders },
+      );
+    }
+
+    // Jev mode resolves regex candidates immediately and falls back to conservative bands.
+    if (mode !== "calculator") {
+      if (!process.env.OPENROUTER_API_KEY) {
+        return NextResponse.json(
+          { error: "OPENROUTER_API_KEY not configured" },
+          { status: 500, headers: corsHeaders },
+        );
+      }
+
+      const candidates = extractRegexOfferCandidates(text, appName);
+      const jev = await classifyOcrOfferWithJev({
+        ocrText: text,
+        candidates,
+      });
+      if (!jev) {
+        return NextResponse.json(
+          { error: "Jev classification failed" },
+          { status: 502, headers: corsHeaders },
+        );
+      }
+
+      const classification = classificationFromAnswers(jev.answers);
+      const resolved = resolveRegexOfferCandidates(
+        candidates,
+        jev.answers,
+        classification,
+      );
+      const fastEvaluation = evaluateJevPolicy(classification, 5);
+      const slowEvaluation = evaluateJevPolicy(classification, 7);
+      let createdOrderId: string | undefined;
+
+      if (userId && appName) {
+        try {
+          await connectDB();
+          const entryId = randomBytes(16).toString("hex");
+          const processedAtDate = date
+            ? new Date(date)
+            : getCurrentESTAsUTC().date;
+          const additionalRestaurants = resolved.merchants
+            .slice(1)
+            .map((name) => ({ name }));
+          const deliveryOrder = await DeliveryOrder.create({
+            entryId,
+            userId,
+            appName: appName.trim(),
+            money: resolved.pay,
+            moneyEstimated: resolved.payEstimated,
+            miles: resolved.miles,
+            milesEstimated: resolved.milesEstimated,
+            milesToMoneyRatio:
+              resolved.miles > 0 ? resolved.pay / resolved.miles : undefined,
+            ocrText: text,
+            restaurantName: resolved.merchants[0] ?? "Unknown merchant",
+            ...(additionalRestaurants.length > 0 && {
+              additionalRestaurants,
+            }),
+            time: "",
+            metadata: {
+              source: "offer-api-regex-jev",
+              ocrText: text,
+              regexCandidates: candidates,
+              extractedData: {
+                pay: resolved.pay,
+                miles: resolved.miles,
+                ...(resolved.pickups !== undefined && {
+                  pickups: resolved.pickups,
+                }),
+                ...(resolved.drops !== undefined && {
+                  drops: resolved.drops,
+                }),
+                ...(resolved.items !== undefined && {
+                  items: resolved.items,
+                }),
+                orderKind: resolved.orderKind,
+                restaurants: resolved.merchants.map((restaurantName) => ({
+                  restaurantName,
+                })),
+              },
+              resolvedFields: resolved,
+              jevClassification: classification,
+              jev,
+            },
+            processedAt: processedAtDate,
+            step: resolved.payEstimated ? "OCR_PENDING" : "CREATED",
+            active: false,
+          });
+          createdOrderId = deliveryOrder._id?.toString();
+        } catch (dbError) {
+          console.error("Resolved offer storage error:", dbError);
+        }
+      }
+
+      const display = buildPendingDisplay(
+        resolved.pay,
+        resolved.payEstimated,
+        fastEvaluation.decision,
+        slowEvaluation.decision,
+        createdOrderId,
+      );
+
+      return NextResponse.json(
+        {
+          parsed: {
+            pay: resolved.pay,
+            miles: resolved.miles,
+            pickups: resolved.pickups,
+            drops: resolved.drops,
+            items: resolved.items,
+            restaurants: resolved.merchants,
+          },
+          evaluation: null,
+          display,
+          summary: resolved.payEstimated
+            ? `Estimated pay $${resolved.pay.toFixed(2)} from Jev pay band`
+            : `Pay $${resolved.pay.toFixed(2)} confirmed by regex and Jev`,
+          jev,
+          classification,
+          candidates,
+          resolved,
+          createdOrderId,
+          fastEvaluation,
+          slowEvaluation,
+        },
+        { headers: corsHeaders },
       );
     }
 
     if (!process.env.FAL_KEY) {
       return NextResponse.json(
         { error: "FAL_KEY not configured" },
-        { status: 500, headers: corsHeaders }
+        { status: 500, headers: corsHeaders },
       );
     }
 
-    // Parse OCR text with FAL AI (openrouter/router → Gemini Flash)
+    // Calculator mode: parse OCR text with FAL's existing extraction workflow.
+    // Jev evaluates the structured offer below; it is not a numeric OCR extractor.
     const result = await fal.subscribe("openrouter/router", {
       input: {
         prompt: `${SYSTEM_PROMPT}\n\nInput: "${text}"\nOutput:`,
@@ -233,7 +423,7 @@ export async function POST(request: NextRequest) {
     } catch {
       return NextResponse.json(
         { raw: output, error: "Could not parse response" },
-        { headers: corsHeaders }
+        { headers: corsHeaders },
       );
     }
 
@@ -248,9 +438,18 @@ export async function POST(request: NextRequest) {
           miles: parsed.miles,
           items: parsed.items,
         },
-        DEFAULT_SETTINGS
+        DEFAULT_SETTINGS,
       );
     }
+
+    // Keep Jev as a shadow recommendation until its decisions are validated against driver outcomes.
+    const jev = evaluation
+      ? await evaluateOfferWithJev({
+          ocrText: text,
+          offer: { ...parsed, pay: parsed.pay ?? 0 },
+          evaluation,
+        })
+      : null;
 
     let createdOrderId: string | undefined;
 
@@ -284,6 +483,8 @@ export async function POST(request: NextRequest) {
           appName: appName.trim(),
           ...(parsedMiles !== undefined && { miles: parsedMiles }),
           ...(parsedMoney !== undefined && { money: parsedMoney }),
+          moneyEstimated: false,
+          ocrText: text,
           ...(milesToMoneyRatio !== undefined && { milesToMoneyRatio }),
           restaurantName,
           time: "",
@@ -297,6 +498,7 @@ export async function POST(request: NextRequest) {
               ...(parsed.pickups !== undefined && { pickups: parsed.pickups }),
               ...(parsed.items !== undefined && { items: parsed.items }),
             },
+            jev,
           },
           processedAt: date ? new Date(date) : processedAtDate,
           step: "CREATED",
@@ -322,7 +524,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Build display (include Tally Order id when an order is created)
-    const display = buildDisplay(parsed, evaluation, createdOrderId);
+    const display = buildDisplay(parsed, evaluation, createdOrderId, jev);
 
     // Build URL
     const params = new URLSearchParams();
@@ -348,8 +550,9 @@ export async function POST(request: NextRequest) {
         pickups: parsed.pickups,
         restaurants: parsed.restaurants,
         createdOrderId,
+        jev,
       },
-      { headers: corsHeaders }
+      { headers: corsHeaders },
     );
   } catch (error) {
     console.error("Offer API error:", error);

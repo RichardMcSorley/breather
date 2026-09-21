@@ -13,7 +13,17 @@ export async function POST(request: NextRequest) {
     await connectDB();
 
     const body = await request.json();
-    const { userId, screenshot, appName, ocrText, lat, lon, alt, address, date } = body;
+    const {
+      userId,
+      screenshot,
+      appName,
+      ocrText,
+      lat,
+      lon,
+      alt,
+      address,
+      date,
+    } = body;
 
     // Validate required fields
     if (!userId) {
@@ -23,15 +33,12 @@ export async function POST(request: NextRequest) {
     if (!screenshot) {
       return NextResponse.json(
         { error: "Missing screenshot" },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
     if (!appName) {
-      return NextResponse.json(
-        { error: "Missing appName" },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: "Missing appName" }, { status: 400 });
     }
 
     // Generate a unique entryId
@@ -39,18 +46,26 @@ export async function POST(request: NextRequest) {
 
     // Process screenshot with Gemini
     try {
-      const processed = await processOrderScreenshotGemini(screenshot, ocrText, "order");
+      const processed = await processOrderScreenshotGemini(
+        screenshot,
+        ocrText,
+        "order",
+      );
 
       // Extract restaurants array from metadata
       const restaurants: any[] = [];
-      if (processed.metadata?.extractedData?.restaurants && Array.isArray(processed.metadata.extractedData.restaurants)) {
+      if (
+        processed.metadata?.extractedData?.restaurants &&
+        Array.isArray(processed.metadata.extractedData.restaurants)
+      ) {
         restaurants.push(...processed.metadata.extractedData.restaurants);
       }
 
       // Calculate miles to money ratio (only if miles is provided and > 0)
-      const milesToMoneyRatio = processed.miles && processed.miles > 0 
-        ? processed.money / processed.miles 
-        : undefined;
+      const milesToMoneyRatio =
+        processed.miles && processed.miles > 0
+          ? processed.money / processed.miles
+          : undefined;
 
       // Use provided date if available (format: 'EEE, dd MMM yyyy HH:mm:ss Z'), otherwise get current EST time
       let processedAtDate: Date;
@@ -68,15 +83,19 @@ export async function POST(request: NextRequest) {
 
       // First restaurant becomes the main restaurant, additional restaurants go to additionalRestaurants
       const firstRestaurant = restaurants.length > 0 ? restaurants[0] : null;
-      const mainRestaurantName = firstRestaurant?.restaurantName || processed.restaurantName;
+      const mainRestaurantName =
+        firstRestaurant?.restaurantName || processed.restaurantName;
 
       // Save to delivery orders collection
       const deliveryOrder = await DeliveryOrder.create({
         entryId,
         userId,
         appName,
-        ...(processed.miles !== undefined && processed.miles !== null && { miles: processed.miles }),
+        ...(processed.miles !== undefined &&
+          processed.miles !== null && { miles: processed.miles }),
         money: processed.money,
+        moneyEstimated: false,
+        ...(typeof ocrText === "string" && ocrText.trim() && { ocrText }),
         ...(milesToMoneyRatio !== undefined && { milesToMoneyRatio }),
         restaurantName: mainRestaurantName,
         time: "", // Time not extracted from screenshot, can be updated later
@@ -90,7 +109,8 @@ export async function POST(request: NextRequest) {
         ...(lat !== undefined && lat !== null && { userLatitude: lat }),
         ...(lon !== undefined && lon !== null && { userLongitude: lon }),
         ...(alt !== undefined && alt !== null && { userAltitude: alt }),
-        ...(address !== undefined && address !== null && { userAddress: address }),
+        ...(address !== undefined &&
+          address !== null && { userAddress: address }),
         // Add remaining restaurants to additionalRestaurants - all from same screenshot, same order ID
         ...(restaurants.length > 1 && {
           additionalRestaurants: restaurants.slice(1).map((r: any) => ({
@@ -112,19 +132,27 @@ export async function POST(request: NextRequest) {
       }
 
       // Build response
-      const milesText = deliveryOrder.miles !== undefined ? `${deliveryOrder.miles} mi` : "? mi";
-      const ratioText = deliveryOrder.milesToMoneyRatio !== undefined 
-        ? `$${deliveryOrder.milesToMoneyRatio.toFixed(2)}/mi - ` 
-        : "";
-      
+      const milesText =
+        deliveryOrder.miles !== undefined
+          ? `${deliveryOrder.miles} mi`
+          : "? mi";
+      const ratioText =
+        deliveryOrder.milesToMoneyRatio !== undefined
+          ? `$${deliveryOrder.milesToMoneyRatio.toFixed(2)}/mi - `
+          : "";
+
       const response = {
         success: true,
         id: deliveryOrder._id.toString(),
         entryId: deliveryOrder.entryId,
         message: "Delivery order processed and saved successfully",
-        ...(deliveryOrder.miles !== undefined && { miles: deliveryOrder.miles }),
+        ...(deliveryOrder.miles !== undefined && {
+          miles: deliveryOrder.miles,
+        }),
         money: deliveryOrder.money,
-        ...(deliveryOrder.milesToMoneyRatio !== undefined && { milesToMoneyRatio: deliveryOrder.milesToMoneyRatio }),
+        ...(deliveryOrder.milesToMoneyRatio !== undefined && {
+          milesToMoneyRatio: deliveryOrder.milesToMoneyRatio,
+        }),
         restaurantName: deliveryOrder.restaurantName,
         time: deliveryOrder.time,
         appName: deliveryOrder.appName,
@@ -138,9 +166,12 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(
         {
           error: "Failed to process screenshot",
-          details: processError instanceof Error ? processError.message : "Unknown processing error",
+          details:
+            processError instanceof Error
+              ? processError.message
+              : "Unknown processing error",
         },
-        { status: 500 }
+        { status: 500 },
       );
     }
   } catch (error) {
@@ -254,7 +285,8 @@ export async function GET(request: NextRequest) {
           if (order.money === undefined) {
             return false;
           }
-          const orderMoneyMatch = Math.abs(order.money - filterAmountNum) < 0.01;
+          const orderMoneyMatch =
+            Math.abs(order.money - filterAmountNum) < 0.01;
           if (!orderMoneyMatch) {
             return false;
           }
@@ -267,8 +299,11 @@ export async function GET(request: NextRequest) {
     // Apply search filter if provided (search by app name, restaurant name, address, or pay amount)
     // Support multi-term search: split by spaces, all terms must match (AND logic)
     if (searchQuery && searchQuery.trim()) {
-      const searchTerms = searchQuery.trim().split(/\s+/).filter(term => term.length > 0);
-      
+      const searchTerms = searchQuery
+        .trim()
+        .split(/\s+/)
+        .filter((term) => term.length > 0);
+
       if (searchTerms.length > 0) {
         orders = orders.filter((order) => {
           // All search terms must match (AND logic)
@@ -276,8 +311,9 @@ export async function GET(request: NextRequest) {
             const termLower = term.toLowerCase();
             // Try to parse as a number for amount search
             const termAsNumber = parseFloat(termLower);
-            const isNumericSearch = !isNaN(termAsNumber) && isFinite(termAsNumber);
-            
+            const isNumericSearch =
+              !isNaN(termAsNumber) && isFinite(termAsNumber);
+
             // Each term can match in any field (OR logic within term)
             // Search by pay amount (money field) if term is numeric
             if (isNumericSearch && order.money != null) {
@@ -286,26 +322,44 @@ export async function GET(request: NextRequest) {
                 return true;
               }
             }
-            
+
             // Search in app name
-            if (order.appName && order.appName.toLowerCase().includes(termLower)) {
+            if (
+              order.appName &&
+              order.appName.toLowerCase().includes(termLower)
+            ) {
               return true;
             }
             // Search in main restaurant name
-            if (order.restaurantName && order.restaurantName.toLowerCase().includes(termLower)) {
+            if (
+              order.restaurantName &&
+              order.restaurantName.toLowerCase().includes(termLower)
+            ) {
               return true;
             }
             // Search in main restaurant address
-            if (order.restaurantAddress && order.restaurantAddress.toLowerCase().includes(termLower)) {
+            if (
+              order.restaurantAddress &&
+              order.restaurantAddress.toLowerCase().includes(termLower)
+            ) {
               return true;
             }
             // Search in additional restaurants
-            if (order.additionalRestaurants && Array.isArray(order.additionalRestaurants)) {
+            if (
+              order.additionalRestaurants &&
+              Array.isArray(order.additionalRestaurants)
+            ) {
               for (const additionalRestaurant of order.additionalRestaurants) {
-                if (additionalRestaurant.name && additionalRestaurant.name.toLowerCase().includes(termLower)) {
+                if (
+                  additionalRestaurant.name &&
+                  additionalRestaurant.name.toLowerCase().includes(termLower)
+                ) {
                   return true;
                 }
-                if (additionalRestaurant.address && additionalRestaurant.address.toLowerCase().includes(termLower)) {
+                if (
+                  additionalRestaurant.address &&
+                  additionalRestaurant.address.toLowerCase().includes(termLower)
+                ) {
                   return true;
                 }
               }
@@ -381,7 +435,8 @@ export async function GET(request: NextRequest) {
         active: order.active !== undefined ? order.active : true,
         processedAt: order.processedAt.toISOString(),
         createdAt: order.createdAt.toISOString(),
-        linkedTransactions: transactionsByOrderId.get(order._id.toString()) || [],
+        linkedTransactions:
+          transactionsByOrderId.get(order._id.toString()) || [],
         additionalRestaurants: order.additionalRestaurants || [],
       })),
       pagination: {
@@ -419,7 +474,10 @@ export async function DELETE(request: NextRequest) {
       return NextResponse.json({ error: "Order not found" }, { status: 404 });
     }
 
-    return NextResponse.json({ success: true, message: "Order deleted successfully" });
+    return NextResponse.json({
+      success: true,
+      message: "Order deleted successfully",
+    });
   } catch (error) {
     return handleApiError(error);
   }
@@ -430,7 +488,21 @@ export async function PATCH(request: NextRequest) {
     await connectDB();
 
     const body = await request.json();
-    const { id, appName, miles, money, restaurantName, restaurantAddress, restaurantPlaceId, restaurantLat, restaurantLon, time, step, additionalRestaurants, updateAdditionalRestaurant } = body;
+    const {
+      id,
+      appName,
+      miles,
+      money,
+      restaurantName,
+      restaurantAddress,
+      restaurantPlaceId,
+      restaurantLat,
+      restaurantLon,
+      time,
+      step,
+      additionalRestaurants,
+      updateAdditionalRestaurant,
+    } = body;
 
     if (!id) {
       return NextResponse.json({ error: "Missing id" }, { status: 400 });
@@ -442,7 +514,7 @@ export async function PATCH(request: NextRequest) {
       return NextResponse.json({ error: "Order not found" }, { status: 404 });
     }
 
-    const updateSet: Record<string, any> = {};
+    const updateSet: Record<string, unknown> = {};
 
     if (typeof appName === "string") {
       updateSet.appName = appName;
@@ -478,7 +550,11 @@ export async function PATCH(request: NextRequest) {
       updateSet.additionalRestaurants = additionalRestaurants;
     }
     // Support updating a single additional restaurant by index
-    if (updateAdditionalRestaurant && typeof updateAdditionalRestaurant.index === "number" && updateAdditionalRestaurant.data) {
+    if (
+      updateAdditionalRestaurant &&
+      typeof updateAdditionalRestaurant.index === "number" &&
+      updateAdditionalRestaurant.data
+    ) {
       const index = updateAdditionalRestaurant.index;
       const restaurantData = updateAdditionalRestaurant.data;
       if (!existingOrder.additionalRestaurants) {
@@ -495,9 +571,19 @@ export async function PATCH(request: NextRequest) {
 
     // Recalculate ratio if miles or money changed
     if (updateSet.miles !== undefined || updateSet.money !== undefined) {
-      const finalMiles = updateSet.miles ?? existingOrder.miles;
-      const finalMoney = updateSet.money ?? existingOrder.money;
-      if (finalMiles !== undefined && finalMiles !== null && finalMiles > 0) {
+      const finalMiles =
+        typeof updateSet.miles === "number"
+          ? updateSet.miles
+          : existingOrder.miles;
+      const finalMoney =
+        typeof updateSet.money === "number"
+          ? updateSet.money
+          : existingOrder.money;
+      if (
+        typeof finalMiles === "number" &&
+        finalMiles > 0 &&
+        typeof finalMoney === "number"
+      ) {
         updateSet.milesToMoneyRatio = finalMoney / finalMiles;
       } else {
         // If miles is 0 or undefined, remove the ratio
@@ -506,7 +592,10 @@ export async function PATCH(request: NextRequest) {
     }
 
     if (Object.keys(updateSet).length === 0) {
-      return NextResponse.json({ error: "No fields to update" }, { status: 400 });
+      return NextResponse.json(
+        { error: "No fields to update" },
+        { status: 400 },
+      );
     }
 
     const result = await DeliveryOrder.findByIdAndUpdate(
@@ -515,7 +604,7 @@ export async function PATCH(request: NextRequest) {
       {
         new: true,
         runValidators: true,
-      }
+      },
     ).lean();
 
     if (!result) {
@@ -548,4 +637,3 @@ export async function PATCH(request: NextRequest) {
     return handleApiError(error);
   }
 }
-

@@ -14,12 +14,31 @@ export interface IAdditionalRestaurant {
   userAddress?: string;
 }
 
+export interface DeliveryOrderExtractedData {
+  [key: string]: unknown;
+  restaurants?: Array<{ restaurantName?: string; [key: string]: unknown }>;
+  pickups?: number;
+  drops?: number;
+  items?: number;
+  extractedText?: string;
+}
+
+export interface DeliveryOrderMetadata {
+  [key: string]: unknown;
+  extractedData?: DeliveryOrderExtractedData;
+  ocrText?: string;
+  extractedText?: string;
+}
+
 export interface IDeliveryOrder extends Document {
   entryId: string;
   userId: string;
   appName?: string;
   miles?: number;
+  milesEstimated?: boolean;
   money?: number;
+  moneyEstimated?: boolean;
+  ocrText?: string;
   milesToMoneyRatio?: number;
   restaurantName?: string;
   restaurantAddress?: string;
@@ -33,7 +52,7 @@ export interface IDeliveryOrder extends Document {
   userAltitude?: number;
   userAddress?: string;
   rawResponse?: string;
-  metadata?: Record<string, any>;
+  metadata?: DeliveryOrderMetadata;
   linkedTransactionIds?: mongoose.Types.ObjectId[];
   linkedOcrExportIds?: mongoose.Types.ObjectId[];
   step?: string;
@@ -62,9 +81,20 @@ const DeliveryOrderSchema: Schema = new Schema(
       type: Number,
       required: false,
     },
+    milesEstimated: {
+      type: Boolean,
+      default: false,
+    },
     money: {
       type: Number,
       required: false,
+    },
+    moneyEstimated: {
+      type: Boolean,
+      default: false,
+    },
+    ocrText: {
+      type: String,
     },
     milesToMoneyRatio: {
       type: Number,
@@ -115,14 +145,18 @@ const DeliveryOrderSchema: Schema = new Schema(
       type: Date,
       required: true,
     },
-    linkedTransactionIds: [{
-      type: Schema.Types.ObjectId,
-      ref: "Transaction",
-    }],
-    linkedOcrExportIds: [{
-      type: Schema.Types.ObjectId,
-      ref: "OcrExport",
-    }],
+    linkedTransactionIds: [
+      {
+        type: Schema.Types.ObjectId,
+        ref: "Transaction",
+      },
+    ],
+    linkedOcrExportIds: [
+      {
+        type: Schema.Types.ObjectId,
+        ref: "OcrExport",
+      },
+    ],
     step: {
       type: String,
       default: "CREATED",
@@ -131,46 +165,48 @@ const DeliveryOrderSchema: Schema = new Schema(
       type: Boolean,
       default: true,
     },
-    additionalRestaurants: [{
-      name: {
-        type: String,
-        required: true,
+    additionalRestaurants: [
+      {
+        name: {
+          type: String,
+          required: true,
+        },
+        address: {
+          type: String,
+        },
+        placeId: {
+          type: String,
+        },
+        lat: {
+          type: Number,
+        },
+        lon: {
+          type: Number,
+        },
+        screenshot: {
+          type: String,
+        },
+        extractedText: {
+          type: String,
+        },
+        userLatitude: {
+          type: Number,
+        },
+        userLongitude: {
+          type: Number,
+        },
+        userAltitude: {
+          type: Number,
+        },
+        userAddress: {
+          type: String,
+        },
       },
-      address: {
-        type: String,
-      },
-      placeId: {
-        type: String,
-      },
-      lat: {
-        type: Number,
-      },
-      lon: {
-        type: Number,
-      },
-      screenshot: {
-        type: String,
-      },
-      extractedText: {
-        type: String,
-      },
-      userLatitude: {
-        type: Number,
-      },
-      userLongitude: {
-        type: Number,
-      },
-      userAltitude: {
-        type: Number,
-      },
-      userAddress: {
-        type: String,
-      },
-    }],
+    ],
   },
   {
     timestamps: true,
-  }
+  },
 );
 
 DeliveryOrderSchema.index({ userId: 1, processedAt: -1 });
@@ -181,4 +217,3 @@ const DeliveryOrder: Model<IDeliveryOrder> =
   mongoose.model<IDeliveryOrder>("DeliveryOrder", DeliveryOrderSchema);
 
 export default DeliveryOrder;
-

@@ -3,6 +3,7 @@ import mongoose, { Schema, Document, Model } from "mongoose";
 export interface ITransaction extends Document {
   userId: string;
   amount: number;
+  amountEstimated?: boolean;
   type: "income" | "expense";
   date: Date;
   time: string;
@@ -30,7 +31,11 @@ export interface ITransaction extends Document {
     distanceMiles?: number;
     durationText?: string;
     durationSeconds?: number;
-    type: 'user-to-restaurant' | 'restaurant-to-restaurant' | 'restaurant-to-customer' | 'customer-to-customer';
+    type:
+      | "user-to-restaurant"
+      | "restaurant-to-restaurant"
+      | "restaurant-to-customer"
+      | "customer-to-customer";
     fromIndex: number;
     toIndex: number;
     orderId?: string;
@@ -50,6 +55,10 @@ const TransactionSchema: Schema = new Schema(
     amount: {
       type: Number,
       required: true,
+    },
+    amountEstimated: {
+      type: Boolean,
+      default: false,
     },
     type: {
       type: String,
@@ -82,14 +91,18 @@ const TransactionSchema: Schema = new Schema(
     dueDate: {
       type: Date,
     },
-    linkedOcrExportIds: [{
-      type: Schema.Types.ObjectId,
-      ref: "OcrExport",
-    }],
-    linkedDeliveryOrderIds: [{
-      type: Schema.Types.ObjectId,
-      ref: "DeliveryOrder",
-    }],
+    linkedOcrExportIds: [
+      {
+        type: Schema.Types.ObjectId,
+        ref: "OcrExport",
+      },
+    ],
+    linkedDeliveryOrderIds: [
+      {
+        type: Schema.Types.ObjectId,
+        ref: "DeliveryOrder",
+      },
+    ],
     step: {
       type: String,
       default: "CREATED",
@@ -101,14 +114,13 @@ const TransactionSchema: Schema = new Schema(
   },
   {
     timestamps: true,
-  }
+  },
 );
 
 TransactionSchema.index({ userId: 1, date: -1 });
 
 const Transaction: Model<ITransaction> =
-  mongoose.models.Transaction || mongoose.model<ITransaction>("Transaction", TransactionSchema);
+  mongoose.models.Transaction ||
+  mongoose.model<ITransaction>("Transaction", TransactionSchema);
 
 export default Transaction;
-
-
