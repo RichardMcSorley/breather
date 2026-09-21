@@ -66,21 +66,24 @@ function buildPendingDisplay(
   orderKind: string,
   createdOrderId?: string,
 ) {
-  const decision =
-    fastEvaluation.decision === slowEvaluation.decision
-      ? fastEvaluation.decision
-      : "review";
   const decisionLabel =
-    decision === "accept"
+    fastEvaluation.decision === "accept" && slowEvaluation.decision === "accept"
       ? "TAKE IT"
-      : decision === "decline"
+      : fastEvaluation.decision === "decline" &&
+          slowEvaluation.decision === "decline"
         ? "PASS"
-        : "REVIEW";
+        : fastEvaluation.decision === "decline" &&
+            slowEvaluation.decision === "accept"
+          ? "ACCEPT IF SLOW"
+          : "ACCEPT IF FAST";
   const payPerMile = miles > 0 ? pay / miles : null;
   const reason =
     fastEvaluation.decision === slowEvaluation.decision
       ? slowEvaluation.reason
-      : `Fast says ${fastEvaluation.decision}; slow says ${slowEvaluation.decision}. ${slowEvaluation.reason}`;
+      : fastEvaluation.decision === "decline" &&
+          slowEvaluation.decision === "accept"
+        ? "Slow conditions pass the lower $5 threshold; fast conditions require $7."
+        : "Fast conditions pass the higher $7 threshold.";
   const work = [
     `${pickups ?? 1} pickup${pickups === 1 ? "" : "s"}`,
     `${drops ?? 1} dropoff${drops === 1 ? "" : "s"}`,
@@ -89,16 +92,15 @@ function buildPendingDisplay(
   if (items !== undefined && items > 0) work.push(`${items} items`);
 
   const display = [
-    `Jev fast: ${fastEvaluation.decision}`,
-    `Jev slow: ${slowEvaluation.decision}`,
-    `Jev verdict: ${decisionLabel}`,
+    `Fast: ${fastEvaluation.decision} · Slow: ${slowEvaluation.decision}`,
+    `Verdict: ${decisionLabel}`,
     `Why: ${reason}`,
     `Offer: $${pay.toFixed(2)} · ${miles.toFixed(1)} mi${
       payPerMile === null ? "" : ` · $${payPerMile.toFixed(2)}/mi`
     }`,
     `Work: ${work.join(" · ")}`,
-    `${payEstimated ? "Estimated" : "Pay"}: $${pay.toFixed(2)}${
-      payEstimated ? " (Jev band fallback; OCR pending)" : " (regex confirmed)"
+    `${payEstimated ? "Estimated pay" : "Pay"}: $${pay.toFixed(2)}${
+      payEstimated ? " (OCR pending)" : ""
     }`,
   ];
 
@@ -338,14 +340,15 @@ export async function POST(request: NextRequest) {
             ? resolved.items
             : undefined,
       };
+      // Fast market requires $7 base threshold; slow market permits $5.
       const fastEvaluation = evaluateJevPolicy(
         classification,
-        5,
+        7,
         confirmedFacts,
       );
       const slowEvaluation = evaluateJevPolicy(
         classification,
-        7,
+        5,
         confirmedFacts,
       );
       let createdOrderId: string | undefined;
