@@ -16,6 +16,7 @@ export type JevPolicyEvaluation = {
   requiredPayMinimum: number | null;
   requiredPayMaximum: number | null;
   mileageMinimum: number | null;
+  reason: string;
 };
 
 const payRanges: Record<string, Range> = {
@@ -166,6 +167,7 @@ export function evaluateJevPolicy(
       requiredPayMinimum: null,
       requiredPayMaximum: null,
       mileageMinimum: null,
+      reason: "Jev could not establish all pay, mileage, or workload bands.",
     };
   }
 
@@ -187,6 +189,8 @@ export function evaluateJevPolicy(
     items[1] * 0.35;
   const bestPayPerMile = pay[1] / miles[0];
   const worstPayPerMile = pay[0] / miles[1];
+  const payFails = pay[1] < requiredPayMinimum;
+  const mileageFails = bestPayPerMile < mileageMinimum;
 
   if (pay[0] >= requiredPayMaximum && worstPayPerMile >= mileageMinimum) {
     return {
@@ -194,15 +198,23 @@ export function evaluateJevPolicy(
       requiredPayMinimum,
       requiredPayMaximum,
       mileageMinimum,
+      reason: `Pay band clears $${requiredPayMaximum.toFixed(2)} workload minimum and worst-case pay per mile clears $${mileageMinimum.toFixed(2)}/mi.`,
     };
   }
 
-  if (pay[1] < requiredPayMinimum || bestPayPerMile < mileageMinimum) {
+  if (payFails || mileageFails) {
+    const failures = [
+      payFails ? `pay may fall below $${requiredPayMinimum.toFixed(2)}` : null,
+      mileageFails
+        ? `best-case pay per mile is below $${mileageMinimum.toFixed(2)}/mi`
+        : null,
+    ].filter((failure): failure is string => failure !== null);
     return {
       decision: "decline",
       requiredPayMinimum,
       requiredPayMaximum,
       mileageMinimum,
+      reason: `Pass: ${failures.join(" and ")}.`,
     };
   }
 
@@ -211,5 +223,6 @@ export function evaluateJevPolicy(
     requiredPayMinimum,
     requiredPayMaximum,
     mileageMinimum,
+    reason: `Review: offer overlaps the $${requiredPayMinimum.toFixed(2)}-$${requiredPayMaximum.toFixed(2)} workload threshold.`,
   };
 }

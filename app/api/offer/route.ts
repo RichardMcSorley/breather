@@ -18,6 +18,7 @@ import {
 import {
   classificationFromAnswers,
   evaluateJevPolicy,
+  type JevPolicyEvaluation,
 } from "@/lib/jev-rule-engine";
 import { extractRegexOfferCandidates } from "@/lib/ocr-offer-extractor";
 import { resolveRegexOfferCandidates } from "@/lib/ocr-offer-resolution";
@@ -55,14 +56,47 @@ Output: {"pay": 12, "pickups": 2, "miles": 5, "restaurants": []}`;
 
 function buildPendingDisplay(
   pay: number,
+  miles: number,
   payEstimated: boolean,
-  fastDecision: string,
-  slowDecision: string,
+  fastEvaluation: JevPolicyEvaluation,
+  slowEvaluation: JevPolicyEvaluation,
+  pickups: number | undefined,
+  drops: number | undefined,
+  items: number | undefined,
+  orderKind: string,
   createdOrderId?: string,
 ) {
+  const decision =
+    fastEvaluation.decision === slowEvaluation.decision
+      ? fastEvaluation.decision
+      : "review";
+  const decisionLabel =
+    decision === "accept"
+      ? "TAKE IT"
+      : decision === "decline"
+        ? "PASS"
+        : "REVIEW";
+  const payPerMile = miles > 0 ? pay / miles : null;
+  const reason =
+    fastEvaluation.decision === slowEvaluation.decision
+      ? slowEvaluation.reason
+      : `Fast says ${fastEvaluation.decision}; slow says ${slowEvaluation.decision}. ${slowEvaluation.reason}`;
+  const work = [
+    `${pickups ?? 1} pickup${pickups === 1 ? "" : "s"}`,
+    `${drops ?? 1} dropoff${drops === 1 ? "" : "s"}`,
+    `${orderKind.replaceAll("_", " ")}`,
+  ];
+  if (items !== undefined && items > 0) work.push(`${items} items`);
+
   const display = [
-    `Jev fast: ${fastDecision}`,
-    `Jev slow: ${slowDecision}`,
+    `Jev fast: ${fastEvaluation.decision}`,
+    `Jev slow: ${slowEvaluation.decision}`,
+    `Jev verdict: ${decisionLabel}`,
+    `Why: ${reason}`,
+    `Offer: $${pay.toFixed(2)} · ${miles.toFixed(1)} mi${
+      payPerMile === null ? "" : ` · $${payPerMile.toFixed(2)}/mi`
+    }`,
+    `Work: ${work.join(" · ")}`,
     `${payEstimated ? "Estimated" : "Pay"}: $${pay.toFixed(2)}${
       payEstimated ? " (Jev band fallback; OCR pending)" : " (regex confirmed)"
     }`,
@@ -355,9 +389,14 @@ export async function POST(request: NextRequest) {
 
       const display = buildPendingDisplay(
         resolved.pay,
+        resolved.miles,
         resolved.payEstimated,
-        fastEvaluation.decision,
-        slowEvaluation.decision,
+        fastEvaluation,
+        slowEvaluation,
+        resolved.pickups,
+        resolved.drops,
+        resolved.items,
+        resolved.orderKind,
         createdOrderId,
       );
 
