@@ -209,12 +209,17 @@ export function evaluateJevPolicy(
   const payFloor = facts?.pay ?? pay[0];
 
   if (payFloor >= requiredPayMaximum && worstPayPerMile >= mileageMinimum) {
+    const payBasis = facts?.pay !== undefined ? "Confirmed pay" : "Pay band";
+    const mileageBasis =
+      facts?.pay !== undefined && facts?.miles !== undefined
+        ? "Confirmed pay per mile"
+        : "Worst-case pay per mile";
     return {
       decision: "accept",
       requiredPayMinimum,
       requiredPayMaximum,
       mileageMinimum,
-      reason: `Pay band clears $${requiredPayMaximum.toFixed(2)} workload minimum and worst-case pay per mile clears $${mileageMinimum.toFixed(2)}/mi.`,
+      reason: `${payBasis} clears $${requiredPayMaximum.toFixed(2)} workload minimum and ${mileageBasis.toLowerCase()} clears $${mileageMinimum.toFixed(2)}/mi.`,
     };
   }
 
