@@ -199,7 +199,7 @@ const extractItems = (text: string) => {
   };
 };
 
-const extractDrops = (text: string) => {
+const extractDrops = (text: string, appName?: string) => {
   const values: Array<{ value: number; evidence: string }> = [];
   const add = (pattern: RegExp) => {
     for (const match of text.matchAll(pattern)) {
@@ -211,16 +211,35 @@ const extractDrops = (text: string) => {
   };
 
   add(new RegExp(`(?:delivery|package)\\s*\\(\\s*${NUMBER}\\s*\\)`, "gi"));
-  add(
-    new RegExp(
-      `(?<![\\d.$])${NUMBER}\\s+(?:deliver(?:y|ies)|orders?|bundles?|stops?)\\b`,
-      "gi",
-    ),
-  );
+  const customerDropoffs = [...text.matchAll(/customer\s+dropoff/gi)].length;
+  const pickupLabels = [...text.matchAll(/\b(?:pickup|retail\s+pickup)\b/gi)].length;
+  const hasTotalStopLabels =
+    customerDropoffs > 0 && pickupLabels > 0;
+  const dasherStops =
+    /(?:dasher|doordash)/i.test(appName ?? "") || hasTotalStopLabels;
+  if (!dasherStops) {
+    add(
+      new RegExp(
+        `(?<![\\d.$])${NUMBER}\\s+(?:deliver(?:y|ies)|orders?|bundles?|stops?)\\b`,
+        "gi",
+      ),
+    );
+  } else {
+    for (const match of text.matchAll(
+      /(?<![\d.$])(\d+)\s+stops?\b/gi,
+    )) {
+      const stops = Number(match[1]);
+      if (Number.isInteger(stops) && stops > 0 && stops <= 50) {
+        values.push({
+          value: Math.max(1, stops - 1),
+          evidence: `${match[0]} interpreted as ${Math.max(1, stops - 1)} dropoff`,
+        });
+      }
+    }
+  }
   add(new RegExp(`(?<![\\d.$])${NUMBER}\\s+shop\\s+and\\s+deliver\\b`, "gi"));
   add(/(?<![\\d.$])(\d+)\s*[|,\n]+\s*miles?\s*[|,\n]*\s*orders?\b/gi);
 
-  const customerDropoffs = [...text.matchAll(/customer\s+dropoff/gi)].length;
   if (customerDropoffs > 0) {
     values.push({
       value: customerDropoffs,
@@ -294,7 +313,7 @@ export function extractRegexOfferCandidates(text: string, appName?: string) {
   const pay = extractPay(text);
   const miles = extractMiles(text, appName);
   const items = extractItems(text);
-  const drops = extractDrops(text);
+  const drops = extractDrops(text, appName);
   const pickups = extractPickups(text);
   const merchants = extractMerchants(text);
   const shopping =

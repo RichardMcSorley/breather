@@ -19,6 +19,21 @@ describe("extractRegexOfferCandidates", () => {
     });
   });
 
+  it("treats DoorDash total stops as pickup plus dropoffs", () => {
+    const result = extractRegexOfferCandidates(
+      `$7.80 Guaranteed (incl. tips)\n4.3 mi\n18 min\nPickup\nOutback Steakhouse\nCustomer dropoff\n(2 stops)`,
+      "Photos",
+    );
+
+    expect(result).toMatchObject({
+      pay: 7.8,
+      miles: 4.3,
+      pickups: 1,
+      drops: 1,
+      orderKind: "single_delivery",
+    });
+  });
+
   it("handles GH multiline distance without treating pay cents as order count", () => {
     const result = extractRegexOfferCandidates(
       `Steak 'n Shake & Jimmy John's\n$12.33\nDelivery pay + tip\n9.2\n2\nmiles\norders`,
