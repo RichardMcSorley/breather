@@ -11,6 +11,14 @@ export type JevRuleClassification = {
   orderKind: string;
 };
 
+export type JevPolicyFacts = {
+  pay?: number;
+  miles?: number;
+  pickups?: number;
+  drops?: number;
+  items?: number;
+};
+
 export type JevPolicyEvaluation = {
   decision: RuleDecision;
   requiredPayMinimum: number | null;
@@ -154,6 +162,7 @@ export function estimatedMilesForBand(milesBand: string) {
 export function evaluateJevPolicy(
   classification: JevRuleClassification,
   basePay: number,
+  facts?: JevPolicyFacts,
 ): JevPolicyEvaluation {
   const pay = rangeFor(payRanges, classification.payBand);
   const miles = rangeFor(milesRanges, classification.milesBand);
@@ -179,20 +188,27 @@ export function evaluateJevPolicy(
     classification.orderKind === "shopping_batch";
   const mileageMinimum = shopping || batch ? 2.5 : 2;
   const shoppingSetup = shopping ? 1.75 : 0;
+  const pickupMinimum = facts?.pickups ?? pickups[0];
+  const pickupMaximum = facts?.pickups ?? pickups[1];
+  const dropMinimum = facts?.drops ?? drops[0];
+  const dropMaximum = facts?.drops ?? drops[1];
+  const itemMinimum = facts?.items ?? items[0];
+  const itemMaximum = facts?.items ?? items[1];
   const requiredPayMinimum =
-    basePay * drops[0] * (1 + 0.4 * (pickups[0] - 1)) +
+    basePay * dropMinimum * (1 + 0.4 * (pickupMinimum - 1)) +
     shoppingSetup +
-    items[0] * 0.35;
+    itemMinimum * 0.35;
   const requiredPayMaximum =
-    basePay * drops[1] * (1 + 0.4 * (pickups[1] - 1)) +
+    basePay * dropMaximum * (1 + 0.4 * (pickupMaximum - 1)) +
     shoppingSetup +
-    items[1] * 0.35;
-  const bestPayPerMile = pay[1] / miles[0];
-  const worstPayPerMile = pay[0] / miles[1];
-  const payFails = pay[1] < requiredPayMinimum;
+    itemMaximum * 0.35;
+  const bestPayPerMile = (facts?.pay ?? pay[1]) / (facts?.miles ?? miles[0]);
+  const worstPayPerMile = (facts?.pay ?? pay[0]) / (facts?.miles ?? miles[1]);
+  const payFails = (facts?.pay ?? pay[1]) < requiredPayMinimum;
   const mileageFails = bestPayPerMile < mileageMinimum;
+  const payFloor = facts?.pay ?? pay[0];
 
-  if (pay[0] >= requiredPayMaximum && worstPayPerMile >= mileageMinimum) {
+  if (payFloor >= requiredPayMaximum && worstPayPerMile >= mileageMinimum) {
     return {
       decision: "accept",
       requiredPayMinimum,

@@ -20,6 +20,24 @@ describe("evaluateJevPolicy", () => {
     expect(result.requiredPayMaximum).toBe(5);
   });
 
+  it("uses confirmed pay and miles instead of rejecting a mixed band", () => {
+    const result = evaluateJevPolicy(
+      {
+        payBand: "7_to_7_99",
+        milesBand: "3_to_3_99",
+        pickups: "one",
+        dropoffs: "one",
+        itemsBand: "zero",
+        orderKind: "single_delivery",
+      },
+      7,
+      { pay: 7.8, miles: 3.3, pickups: 1, drops: 1, items: 0 },
+    );
+
+    expect(result.decision).toBe("accept");
+    expect(result.reason).toContain("clears");
+  });
+
   it("explains why weak offers should be passed", () => {
     const result = evaluateJevPolicy(
       {

@@ -322,8 +322,32 @@ export async function POST(request: NextRequest) {
         jev.answers,
         classification,
       );
-      const fastEvaluation = evaluateJevPolicy(classification, 5);
-      const slowEvaluation = evaluateJevPolicy(classification, 7);
+      const confirmedFacts = {
+        pay: resolved.payEstimated ? undefined : resolved.pay,
+        miles: resolved.milesEstimated ? undefined : resolved.miles,
+        pickups:
+          resolved.validation.pickups.source === "regex"
+            ? resolved.pickups
+            : undefined,
+        drops:
+          resolved.validation.drops.source === "regex"
+            ? resolved.drops
+            : undefined,
+        items:
+          resolved.validation.items.source === "regex"
+            ? resolved.items
+            : undefined,
+      };
+      const fastEvaluation = evaluateJevPolicy(
+        classification,
+        5,
+        confirmedFacts,
+      );
+      const slowEvaluation = evaluateJevPolicy(
+        classification,
+        7,
+        confirmedFacts,
+      );
       let createdOrderId: string | undefined;
 
       if (userId && appName) {
