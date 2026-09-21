@@ -90,25 +90,6 @@ function buildPendingDisplay(
     decisionLabel = "ACCEPT IF FAST";
   }
   const payPerMile = miles > 0 ? pay / miles : null;
-  let reason = "Use current order speed before accepting.";
-  if (fastEvaluation.decision === slowEvaluation.decision) {
-    reason =
-      fastEvaluation.decision === "accept" ||
-      fastEvaluation.decision === "decline"
-        ? `Fast: ${fastEvaluation.reason} Slow: ${slowEvaluation.reason}`
-        : slowEvaluation.reason;
-  } else if (
-    fastEvaluation.decision === "decline" &&
-    slowEvaluation.decision === "accept"
-  ) {
-    reason =
-      "Slow conditions pass the lower $5 threshold; fast conditions require $7.";
-  } else if (
-    fastEvaluation.decision === "accept" &&
-    slowEvaluation.decision === "decline"
-  ) {
-    reason = "Fast conditions pass the higher $7 threshold.";
-  }
   const work = [
     `${pickups ?? 1} pickup${pickups === 1 ? "" : "s"}`,
     `${drops ?? 1} dropoff${drops === 1 ? "" : "s"}`,
@@ -119,7 +100,6 @@ function buildPendingDisplay(
   const display = [
     `Fast: ${fastEvaluation.decision} · Slow: ${slowEvaluation.decision}`,
     `Verdict: ${decisionLabel}`,
-    `Why: ${reason}`,
     `Offer: $${pay.toFixed(2)} · ${miles.toFixed(1)} mi${
       payPerMile === null ? "" : ` · $${payPerMile.toFixed(2)}/mi`
     }`,
