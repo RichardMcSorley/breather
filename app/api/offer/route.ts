@@ -88,6 +88,17 @@ function buildPendingDisplay(
     slowEvaluation.decision === "decline"
   ) {
     decisionLabel = "ACCEPT IF FAST";
+  } else if (
+    fastEvaluation.decision === "review" ||
+    slowEvaluation.decision === "review"
+  ) {
+    const knownDecision = [
+      fastEvaluation.decision,
+      slowEvaluation.decision,
+    ].find((decision) => decision !== "review");
+    decisionLabel = knownDecision
+      ? `REVIEW + ${knownDecision.toUpperCase()}`
+      : "REVIEW";
   }
   const payPerMile = miles > 0 ? pay / miles : null;
   const work = [

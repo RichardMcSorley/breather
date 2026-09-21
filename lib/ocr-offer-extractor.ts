@@ -212,9 +212,9 @@ const extractDrops = (text: string, appName?: string) => {
 
   add(new RegExp(`(?:delivery|package)\\s*\\(\\s*${NUMBER}\\s*\\)`, "gi"));
   const customerDropoffs = [...text.matchAll(/customer\s+dropoff/gi)].length;
-  const pickupLabels = [...text.matchAll(/\b(?:pickup|retail\s+pickup)\b/gi)].length;
-  const hasTotalStopLabels =
-    customerDropoffs > 0 && pickupLabels > 0;
+  const pickupLabels = [...text.matchAll(/\b(?:pickup|retail\s+pickup)\b/gi)]
+    .length;
+  const hasTotalStopLabels = customerDropoffs > 0 && pickupLabels > 0;
   const dasherStops =
     /(?:dasher|doordash)/i.test(appName ?? "") || hasTotalStopLabels;
   if (!dasherStops) {
@@ -225,9 +225,7 @@ const extractDrops = (text: string, appName?: string) => {
       ),
     );
   } else {
-    for (const match of text.matchAll(
-      /(?<![\d.$])(\d+)\s+stops?\b/gi,
-    )) {
+    for (const match of text.matchAll(/(?<![\d.$])(\d+)\s+stops?\b/gi)) {
       const stops = Number(match[1]);
       if (Number.isInteger(stops) && stops > 0 && stops <= 50) {
         values.push({
