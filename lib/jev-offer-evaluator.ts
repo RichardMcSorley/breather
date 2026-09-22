@@ -241,6 +241,15 @@ export async function classifyOcrOfferWithJev(input: {
               unknown: "Item count is missing or ambiguous.",
             },
           },
+          is_shopping: {
+            type: "noul",
+            instructions:
+              "Does this offer require the driver to shop for items at the pickup location?",
+            criteria: {
+              true: "The driver must select, shop for, or purchase one or more items.",
+              false: "The driver only picks up an already-prepared order or package.",
+            },
+          },
           pay_candidate: {
             type: "choice",
             instructions:

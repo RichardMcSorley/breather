@@ -1,7 +1,26 @@
 import { describe, expect, it } from "vitest";
-import { evaluateJevPolicy } from "@/lib/jev-rule-engine";
+import {
+  classificationFromAnswers,
+  evaluateJevPolicy,
+} from "@/lib/jev-rule-engine";
 
 describe("evaluateJevPolicy", () => {
+  it("exposes classifier dimensions without using a vague batch flag", () => {
+    const classification = classificationFromAnswers({
+      is_shopping: { type: "noul", noul: 0.92 },
+      pickups: { type: "choice", choice: "one" },
+      dropoffs: { type: "choice", choice: "two" },
+      items_band: { type: "choice", choice: "six_to_ten" },
+      merchant_category: { type: "choice", choice: "grocery_store" },
+    });
+
+    expect(classification.isShopping).toBe(true);
+    expect(classification.pickups).toBe("one");
+    expect(classification.dropoffs).toBe("two");
+    expect(classification.itemsBand).toBe("six_to_ten");
+    expect(classification.merchantCategory).toBe("grocery_store");
+  });
+
   it("explains why strong offers should be taken", () => {
     const result = evaluateJevPolicy(
       {

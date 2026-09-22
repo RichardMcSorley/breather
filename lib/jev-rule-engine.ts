@@ -9,6 +9,8 @@ export type JevRuleClassification = {
   dropoffs: string;
   itemsBand: string;
   orderKind: string;
+  isShopping?: boolean | null;
+  merchantCategory?: string;
 };
 
 export type JevPolicyFacts = {
@@ -115,6 +117,14 @@ export function choiceAnswer(value: unknown) {
     : "unknown";
 }
 
+export function noulAnswer(value: unknown): boolean | null {
+  if (!value || typeof value !== "object") return null;
+  const answer = value as { type?: unknown; noul?: unknown };
+  return answer.type === "noul" && typeof answer.noul === "number"
+    ? answer.noul >= 0.5
+    : null;
+}
+
 export function classificationFromAnswers(
   answers: unknown,
 ): JevRuleClassification {
@@ -130,6 +140,8 @@ export function classificationFromAnswers(
     dropoffs: choiceAnswer(record.dropoffs),
     itemsBand: choiceAnswer(record.items_band),
     orderKind: choiceAnswer(record.order_kind),
+    isShopping: noulAnswer(record.is_shopping),
+    merchantCategory: choiceAnswer(record.merchant_category),
   };
 }
 
