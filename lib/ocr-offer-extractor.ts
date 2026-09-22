@@ -270,6 +270,17 @@ const extractOrderCount = (text: string) => {
     : { value: 1, evidence: "default single order" };
 };
 
+const extractStopCounts = (text: string) => {
+  const totalMatch = text.match(/(?<![\d.])(\d+)\s+stops?\s*\(/i);
+  const dropoffMatch = text.match(
+    /multiple\s+dropoffs?\s*\(\s*(\d+)\s+stops?\s*\)/i,
+  );
+  return {
+    totalStops: totalMatch ? Number(totalMatch[1]) : undefined,
+    dropoffStops: dropoffMatch ? Number(dropoffMatch[1]) : undefined,
+  };
+};
+
 const extractMerchants = (text: string) => {
   const lines = linesOf(text);
   const merchants: string[] = [];
@@ -324,6 +335,7 @@ export function extractRegexOfferCandidates(text: string, appName?: string) {
   const pickups = extractPickups(text);
   const merchants = extractMerchants(text);
   const orderCount = extractOrderCount(text);
+  const stopCounts = extractStopCounts(text);
   const payPosition = text.search(/\$\s*\d/);
   const offerText = payPosition >= 0 ? text.slice(payPosition) : text;
   const dropoffPosition = offerText.search(/customer\s+dropoff/i);
@@ -332,9 +344,15 @@ export function extractRegexOfferCandidates(text: string, appName?: string) {
   const knownPickupCount = KNOWN_MERCHANTS.filter((merchant) =>
     beforeDropoff.toLowerCase().includes(merchant.toLowerCase()),
   ).length;
-  const pickupValue = Math.max(pickups.value, knownPickupCount);
   const customerDropoffCount = [...text.matchAll(/customer\s+dropoff/gi)].length;
-  const dropValue = customerDropoffCount > 0 ? customerDropoffCount : drops.value;
+  const dropValue =
+    stopCounts.dropoffStops ??
+    (customerDropoffCount > 0 ? customerDropoffCount : drops.value);
+  const pickupFromStops =
+    stopCounts.totalStops !== undefined && stopCounts.dropoffStops !== undefined
+      ? Math.max(1, stopCounts.totalStops - stopCounts.dropoffStops)
+      : 0;
+  const pickupValue = Math.max(pickups.value, knownPickupCount, pickupFromStops);
   const resolvedPickups = {
     value: pickupValue,
     evidence:
@@ -345,7 +363,9 @@ export function extractRegexOfferCandidates(text: string, appName?: string) {
   const resolvedDrops = {
     value: dropValue,
     evidence:
-      customerDropoffCount > 0
+      stopCounts.dropoffStops !== undefined
+        ? `${stopCounts.dropoffStops} explicit dropoff stops`
+        : customerDropoffCount > 0
         ? `${customerDropoffCount} customer dropoff labels`
         : drops.evidence,
   };

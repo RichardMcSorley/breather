@@ -51,6 +51,19 @@ describe("extractRegexOfferCandidates", () => {
     );
   });
 
+  it("uses explicit multiple-dropoff stops to split total stops", () => {
+    const result = extractRegexOfferCandidates(
+      `$13.30 incl. tips\n4 stops (5.9 mi) • 27 min\nMoe's Southwest Grill\nAshland Poke & Hibachi\nMultiple dropoffs (2 stops)\nGuaranteed earnings`,
+      "Dasher",
+    );
+
+    expect(result).toMatchObject({
+      pickups: 2,
+      drops: 2,
+      orderKind: "delivery_batch",
+    });
+  });
+
   it("handles GH multiline distance without treating pay cents as order count", () => {
     const result = extractRegexOfferCandidates(
       `Steak 'n Shake & Jimmy John's\n$12.33\nDelivery pay + tip\n9.2\n2\nmiles\norders`,
