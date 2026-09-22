@@ -73,7 +73,7 @@ function buildPendingDisplay(
     fastEvaluation.decision === "accept" &&
     slowEvaluation.decision === "accept"
   ) {
-    decisionLabel = "TAKE IT";
+    decisionLabel = "ACCEPT";
   } else if (
     fastEvaluation.decision === "decline" &&
     slowEvaluation.decision === "decline"
