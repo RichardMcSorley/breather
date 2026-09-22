@@ -34,6 +34,23 @@ describe("extractRegexOfferCandidates", () => {
     });
   });
 
+  it("separates pickup stops, dropoff stops, and orders at one dropoff", () => {
+    const result = extractRegexOfferCandidates(
+      `$14.30 incl. tips\n3 stops (7.5 mi) • 27 min\nPanera Bread\nChick-fil-A\nCustomer dropoff\nDrop off 2 orders`,
+      "Dasher",
+    );
+
+    expect(result).toMatchObject({
+      pickups: 2,
+      drops: 1,
+      orderCount: 2,
+      orderKind: "delivery_batch",
+    });
+    expect(result.merchants).toEqual(
+      expect.arrayContaining(["Panera Bread", "Chick-fil-A"]),
+    );
+  });
+
   it("handles GH multiline distance without treating pay cents as order count", () => {
     const result = extractRegexOfferCandidates(
       `Steak 'n Shake & Jimmy John's\n$12.33\nDelivery pay + tip\n9.2\n2\nmiles\norders`,

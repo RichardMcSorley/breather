@@ -22,6 +22,7 @@ export interface RegexOfferCandidates {
   miles?: number;
   pickups?: number;
   drops?: number;
+  orderCount?: number;
   items?: number;
   orderKind?: RegexOrderKind;
   merchants: string[];
@@ -30,6 +31,7 @@ export interface RegexOfferCandidates {
     miles?: string;
     pickups?: string;
     drops?: string;
+    orderCount?: string;
     items?: string;
     orderKind?: string;
     merchants?: string;
@@ -261,6 +263,13 @@ const extractPickups = (text: string) => {
   };
 };
 
+const extractOrderCount = (text: string) => {
+  const match = text.match(/drop\s*off\s+(\d+)\s+orders?/i);
+  return match
+    ? { value: Math.max(1, Number(match[1])), evidence: match[0] }
+    : { value: 1, evidence: "default single order" };
+};
+
 const extractMerchants = (text: string) => {
   const lines = linesOf(text);
   const merchants: string[] = [];
@@ -314,12 +323,39 @@ export function extractRegexOfferCandidates(text: string, appName?: string) {
   const drops = extractDrops(text, appName);
   const pickups = extractPickups(text);
   const merchants = extractMerchants(text);
+  const orderCount = extractOrderCount(text);
+  const payPosition = text.search(/\$\s*\d/);
+  const offerText = payPosition >= 0 ? text.slice(payPosition) : text;
+  const dropoffPosition = offerText.search(/customer\s+dropoff/i);
+  const beforeDropoff =
+    dropoffPosition >= 0 ? offerText.slice(0, dropoffPosition) : offerText;
+  const knownPickupCount = KNOWN_MERCHANTS.filter((merchant) =>
+    beforeDropoff.toLowerCase().includes(merchant.toLowerCase()),
+  ).length;
+  const pickupValue = Math.max(pickups.value, knownPickupCount);
+  const customerDropoffCount = [...text.matchAll(/customer\s+dropoff/gi)].length;
+  const dropValue = customerDropoffCount > 0 ? customerDropoffCount : drops.value;
+  const resolvedPickups = {
+    value: pickupValue,
+    evidence:
+      knownPickupCount > 1
+        ? `${pickupValue} pickup merchants before customer dropoff`
+        : pickups.evidence,
+  };
+  const resolvedDrops = {
+    value: dropValue,
+    evidence:
+      customerDropoffCount > 0
+        ? `${customerDropoffCount} customer dropoff labels`
+        : drops.evidence,
+  };
   const shopping =
     items !== undefined ||
     /shop\s*(?:for\s*items|and\s*deliver)|shop\s*&\s*deliver|red\s*card|retail pickup/i.test(
       text,
     );
-  const batch = drops.value > 1;
+  const batch =
+    orderCount.value > 1 || resolvedPickups.value > 1 || resolvedDrops.value > 1;
   const orderKind: RegexOrderKind = shopping
     ? batch
       ? "shopping_batch"
@@ -331,16 +367,18 @@ export function extractRegexOfferCandidates(text: string, appName?: string) {
   return {
     pay: pay?.value,
     miles: miles?.value,
-    pickups: pickups.value,
-    drops: drops.value,
+    pickups: resolvedPickups.value,
+    drops: resolvedDrops.value,
+    orderCount: orderCount.value,
     items: items?.value,
     orderKind,
     merchants,
     evidence: {
       pay: pay?.evidence,
       miles: miles?.evidence,
-      pickups: pickups.evidence,
-      drops: drops.evidence,
+      pickups: resolvedPickups.evidence,
+      drops: resolvedDrops.evidence,
+      orderCount: orderCount.evidence,
       items: items?.evidence,
       orderKind: orderKind,
       merchants: merchants.join("; "),

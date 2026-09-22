@@ -133,14 +133,17 @@ export function classificationFromAnswers(
       ? (answers as Record<string, unknown>)
       : {};
 
+  const isShopping = noulAnswer(record.is_shopping);
+  const classifiedItems = choiceAnswer(record.items_band);
+
   return {
     payBand: choiceAnswer(record.pay_band),
     milesBand: choiceAnswer(record.miles_band),
     pickups: choiceAnswer(record.pickups),
     dropoffs: choiceAnswer(record.dropoffs),
-    itemsBand: choiceAnswer(record.items_band),
+    itemsBand: isShopping === false ? "zero" : classifiedItems,
     orderKind: choiceAnswer(record.order_kind),
-    isShopping: noulAnswer(record.is_shopping),
+    isShopping,
     merchantCategory: choiceAnswer(record.merchant_category),
   };
 }

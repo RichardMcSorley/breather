@@ -54,13 +54,14 @@ export function resolveRegexOfferCandidates(
   return {
     pay,
     miles,
-    pickups: exactWhenConfirmed(candidates.pickups, pickupsStatus),
-    drops: exactWhenConfirmed(candidates.drops, dropsStatus),
-    items: exactWhenConfirmed(candidates.items, itemsStatus),
+    // Counts are deterministic UI facts when regex finds them. Jev validates
+    // them, but should not replace an exact count with a broader band.
+    pickups: candidates.pickups ?? undefined,
+    drops: candidates.drops ?? undefined,
+    items: candidates.items ?? undefined,
+    orderCount: candidates.orderCount,
     orderKind:
-      orderKindStatus === "confirmed" && candidates.orderKind
-        ? candidates.orderKind
-        : classification.orderKind,
+      candidates.orderKind ?? classification.orderKind,
     merchants,
     payEstimated: exactPay === undefined,
     milesEstimated: exactMiles === undefined,
@@ -75,24 +76,15 @@ export function resolveRegexOfferCandidates(
       },
       pickups: {
         status: pickupsStatus,
-        source:
-          exactWhenConfirmed(candidates.pickups, pickupsStatus) === undefined
-            ? "jev"
-            : "regex",
+        source: candidates.pickups !== undefined ? "regex" : "jev",
       },
       drops: {
         status: dropsStatus,
-        source:
-          exactWhenConfirmed(candidates.drops, dropsStatus) === undefined
-            ? "jev"
-            : "regex",
+        source: candidates.drops !== undefined ? "regex" : "jev",
       },
       items: {
         status: itemsStatus,
-        source:
-          exactWhenConfirmed(candidates.items, itemsStatus) === undefined
-            ? "jev"
-            : "regex",
+        source: candidates.items !== undefined ? "regex" : "jev",
       },
       orderKind: {
         status: orderKindStatus,

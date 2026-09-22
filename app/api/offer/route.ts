@@ -63,6 +63,7 @@ function buildPendingDisplay(
   offerEstimate: OfferEvaluation,
   pickups: number | undefined,
   drops: number | undefined,
+  orderCount: number | undefined,
   items: number | undefined,
   orderKind: string,
   createdOrderId?: string,
@@ -102,11 +103,14 @@ function buildPendingDisplay(
   }
   const payPerMile = miles > 0 ? pay / miles : null;
   const work = [
-    `${pickups ?? 1} pickup${pickups === 1 ? "" : "s"}`,
-    `${drops ?? 1} dropoff${drops === 1 ? "" : "s"}`,
+    `${pickups ?? 1} pickup${(pickups ?? 1) === 1 ? "" : "s"}`,
+    `${drops ?? 1} dropoff${(drops ?? 1) === 1 ? "" : "s"}`,
     `${orderKind.replaceAll("_", " ")}`,
   ];
   if (items !== undefined && items > 0) work.push(`${items} items`);
+  if (orderCount !== undefined && orderCount > 1) {
+    work.push(`${orderCount} orders`);
+  }
 
   const display = [
     `Fast: ${fastEvaluation.decision} · Min pay: ${formatMinimumPay(fastEvaluation)}`,
@@ -431,6 +435,9 @@ export async function POST(request: NextRequest) {
                 ...(resolved.drops !== undefined && {
                   drops: resolved.drops,
                 }),
+                ...(resolved.orderCount !== undefined && {
+                  orderCount: resolved.orderCount,
+                }),
                 ...(resolved.items !== undefined && {
                   items: resolved.items,
                 }),
@@ -462,6 +469,7 @@ export async function POST(request: NextRequest) {
         offerEstimate,
         resolved.pickups,
         resolved.drops,
+        resolved.orderCount,
         resolved.items,
         resolved.orderKind,
         createdOrderId,
@@ -474,6 +482,7 @@ export async function POST(request: NextRequest) {
             miles: resolved.miles,
             pickups: resolved.pickups,
             drops: resolved.drops,
+            orderCount: resolved.orderCount,
             items: resolved.items,
             restaurants: resolved.merchants,
             isShopping: classification.isShopping,
